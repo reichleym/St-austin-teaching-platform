@@ -1,6 +1,6 @@
 # St. Austin Teaching Platform
 
-Next.js application with PostgreSQL via Prisma.
+Next.js application with PostgreSQL via Prisma and NextAuth authentication.
 
 ## Prerequisites
 
@@ -15,11 +15,11 @@ Next.js application with PostgreSQL via Prisma.
 npm install
 ```
 
-2. Set your database connection string:
+2. Set environment variables:
 
 ```bash
 cp .env.example .env
-# Edit .env and provide a valid DATABASE_URL
+# Edit .env values (DATABASE_URL and NEXTAUTH_SECRET are required)
 ```
 
 3. Create your database:
@@ -28,10 +28,11 @@ cp .env.example .env
 createdb st_austin
 ```
 
-4. Run migration and generate Prisma client:
+4. Run migration and seed users:
 
 ```bash
 npm run db:migrate
+npm run db:seed
 ```
 
 5. Start the app:
@@ -45,3 +46,10 @@ npm run dev
 - `npm run db:generate` generates Prisma client
 - `npm run db:migrate` runs Prisma migrations in dev
 - `npm run db:studio` opens Prisma Studio
+- `npm run db:seed` seeds super admin, teacher, and student users
+
+## Auth Routes
+
+- `/login` public login page
+- `/dashboard` protected for active authenticated users
+- `/dashboard/admin` protected for active `ADMIN` users only
