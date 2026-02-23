@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { LogoutButton } from "@/components/logout-button";
+import { getRoleHomePath } from "@/lib/role-routing";
 
 export default async function Home() {
   const session = await auth();
@@ -14,23 +16,26 @@ export default async function Home() {
             Signed in as {session.user.email} ({session.user.role})
           </p>
           <div className="space-x-4">
-            <Link href="/dashboard" className="underline">
+            <Link href={getRoleHomePath(session.user.role)} className="underline">
               Dashboard
             </Link>
-            {session.user.role === "ADMIN" ? (
-              <Link href="/dashboard?module=admin-controls" className="underline">
-                Admin
+            {session.user.role === Role.SUPER_ADMIN ? (
+              <Link href="/dashboard?module=overview" className="underline">
+                Super Admin
               </Link>
             ) : null}
           </div>
           <LogoutButton />
         </div>
       ) : (
-        <p className="mt-4">
-          <Link href="/login" className="underline">
-            Login
+        <div className="mt-4 space-x-4">
+          <Link href="/admin/login" className="underline">
+            Admin Login
           </Link>
-        </p>
+          <Link href="/login" className="underline">
+            Teacher/Student Login
+          </Link>
+        </div>
       )}
     </main>
   );

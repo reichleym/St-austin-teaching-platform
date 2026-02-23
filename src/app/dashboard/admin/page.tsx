@@ -4,13 +4,14 @@ import { auth } from "@/lib/auth";
 export default async function AdminDashboardPage() {
   const session = await auth();
 
-  if (!session?.user || session.user.status !== "ACTIVE") {
-    redirect("/login");
+  if (!session?.user) {
+    redirect("/admin/login");
   }
 
-  if (session.user.role !== "ADMIN") {
-    redirect("/dashboard");
+  const roleText = String(session.user.role);
+  if (roleText !== "SUPER_ADMIN" && roleText !== "ADMIN") {
+    redirect("/dashboard/student");
   }
 
-  redirect("/dashboard?module=admin-controls");
+  redirect("/dashboard?module=overview");
 }

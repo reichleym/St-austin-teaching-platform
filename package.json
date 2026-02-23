@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev . --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -17,8 +17,9 @@
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
     "bcryptjs": "^3.0.3",
-    "next": "16.1.6",
+    "next": "15.9.0",
     "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
     "pg": "^8.18.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
@@ -30,7 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "15.9.0",
     "prisma": "^7.4.1",
     "tailwindcss": "^4",
     "typescript": "^5"

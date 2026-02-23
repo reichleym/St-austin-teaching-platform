@@ -11,47 +11,45 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg(pool),
 });
 
-async function upsertSeedUser({ email, password, name, role }) {
+async function createInitialSuperAdmin({ email, password, name }) {
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.user.upsert({
-    where: { email },
-    update: {
-      name,
-      passwordHash,
-      role,
-      status: UserStatus.ACTIVE,
-    },
-    create: {
+
+  const existingAdmins = await prisma.user.findMany({
+    where: { role: Role.SUPER_ADMIN },
+    select: { id: true, email: true },
+  });
+
+  if (existingAdmins.length > 0) {
+    if (existingAdmins.length === 1 && existingAdmins[0].email === email) {
+      console.log(`Super Admin already bootstrapped: ${email}`);
+      return;
+    }
+
+    const existingEmails = existingAdmins.map((admin) => admin.email).join(", ");
+    throw new Error(
+      `Bootstrap blocked: admin account(s) already exist (${existingEmails}). ` +
+        "Create or manage admins manually in the database."
+    );
+  }
+
+  await prisma.user.create({
+    data: {
       email,
       name,
       passwordHash,
-      role,
+      role: Role.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
     },
   });
-  console.log(`Seeded ${role.toLowerCase()} user: ${email}`);
+
+  console.log(`Created initial Super Admin: ${email}`);
 }
 
 async function main() {
-  await upsertSeedUser({
+  await createInitialSuperAdmin({
     email: process.env.SEED_SUPER_ADMIN_EMAIL ?? "admin@staustin.edu",
     password: process.env.SEED_SUPER_ADMIN_PASSWORD ?? "ChangeMe123!",
     name: process.env.SEED_SUPER_ADMIN_NAME ?? "Super Admin",
-    role: Role.ADMIN,
-  });
-
-  await upsertSeedUser({
-    email: process.env.SEED_TEACHER_EMAIL ?? "teacher@staustin.edu",
-    password: process.env.SEED_TEACHER_PASSWORD ?? "ChangeMe123!",
-    name: process.env.SEED_TEACHER_NAME ?? "Seed Teacher",
-    role: Role.TEACHER,
-  });
-
-  await upsertSeedUser({
-    email: process.env.SEED_STUDENT_EMAIL ?? "student@staustin.edu",
-    password: process.env.SEED_STUDENT_PASSWORD ?? "ChangeMe123!",
-    name: process.env.SEED_STUDENT_NAME ?? "Seed Student",
-    role: Role.STUDENT,
   });
 }
 

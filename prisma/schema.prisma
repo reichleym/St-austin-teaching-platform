@@ -7,7 +7,7 @@ datasource db {
 }
 
 enum Role {
-  ADMIN
+  SUPER_ADMIN
   TEACHER
   STUDENT
 }
@@ -17,19 +17,65 @@ enum UserStatus {
   DISABLED
 }
 
+enum SignupMode {
+  INVITE_ONLY
+  OPEN_WITH_CUTOFF
+}
+
+enum GradeEditRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  DROPPED
+  COMPLETED
+}
+
+enum AdminActionType {
+  INVITE_TEACHER
+  INVITE_STUDENT
+  ENABLE_USER
+  DISABLE_USER
+  TOGGLE_STUDENT_SELF_SIGNUP
+  SET_SIGNUP_CUTOFF
+  APPROVE_GRADE_EDIT_REQUEST
+  REJECT_GRADE_EDIT_REQUEST
+  CREATE_ANNOUNCEMENT
+  UPDATE_ANNOUNCEMENT
+  DELETE_ANNOUNCEMENT
+  UPDATE_SYSTEM_SETTINGS
+}
+
 model User {
-  id            String     @id @default(cuid())
-  name          String?
-  email         String     @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String
-  role          Role       @default(STUDENT)
-  status        UserStatus @default(ACTIVE)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  accounts      Account[]
-  sessions      Session[]
+  id                        String                    @id @default(cuid())
+  name                      String?
+  email                     String                    @unique
+  emailVerified             DateTime?
+  image                     String?
+  passwordHash              String
+  role                      Role                      @default(STUDENT)
+  status                    UserStatus                @default(ACTIVE)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  accounts                  Account[]
+  sessions                  Session[]
+  createdInvitations        Invitation[]              @relation("InvitationCreatedBy")
+  createdAnnouncements      Announcement[]            @relation("AnnouncementCreatedBy")
+  updatedAnnouncements      Announcement[]            @relation("AnnouncementUpdatedBy")
+  taughtCourses             Course[]                  @relation("CourseTeacher")
+  enrollments               Enrollment[]
+  gradesAwarded             Grade[]                   @relation("GradeAwardedBy")
+  gradeRecords              Grade[]                   @relation("GradeStudent")
+  gradeEditSubjectRequests  GradeEditRequest[]        @relation("GradeEditStudent")
+  discussionParticipations  DiscussionParticipation[]
+  submittedGradeEditRequest GradeEditRequest[]        @relation("GradeEditRequestedBy")
+  reviewedGradeEditRequest  GradeEditRequest[]        @relation("GradeEditReviewedBy")
+  adminActions              AdminActionLog[]          @relation("AdminActionActor")
+  targetedAdminActions      AdminActionLog[]          @relation("AdminActionTargetUser")
+  settingsUpdates           SystemSettings[]          @relation("SystemSettingsUpdatedBy")
 }
 
 model Account {
@@ -65,4 +111,168 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  role        Role
+  token       String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdBy   User      @relation("InvitationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([email])
+  @@index([role, expiresAt])
+}
+
+model SystemSettings {
+  id                         Int        @id @default(1)
+  studentSelfSignupEnabled   Boolean    @default(false)
+  studentSignupCutoffDate    DateTime?
+  signupMode                 SignupMode @default(INVITE_ONLY)
+  gradeScale                 Json?
+  lateSubmissionPenaltyRules Json?
+  updatedById                String?
+  updatedBy                  User?      @relation("SystemSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  isGlobal    Boolean   @default(true)
+  expiresAt   DateTime?
+  createdById String
+  createdBy   User      @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById String?
+  updatedBy   User?     @relation("AnnouncementUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isGlobal, expiresAt])
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  title       String
+  description String?
+  teacherId   String?
+  teacher     User?        @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  assignments Assignment[]
+  discussions Discussion[]
+  enrollments Enrollment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Assignment {
+  id                String             @id @default(cuid())
+  courseId          String
+  course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  dueAt             DateTime?
+  maxPoints         Decimal            @default(100) @db.Decimal(6, 2)
+  grades            Grade[]
+  gradeEditRequests GradeEditRequest[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Discussion {
+  id             String                    @id @default(cuid())
+  courseId       String
+  course         Course                    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title          String
+  content        String?
+  isClosed       Boolean                   @default(false)
+  participations DiscussionParticipation[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+}
+
+model DiscussionParticipation {
+  id             String     @id @default(cuid())
+  discussionId   String
+  studentId      String
+  postsCount     Int        @default(0)
+  completionRate Int        @default(0)
+  lastPostedAt   DateTime?
+  discussion     Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([discussionId, studentId])
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  courseId   String
+  studentId  String
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student    User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId])
+}
+
+model Grade {
+  id           String     @id @default(cuid())
+  assignmentId String
+  studentId    String
+  awardedById  String?
+  points       Decimal    @db.Decimal(6, 2)
+  publishedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      User       @relation("GradeStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  awardedBy    User?      @relation("GradeAwardedBy", fields: [awardedById], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, studentId])
+}
+
+model GradeEditRequest {
+  id             String                 @id @default(cuid())
+  assignmentId   String
+  studentId      String
+  requestedById  String
+  reason         String
+  proposedPoints Decimal?               @db.Decimal(6, 2)
+  status         GradeEditRequestStatus @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  assignment     Assignment             @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student        User                   @relation("GradeEditStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  requestedBy    User                   @relation("GradeEditRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  reviewedBy     User?                  @relation("GradeEditReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([assignmentId, studentId])
+}
+
+model AdminActionLog {
+  id           String          @id @default(cuid())
+  action       AdminActionType
+  actorId      String
+  targetUserId String?
+  entityType   String?
+  entityId     String?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+  actor        User            @relation("AdminActionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  targetUser   User?           @relation("AdminActionTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
 }
