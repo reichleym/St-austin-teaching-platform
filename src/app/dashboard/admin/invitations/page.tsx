@@ -5,8 +5,13 @@ import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { auth } from "@/lib/auth";
 import { InvitationsClient } from "./invitations-client";
 
-export default async function AdminInvitationsPage() {
+type Props = {
+  searchParams: Promise<{ role?: string }>;
+};
+
+export default async function AdminInvitationsPage({ searchParams }: Props) {
   const session = await auth();
+  const params = await searchParams;
 
   if (!session?.user || session.user.status !== UserStatus.ACTIVE) {
     redirect("/admin/login");
@@ -17,6 +22,8 @@ export default async function AdminInvitationsPage() {
     redirect("/dashboard");
   }
 
+  const initialRole = params.role === "STUDENT" ? "STUDENT" : "TEACHER";
+
   return (
     <main className="min-h-screen lg:flex">
       <DashboardSidebar role={session.user.role} selectedSlug="invitations" />
@@ -24,7 +31,7 @@ export default async function AdminInvitationsPage() {
         <DashboardTopbar name={session.user.name} email={session.user.email} role={session.user.role} />
 
         <section className="brand-glass brand-animate p-6">
-          <InvitationsClient />
+          <InvitationsClient initialRole={initialRole} />
         </section>
       </div>
     </main>

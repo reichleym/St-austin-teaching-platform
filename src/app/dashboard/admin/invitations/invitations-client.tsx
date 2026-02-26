@@ -1,15 +1,67 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type InviteRole = "TEACHER" | "STUDENT";
 
-export function InvitationsClient() {
+type InvitationsClientProps = {
+  initialRole?: InviteRole;
+};
+
+type LocationOption = {
+  name: string;
+  code: string;
+};
+
+export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClientProps) {
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
-  const [selectedRole, setSelectedRole] = useState<InviteRole>("TEACHER");
+  const [selectedRole, setSelectedRole] = useState<InviteRole>(initialRole);
+  const [countries, setCountries] = useState<LocationOption[]>([]);
+  const [states, setStates] = useState<LocationOption[]>([]);
+  const [country, setCountry] = useState("");
+  const [state, setState] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const loadCountries = async () => {
+      try {
+        const response = await fetch("/api/locations");
+        const raw = await response.text();
+        const result = raw ? (JSON.parse(raw) as { countries?: LocationOption[] }) : {};
+        if (active) {
+          setCountries(result.countries ?? []);
+        }
+      } catch {
+        if (active) {
+          setCountries([]);
+        }
+      }
+    };
+    void loadCountries();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const loadStates = async (countryName: string) => {
+    const selectedCountry = countries.find((item) => item.name === countryName);
+    if (!selectedCountry) {
+      setStates([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/locations?countryCode=${encodeURIComponent(selectedCountry.code)}`);
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { states?: LocationOption[] }) : {};
+      setStates(result.states ?? []);
+    } catch {
+      setStates([]);
+    }
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -28,10 +80,10 @@ export function InvitationsClient() {
       const department = String(formData.get("department") ?? "");
       const subjects = String(formData.get("subjects") ?? "");
       const employeeId = String(formData.get("employeeId") ?? "");
-      const gradeLevel = String(formData.get("gradeLevel") ?? "");
-      const section = String(formData.get("section") ?? "");
       const guardianName = String(formData.get("guardianName") ?? "");
       const guardianPhone = String(formData.get("guardianPhone") ?? "");
+      const country = String(formData.get("country") ?? "");
+      const state = String(formData.get("state") ?? "");
 
       const response = await fetch("/api/admin/invitations", {
         method: "POST",
@@ -45,10 +97,10 @@ export function InvitationsClient() {
           department,
           subjects,
           employeeId,
-          gradeLevel,
-          section,
           guardianName,
           guardianPhone,
+          country,
+          state,
         }),
       });
 
@@ -86,24 +138,18 @@ export function InvitationsClient() {
         <div className="brand-panel p-4">
           <p className="brand-section-title">Profile Basics</p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
-            <label className="grid gap-1.5">
+            <label className="grid gap-1.5 md:col-span-2">
               <span className="brand-label">Role</span>
               <select
                 className="brand-input"
                 name="role"
-                defaultValue="TEACHER"
+                value={selectedRole}
                 onChange={(event) => setSelectedRole(event.currentTarget.value as InviteRole)}
               >
                 <option value="TEACHER">Teacher</option>
                 <option value="STUDENT">Student</option>
               </select>
               <span className="brand-helper">Choose the invitation type first.</span>
-            </label>
-
-            <label className="grid gap-1.5">
-              <span className="brand-label">Email</span>
-              <input className="brand-input" type="email" name="email" required placeholder="name@staustin.edu" />
-              <span className="brand-helper">Invite link is sent to this email.</span>
             </label>
 
             <label className="grid gap-1.5">
@@ -116,9 +162,60 @@ export function InvitationsClient() {
               <input className="brand-input" type="text" name="lastName" required />
             </label>
 
-            <label className="grid gap-1.5 md:col-span-2">
+            <label className="grid gap-1.5">
               <span className="brand-label">Phone Number</span>
               <input className="brand-input" type="tel" name="phone" required placeholder="+1 000 000 0000" />
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className="brand-label">Email</span>
+              <input className="brand-input" type="email" name="email" required placeholder="name@staustin.edu" />
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className="brand-label">Country</span>
+              <select
+                className="brand-input"
+                name="country"
+                value={country}
+                onChange={async (event) => {
+                  const value = event.currentTarget.value;
+                  setCountry(value);
+                  setState("");
+                  if (value) {
+                    await loadStates(value);
+                  } else {
+                    setStates([]);
+                  }
+                }}
+                required
+              >
+                <option value="">Select country</option>
+                {countries.map((item) => (
+                  <option key={item.code} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className="brand-label">State</span>
+              <select
+                className="brand-input"
+                name="state"
+                value={state}
+                onChange={(event) => setState(event.currentTarget.value)}
+                disabled={!country}
+                required
+              >
+                <option value="">Select state</option>
+                {states.map((item) => (
+                  <option key={item.code} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>
@@ -148,12 +245,8 @@ export function InvitationsClient() {
             <p className="brand-section-title">Student Profile</p>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <label className="grid gap-1.5">
-                <span className="brand-label">Grade Level</span>
-                <input className="brand-input" type="text" name="gradeLevel" required placeholder="Grade 10" />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Section</span>
-                <input className="brand-input" type="text" name="section" required placeholder="A" />
+                <span className="brand-label">Department</span>
+                <input className="brand-input" type="text" name="department" required placeholder="Science" />
               </label>
               <label className="grid gap-1.5">
                 <span className="brand-label">Guardian Name</span>

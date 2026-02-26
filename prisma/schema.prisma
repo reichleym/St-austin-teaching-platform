@@ -49,6 +49,12 @@ enum AdminActionType {
   UPDATE_SYSTEM_SETTINGS
 }
 
+enum AnnouncementAudience {
+  BOTH
+  TEACHER_ONLY
+  STUDENT_ONLY
+}
+
 model User {
   id                        String                    @id @default(cuid())
   name                      String?
@@ -58,6 +64,12 @@ model User {
   passwordHash              String
   role                      Role                      @default(STUDENT)
   status                    UserStatus                @default(ACTIVE)
+  phone                     String?
+  guardianName              String?
+  guardianPhone             String?
+  country                   String?
+  state                     String?
+  department                String?
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
   accounts                  Account[]
@@ -116,6 +128,13 @@ model VerificationToken {
 model Invitation {
   id          String    @id @default(cuid())
   email       String
+  name        String?
+  phone       String?
+  department  String?
+  guardianName String?
+  guardianPhone String?
+  country     String?
+  state       String?
   role        Role
   token       String    @unique
   expiresAt   DateTime
@@ -147,6 +166,7 @@ model Announcement {
   title       String
   content     String
   isGlobal    Boolean   @default(true)
+  audience    AnnouncementAudience @default(BOTH)
   expiresAt   DateTime?
   createdById String
   createdBy   User      @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -156,6 +176,7 @@ model Announcement {
   updatedAt   DateTime  @updatedAt
 
   @@index([isGlobal, expiresAt])
+  @@index([audience, expiresAt])
 }
 
 model Course {

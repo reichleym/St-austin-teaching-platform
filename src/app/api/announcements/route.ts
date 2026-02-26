@@ -1,18 +1,47 @@
+import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuthenticatedUser, PermissionError } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
+type AnnouncementAudienceValue = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+
+function isAnnouncementAudienceCompatibilityError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `audience`") ||
+    error.message.includes("Unknown argument `audience`") ||
+    (error.message.includes("Invalid value for argument `audience`") && error.message.includes("AnnouncementAudience")) || (error.message.includes("Invalid value for argument `in`") && error.message.includes("AnnouncementAudience"))
+  );
+}
+
 export async function GET() {
   try {
-    await requireAuthenticatedUser();
+    const user = await requireAuthenticatedUser();
+    const role = user.role === "SUPER_ADMIN" || user.role === "ADMIN" ? Role.SUPER_ADMIN : user.role;
     const now = new Date();
-    const announcements = await prisma.announcement.findMany({
-      where: {
-        isGlobal: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const allowedAudience: AnnouncementAudienceValue[] = role === Role.TEACHER ? ["BOTH", "TEACHER_ONLY"] : role === Role.STUDENT ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
+
+    let announcements;
+    try {
+      announcements = await prisma.announcement.findMany({
+        where: {
+          isGlobal: true,
+          audience: { in: allowedAudience },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    } catch (error) {
+      if (!isAnnouncementAudienceCompatibilityError(error)) throw error;
+      announcements = await prisma.announcement.findMany({
+        where: {
+          isGlobal: true,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }
+
     return NextResponse.json({ announcements });
   } catch (error) {
     if (error instanceof PermissionError) {

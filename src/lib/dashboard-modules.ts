@@ -35,6 +35,12 @@ export const dashboardModules: DashboardModule[] = [
     roles: [Role.TEACHER, Role.STUDENT],
   },
   {
+    slug: "announcements-feed",
+    title: "Announcements",
+    description: "Read institution announcements and updates.",
+    roles: [Role.TEACHER, Role.STUDENT],
+  },
+  {
     slug: "assessment",
     title: "Assessment",
     description: "Assignments, grading, and performance evaluation.",
@@ -52,6 +58,20 @@ export const dashboardModules: DashboardModule[] = [
     description: "User lifecycle, invites, and access policy controls.",
     roles: [Role.SUPER_ADMIN],
     parentSlug: "admin-controls",
+  },
+  {
+    slug: "view-teachers",
+    title: "All Teachers",
+    description: "View and add new Teachers",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "user-access",
+  },
+  {
+    slug: "view-students",
+    title: "All Students",
+    description: "View and add new students",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "user-access",
   },
   {
     slug: "announcements",

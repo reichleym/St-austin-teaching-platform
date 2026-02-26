@@ -5,6 +5,19 @@ import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+type LoginFailureCode =
+  | "MISSING_CREDENTIALS"
+  | "INVALID_CREDENTIALS"
+  | "INACTIVE_ACCOUNT"
+  | "INCORRECT_USER_TYPE";
+
+function getAdminLoginErrorMessage(code: LoginFailureCode | string | undefined) {
+  if (code === "INACTIVE_ACCOUNT") return "This account is inactive. Contact your administrator.";
+  if (code === "INVALID_CREDENTIALS") return "Invalid email or password.";
+  if (code === "INCORRECT_USER_TYPE") return "This login is only for Super Admin accounts.";
+  return "Unable to sign in right now.";
+}
+
 export default function AdminLoginClient() {
   const router = useRouter();
   const adminDashboardUrl = "/dashboard/admin";
@@ -27,6 +40,18 @@ export default function AdminLoginClient() {
       const email = formData.get("email");
       const password = formData.get("password");
 
+      const precheck = await fetch("/api/auth/login-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, loginAs: "SUPER_ADMIN", audience: "SUPER_ADMIN" }),
+      });
+      const precheckRaw = await precheck.text();
+      const precheckResult = precheckRaw ? (JSON.parse(precheckRaw) as { ok?: boolean; code?: LoginFailureCode }) : {};
+      if (!precheck.ok || !precheckResult.ok) {
+        setError(getAdminLoginErrorMessage(precheckResult.code));
+        return;
+      }
+
       const result = await signIn("super-admin-credentials", {
         email,
         password,
@@ -36,7 +61,7 @@ export default function AdminLoginClient() {
       });
 
       if (!result || result.error) {
-        setError("Invalid admin credentials or inactive account.");
+        setError("Unable to sign in right now.");
         return;
       }
 
