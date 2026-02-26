@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { AdminUserManagementTable } from "@/components/admin-user-management-table";
 import { AdminAnnouncementsManager } from "@/components/admin-announcements-manager";
 import { AnnouncementsFeed } from "@/components/announcements-feed";
+import { CoursesModule } from "@/components/courses-module";
 
 type Props = {
   searchParams: Promise<{ module?: string }>;
@@ -533,6 +534,8 @@ export default async function DashboardPage({ searchParams }: Props) {
           <AdminAnnouncementsManager initialAnnouncements={serializedAdminAnnouncements} />
         ) : selected.slug === "announcements-feed" ? (
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
+        ) : selected.slug === "courses" ? (
+          <CoursesModule role={session.user.role} />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">

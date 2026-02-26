@@ -20,7 +20,7 @@ export const dashboardModules: DashboardModule[] = [
     slug: "courses",
     title: "Courses",
     description: "Manage and navigate academic course structures.",
-    roles: [Role.TEACHER, Role.STUDENT],
+    roles: [Role.SUPER_ADMIN, Role.TEACHER, Role.STUDENT],
   },
   {
     slug: "learning",
