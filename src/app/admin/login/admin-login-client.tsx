@@ -65,8 +65,9 @@ export default function AdminLoginClient() {
         return;
       }
 
-      router.push(adminDashboardUrl);
+      router.replace(adminDashboardUrl);
       router.refresh();
+      window.location.assign(adminDashboardUrl);
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
       console.error("Login error:", err);
