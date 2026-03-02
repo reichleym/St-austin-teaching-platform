@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
-import { Role } from "@prisma/client";
 import { CourseStructurePanel } from "@/components/course-structure-panel";
+
+type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseItem = {
   id: string;
@@ -38,7 +39,7 @@ type PersonOption = {
 };
 
 type Props = {
-  role: Role;
+  role: AppRole;
 };
 
 const formatDate = (input: string) => {
@@ -59,8 +60,8 @@ function PersonLabel({ person }: { person: PersonOption }) {
 }
 
 export function CoursesModule({ role }: Props) {
-  const isSuperAdmin = role === Role.SUPER_ADMIN;
-  const isStudent = role === Role.STUDENT;
+  const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
+  const isStudent = role === "STUDENT";
   const canManage = isSuperAdmin;
 
   const [courses, setCourses] = useState<CourseItem[]>([]);
