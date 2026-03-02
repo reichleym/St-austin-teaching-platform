@@ -13,6 +13,7 @@ type AssignmentConfigRecord = {
   allowedSubmissionTypes: SubmissionType[];
   maxAttempts: number;
   autoGrade: boolean;
+  timerMinutes: number | null;
   moduleId: string | null;
   lessonId: string | null;
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -29,6 +30,7 @@ type CreateAssignmentBody = {
   allowedSubmissionTypes?: SubmissionType[];
   maxAttempts?: number;
   autoGrade?: boolean;
+  timerMinutes?: number | string | null;
   moduleId?: string | null;
   lessonId?: string | null;
   completionRule?: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -45,6 +47,7 @@ type UpdateAssignmentBody = {
   allowedSubmissionTypes?: SubmissionType[];
   maxAttempts?: number;
   autoGrade?: boolean;
+  timerMinutes?: number | string | null;
   moduleId?: string | null;
   lessonId?: string | null;
   completionRule?: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -101,6 +104,14 @@ function parseCompletionRule(input: unknown): AssignmentConfigRecord["completion
   return "SUBMISSION_OR_GRADE";
 }
 
+function parseTimerMinutes(input: unknown, assignmentType: AssignmentType) {
+  if (assignmentType !== "QUIZ") return null;
+  if (input === null || input === undefined || input === "") return null;
+  const value = typeof input === "number" ? input : Number(input);
+  if (!Number.isInteger(value) || value < 1) return null;
+  return Math.min(value, 240);
+}
+
 function canManageByRole(role: Role | string) {
   return isSuperAdminRole(role) || role === Role.TEACHER;
 }
@@ -114,6 +125,7 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
   "allowedSubmissionTypes" JSONB NOT NULL DEFAULT '["TEXT","FILE"]'::jsonb,
   "maxAttempts" INTEGER NOT NULL DEFAULT 1,
   "autoGrade" BOOLEAN NOT NULL DEFAULT false,
+  "timerMinutes" INTEGER,
   "moduleId" TEXT,
   "lessonId" TEXT,
   "completionRule" TEXT NOT NULL DEFAULT 'SUBMISSION_OR_GRADE',
@@ -123,6 +135,7 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
 );
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_moduleId_idx" ON "AssignmentConfig"("moduleId");
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_lessonId_idx" ON "AssignmentConfig"("lessonId");
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "timerMinutes" INTEGER;
 `);
 }
 
@@ -167,6 +180,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowedSubmissionTypes: Prisma.JsonValue;
       maxAttempts: number;
       autoGrade: boolean;
+      timerMinutes: number | null;
       moduleId: string | null;
       lessonId: string | null;
       completionRule: string;
@@ -179,6 +193,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       "allowedSubmissionTypes",
       "maxAttempts",
       "autoGrade",
+      "timerMinutes",
       "moduleId",
       "lessonId",
       "completionRule"
@@ -195,6 +210,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowedSubmissionTypes: parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
       maxAttempts: parseMaxAttempts(row.maxAttempts, parseAssignmentType(row.assignmentType)),
       autoGrade: !!row.autoGrade,
+      timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
       moduleId: row.moduleId,
       lessonId: row.lessonId,
       completionRule: parseCompletionRule(row.completionRule),
@@ -209,15 +225,16 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
   const allowedSubmissionTypes = parseSubmissionTypes(input.allowedSubmissionTypes);
   const maxAttempts = parseMaxAttempts(input.maxAttempts, assignmentType);
   const autoGrade = assignmentType === "QUIZ" ? !!input.autoGrade : false;
+  const timerMinutes = parseTimerMinutes(input.timerMinutes, assignmentType);
   const moduleId = typeof input.moduleId === "string" && input.moduleId.trim() ? input.moduleId.trim() : null;
   const lessonId = typeof input.lessonId === "string" && input.lessonId.trim() ? input.lessonId.trim() : null;
   const completionRule = parseCompletionRule(input.completionRule);
 
   await prisma.$executeRaw`
     INSERT INTO "AssignmentConfig"
-      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","moduleId","lessonId","completionRule","updatedAt")
+      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","timerMinutes","moduleId","lessonId","completionRule","updatedAt")
     VALUES
-      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
+      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${timerMinutes}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
     ON CONFLICT ("assignmentId")
     DO UPDATE SET
       "assignmentType" = EXCLUDED."assignmentType",
@@ -225,6 +242,7 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
       "allowedSubmissionTypes" = EXCLUDED."allowedSubmissionTypes",
       "maxAttempts" = EXCLUDED."maxAttempts",
       "autoGrade" = EXCLUDED."autoGrade",
+      "timerMinutes" = EXCLUDED."timerMinutes",
       "moduleId" = EXCLUDED."moduleId",
       "lessonId" = EXCLUDED."lessonId",
       "completionRule" = EXCLUDED."completionRule",
@@ -276,6 +294,7 @@ function defaultConfig(assignmentId: string): AssignmentConfigRecord {
     allowedSubmissionTypes: ["TEXT", "FILE"],
     maxAttempts: 1,
     autoGrade: false,
+    timerMinutes: null,
     moduleId: null,
     lessonId: null,
     completionRule: "SUBMISSION_OR_GRADE",
