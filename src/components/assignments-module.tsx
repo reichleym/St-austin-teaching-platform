@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Role } from "@prisma/client";
+
+type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseOption = {
   id: string;
@@ -87,7 +88,7 @@ type DraftQuizQuestion = {
 };
 
 type Props = {
-  role: Role;
+  role: AppRole;
 };
 
 const toDateInput = (value: string | null) => {
@@ -113,8 +114,8 @@ const formatMinutes = (minutes: number) => {
 };
 
 export function AssignmentsModule({ role }: Props) {
-  const canManage = role === Role.SUPER_ADMIN || role === Role.TEACHER;
-  const isStudent = role === Role.STUDENT;
+  const canManage = role === "SUPER_ADMIN" || role === "TEACHER" || role === "ADMIN";
+  const isStudent = role === "STUDENT";
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
