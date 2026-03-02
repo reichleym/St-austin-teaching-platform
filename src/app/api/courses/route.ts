@@ -702,6 +702,15 @@ export async function PATCH(request: NextRequest) {
       });
     });
 
+    const updatedStartDate =
+      "startDate" in updated ? (updated.startDate as Date | null | undefined) ?? null : null;
+    const updatedEndDate =
+      "endDate" in updated ? (updated.endDate as Date | null | undefined) ?? null : null;
+    const updatedVisibility =
+      "visibility" in updated
+        ? (updated.visibility as CourseVisibilityValue | undefined) ?? COURSE_VISIBILITY_PUBLISHED
+        : COURSE_VISIBILITY_PUBLISHED;
+
     return NextResponse.json({
       ok: true,
       course: {
@@ -709,13 +718,13 @@ export async function PATCH(request: NextRequest) {
         code: updated.code,
         title: updated.title,
         description: updated.description,
-        startDate: existing.legacySchema ? null : updated.startDate?.toISOString() ?? null,
-        endDate: existing.legacySchema ? null : updated.endDate?.toISOString() ?? null,
-        visibility: existing.legacySchema ? COURSE_VISIBILITY_PUBLISHED : updated.visibility,
+        startDate: existing.legacySchema ? null : updatedStartDate?.toISOString() ?? null,
+        endDate: existing.legacySchema ? null : updatedEndDate?.toISOString() ?? null,
+        visibility: existing.legacySchema ? COURSE_VISIBILITY_PUBLISHED : updatedVisibility,
         accessState: getCourseAccessState({
-          visibility: existing.legacySchema ? COURSE_VISIBILITY_PUBLISHED : updated.visibility,
-          startDate: existing.legacySchema ? null : updated.startDate,
-          endDate: existing.legacySchema ? null : updated.endDate,
+          visibility: existing.legacySchema ? COURSE_VISIBILITY_PUBLISHED : updatedVisibility,
+          startDate: existing.legacySchema ? null : updatedStartDate,
+          endDate: existing.legacySchema ? null : updatedEndDate,
         }),
         createdAt: updated.createdAt.toISOString(),
         teacher: updated.teacher,

@@ -132,9 +132,10 @@ export async function POST(request: NextRequest) {
     }
     if (
       error instanceof Error &&
-      error.message.includes("Invalid value for argument `audience`") &&
-      error.message.includes("AnnouncementAudience") ||
-      (error.message.includes("Invalid value for argument `in`") && error.message.includes("AnnouncementAudience"))
+      ((error.message.includes("Invalid value for argument `audience`") &&
+        error.message.includes("AnnouncementAudience")) ||
+        (error.message.includes("Invalid value for argument `in`") &&
+          error.message.includes("AnnouncementAudience")))
     ) {
       return NextResponse.json(
         {

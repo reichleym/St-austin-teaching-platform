@@ -17,7 +17,7 @@ function isAnnouncementAudienceCompatibilityError(error: unknown) {
 export async function GET() {
   try {
     const user = await requireAuthenticatedUser();
-    const role = user.role === "SUPER_ADMIN" || user.role === "ADMIN" ? Role.SUPER_ADMIN : user.role;
+    const role = user.role === "SUPER_ADMIN" ? Role.SUPER_ADMIN : user.role;
     const now = new Date();
     const allowedAudience: AnnouncementAudienceValue[] = role === Role.TEACHER ? ["BOTH", "TEACHER_ONLY"] : role === Role.STUDENT ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
 

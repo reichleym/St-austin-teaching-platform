@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Status = "loading" | "success" | "error";
 
-export default function StudentVerifyPage() {
+function StudentVerifyContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email")?.trim().toLowerCase() ?? "";
   const token = searchParams.get("token")?.trim() ?? "";
@@ -65,5 +65,22 @@ export default function StudentVerifyPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function StudentVerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center p-6">
+          <section className="brand-glass p-6">
+            <h1 className="brand-title brand-title-gradient text-2xl font-semibold">Student Email Verification</h1>
+            <p className="brand-muted mt-3 text-sm">Loading verification...</p>
+          </section>
+        </main>
+      }
+    >
+      <StudentVerifyContent />
+    </Suspense>
   );
 }

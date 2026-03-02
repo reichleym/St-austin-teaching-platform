@@ -460,7 +460,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if (isCourseStructureCompatibilityError(error)) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
+      const compatibilityMessage =
+        error instanceof Error
+          ? error.message
+          : "Course lesson schema is outdated in the database/client. Please run latest Prisma migrations and regenerate Prisma client.";
+      return NextResponse.json({ error: compatibilityMessage }, { status: 503 });
     }
     const message = error instanceof Error ? error.message : "Unable to create lesson.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -622,7 +626,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if (isCourseStructureCompatibilityError(error)) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
+      const compatibilityMessage =
+        error instanceof Error
+          ? error.message
+          : "Course lesson schema is outdated in the database/client. Please run latest Prisma migrations and regenerate Prisma client.";
+      return NextResponse.json({ error: compatibilityMessage }, { status: 503 });
     }
     const message = error instanceof Error ? error.message : "Unable to update lesson.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -678,7 +686,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     if (isCourseStructureCompatibilityError(error)) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
+      const compatibilityMessage =
+        error instanceof Error
+          ? error.message
+          : "Course lesson schema is outdated in the database/client. Please run latest Prisma migrations and regenerate Prisma client.";
+      return NextResponse.json({ error: compatibilityMessage }, { status: 503 });
     }
     const message = error instanceof Error ? error.message : "Unable to delete lesson.";
     return NextResponse.json({ error: message }, { status: 500 });
