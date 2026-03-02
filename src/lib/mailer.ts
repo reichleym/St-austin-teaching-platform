@@ -16,6 +16,11 @@ type SendStudentVerificationEmailInput = {
   verifyExpires: Date;
 };
 
+type SendTestEmailInput = {
+  to: string;
+  requestedByEmail: string | null;
+};
+
 function getMailerConfig() {
   const service = (process.env.SMTP_SERVICE ?? "").toLowerCase();
   const isGmail = service === "gmail";
@@ -42,7 +47,7 @@ function getMailerConfig() {
   };
 }
 
-export async function sendInvitationEmail(input: SendInvitationEmailInput) {
+function createTransporter() {
   const config = getMailerConfig();
   const transporter = nodemailer.createTransport({
     service: config.service,
@@ -52,6 +57,12 @@ export async function sendInvitationEmail(input: SendInvitationEmailInput) {
     requireTLS: !config.secure,
     auth: config.auth,
   });
+
+  return { config, transporter };
+}
+
+export async function sendInvitationEmail(input: SendInvitationEmailInput) {
+  const { config, transporter } = createTransporter();
 
   const roleLabel = input.role === "TEACHER" ? "Teacher" : "Student";
   const recipientName = input.name?.trim() || "there";
@@ -93,15 +104,7 @@ export async function sendInvitationEmail(input: SendInvitationEmailInput) {
 }
 
 export async function sendStudentVerificationEmail(input: SendStudentVerificationEmailInput) {
-  const config = getMailerConfig();
-  const transporter = nodemailer.createTransport({
-    service: config.service,
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    requireTLS: !config.secure,
-    auth: config.auth,
-  });
+  const { config, transporter } = createTransporter();
 
   const recipientName = input.name?.trim() || "there";
   const expiresText = input.verifyExpires.toUTCString();
@@ -125,6 +128,28 @@ export async function sendStudentVerificationEmail(input: SendStudentVerificatio
       <p>Please verify your email to activate your student account.</p>
       <p><a href="${input.verifyUrl}">Verify email</a></p>
       <p>This link expires on ${expiresText}.</p>
+    `,
+  });
+}
+
+export async function sendTestEmail(input: SendTestEmailInput) {
+  const { config, transporter } = createTransporter();
+  const requestedBy = input.requestedByEmail?.trim() || "unknown";
+  const sentAt = new Date().toISOString();
+
+  await transporter.sendMail({
+    from: config.from,
+    to: input.to,
+    subject: "St. Austin SMTP Test",
+    text: [
+      "This is a test email from St. Austin.",
+      `Requested by: ${requestedBy}`,
+      `Sent at (UTC): ${sentAt}`,
+    ].join("\n"),
+    html: `
+      <p>This is a test email from <strong>St. Austin</strong>.</p>
+      <p><strong>Requested by:</strong> ${requestedBy}</p>
+      <p><strong>Sent at (UTC):</strong> ${sentAt}</p>
     `,
   });
 }

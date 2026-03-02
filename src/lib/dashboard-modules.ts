@@ -44,7 +44,7 @@ export const dashboardModules: DashboardModule[] = [
     slug: "assessment",
     title: "Assessment",
     description: "Assignments, grading, and performance evaluation.",
-    roles: [Role.TEACHER, Role.STUDENT],
+    roles: [Role.SUPER_ADMIN, Role.TEACHER, Role.STUDENT],
   },
   {
     slug: "admin-controls",
