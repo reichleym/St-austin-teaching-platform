@@ -1,7 +1,13 @@
 "use client";
 
-import { UserStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
+
+type UserStatus = "ACTIVE" | "DISABLED";
+
+const USER_STATUS = {
+  ACTIVE: "ACTIVE" as UserStatus,
+  DISABLED: "DISABLED" as UserStatus,
+};
 
 type ManagedUser = {
   id: string;
@@ -51,7 +57,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const [quickDraft, setQuickDraft] = useState<Draft>({
     name: "",
     email: "",
-    status: UserStatus.ACTIVE,
+    status: USER_STATUS.ACTIVE,
     phone: "",
     guardianName: "",
     guardianPhone: "",
@@ -62,7 +68,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const [fullDraft, setFullDraft] = useState<Draft>({
     name: "",
     email: "",
-    status: UserStatus.ACTIVE,
+    status: USER_STATUS.ACTIVE,
     phone: "",
     guardianName: "",
     guardianPhone: "",
@@ -80,7 +86,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const activeCount = useMemo(() => rows.filter((item) => item.status === UserStatus.ACTIVE).length, [rows]);
+  const activeCount = useMemo(() => rows.filter((item) => item.status === USER_STATUS.ACTIVE).length, [rows]);
   const fullEditUser = useMemo(() => rows.find((item) => item.id === fullEditUserId) ?? null, [rows, fullEditUserId]);
   const visibleCountries = useMemo(() => {
     if (!fullDraft.country || countries.some((item) => item.name === fullDraft.country)) {
@@ -166,7 +172,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setQuickDraft({
       name: "",
       email: "",
-      status: UserStatus.ACTIVE,
+      status: USER_STATUS.ACTIVE,
       phone: "",
       guardianName: "",
       guardianPhone: "",
@@ -239,7 +245,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setFullDraft({
       name: "",
       email: "",
-      status: UserStatus.ACTIVE,
+      status: USER_STATUS.ACTIVE,
       phone: "",
       guardianName: "",
       guardianPhone: "",
@@ -388,8 +394,8 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                               setQuickDraft((prev) => ({ ...prev, status: value }));
                             }}
                           >
-                            <option value={UserStatus.ACTIVE}>ACTIVE</option>
-                            <option value={UserStatus.DISABLED}>DISABLED</option>
+                            <option value={USER_STATUS.ACTIVE}>ACTIVE</option>
+                            <option value={USER_STATUS.DISABLED}>DISABLED</option>
                           </select>
                         ) : (
                           user.status
@@ -521,8 +527,8 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   setFullDraft((prev) => ({ ...prev, status: value }));
                 }}
               >
-                <option value={UserStatus.ACTIVE}>ACTIVE</option>
-                <option value={UserStatus.DISABLED}>DISABLED</option>
+                <option value={USER_STATUS.ACTIVE}>ACTIVE</option>
+                <option value={USER_STATUS.DISABLED}>DISABLED</option>
               </select>
             </label>
             {isStudentFullEdit || isTeacherFullEdit ? (
