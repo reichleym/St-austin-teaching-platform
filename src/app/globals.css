@@ -91,6 +91,8 @@ a {
   border: 1px solid #9ec4f6;
   background: #f7fbff;
   color: #0b3d7f;
+  width: 100%;
+  min-width: 0;
   border-radius: 0.5rem;
   padding: 0.55rem 0.75rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;

@@ -2,33 +2,84 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
 
 export default function StudentRegistrationPage() {
-  const router = useRouter();
+  type LocationOption = {
+    name: string;
+    code: string;
+  };
+
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [warning, setWarning] = useState("");
   const [isPending, setIsPending] = useState(false);
+  const [countries, setCountries] = useState<LocationOption[]>([]);
+  const [states, setStates] = useState<LocationOption[]>([]);
+  const [country, setCountry] = useState("");
+  const [state, setState] = useState("");
   const studentSelfSignupAllowed = isStudentSelfSignupAllowed();
   const cutoffLabel = getStudentSelfSignupCutoffLabel();
 
+  useEffect(() => {
+    let active = true;
+    const loadCountries = async () => {
+      try {
+        const response = await fetch("/api/locations");
+        const raw = await response.text();
+        const result = raw ? (JSON.parse(raw) as { countries?: LocationOption[] }) : {};
+        if (active) {
+          setCountries(result.countries ?? []);
+        }
+      } catch {
+        if (active) {
+          setCountries([]);
+        }
+      }
+    };
+    loadCountries();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const loadStates = async (countryName: string) => {
+    const selectedCountry = countries.find((item) => item.name === countryName);
+    if (!selectedCountry) {
+      setStates([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/locations?countryCode=${encodeURIComponent(selectedCountry.code)}`);
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { states?: LocationOption[] }) : {};
+      setStates(result.states ?? []);
+    } catch {
+      setStates([]);
+    }
+  };
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const form = event.currentTarget;
     setError("");
+    setInfo("");
+    setWarning("");
     setIsPending(true);
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
     const firstName = String(formData.get("firstName") ?? "");
     const lastName = String(formData.get("lastName") ?? "");
     const phone = String(formData.get("phone") ?? "");
-    const gradeLevel = String(formData.get("gradeLevel") ?? "");
-    const section = String(formData.get("section") ?? "");
+    const department = String(formData.get("department") ?? "");
     const guardianName = String(formData.get("guardianName") ?? "");
     const guardianPhone = String(formData.get("guardianPhone") ?? "");
+    const country = String(formData.get("country") ?? "");
+    const state = String(formData.get("state") ?? "");
 
     const response = await fetch("/api/register/student", {
       method: "POST",
@@ -39,14 +90,16 @@ export default function StudentRegistrationPage() {
         firstName,
         lastName,
         phone,
-        gradeLevel,
-        section,
+        department,
         guardianName,
         guardianPhone,
+        country,
+        state,
       }),
     });
 
-    const result = (await response.json()) as { error?: string };
+    const raw = await response.text();
+    const result = raw ? (JSON.parse(raw) as { error?: string; warning?: string; verifyUrl?: string }) : {};
 
     if (!response.ok) {
       setIsPending(false);
@@ -54,23 +107,19 @@ export default function StudentRegistrationPage() {
       return;
     }
 
-    const signInResult = await signIn("user-credentials", {
-      email,
-      password,
-      loginAs: "STUDENT",
-      redirect: false,
-      callbackUrl: "/dashboard/student",
-    });
-
     setIsPending(false);
-
-    if (!signInResult || signInResult.error) {
-      router.push("/login");
-      return;
+    if (result.warning) {
+      setWarning(result.warning);
     }
-
-    router.push(signInResult.url ?? "/dashboard/student");
-    router.refresh();
+    setInfo(
+      result.verifyUrl
+        ? `Account created. Verify your email using this local link: ${result.verifyUrl}`
+        : "Account created. Please check your email and verify before logging in."
+    );
+    form.reset();
+    setCountry("");
+    setState("");
+    setStates([]);
   };
 
   return (
@@ -115,6 +164,50 @@ export default function StudentRegistrationPage() {
                   <span className="brand-label">Email</span>
                   <input className="brand-input" type="email" name="email" required placeholder="student@staustin.edu" />
                 </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Country</span>
+                  <select
+                    className="brand-input"
+                    name="country"
+                    value={country}
+                    onChange={async (event) => {
+                      const value = event.currentTarget.value;
+                      setCountry(value);
+                      setState("");
+                      if (value) {
+                        await loadStates(value);
+                      } else {
+                        setStates([]);
+                      }
+                    }}
+                    required
+                  >
+                    <option value="">Select country</option>
+                    {countries.map((item) => (
+                      <option key={item.code} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">State</span>
+                  <select
+                    className="brand-input"
+                    name="state"
+                    value={state}
+                    onChange={(event) => setState(event.currentTarget.value)}
+                    disabled={!country}
+                    required
+                  >
+                    <option value="">Select state</option>
+                    {states.map((item) => (
+                      <option key={item.code} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 
@@ -122,13 +215,8 @@ export default function StudentRegistrationPage() {
               <p className="brand-section-title">Academic & Guardian</p>
               <div className="mt-3 grid gap-5 md:grid-cols-2">
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Grade Level</span>
-                  <input className="brand-input" type="text" name="gradeLevel" required placeholder="Grade 10" />
-                </label>
-
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Section</span>
-                  <input className="brand-input" type="text" name="section" required placeholder="A" />
+                  <span className="brand-label">Department</span>
+                  <input className="brand-input" type="text" name="department" required placeholder="Science" />
                 </label>
 
                 <label className="grid gap-1.5">
@@ -156,6 +244,8 @@ export default function StudentRegistrationPage() {
             </div>
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {warning ? <p className="text-sm text-amber-700">{warning}</p> : null}
+            {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
 
             <button className="btn-brand-secondary px-4 py-2.5 disabled:opacity-60" disabled={isPending}>
               {isPending ? "Registering..." : "Create Student Account"}

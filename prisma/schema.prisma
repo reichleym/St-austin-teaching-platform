@@ -34,6 +34,27 @@ enum EnrollmentStatus {
   COMPLETED
 }
 
+enum CourseVisibility {
+  DRAFT
+  PUBLISHED
+}
+
+enum ModuleVisibilityRule {
+  ALL_VISIBLE
+  LIMITED_ACCESS
+}
+
+enum LessonVisibility {
+  VISIBLE
+  HIDDEN
+}
+
+enum LessonAttachmentKind {
+  FILE
+  PDF
+  VIDEO_LINK
+}
+
 enum AdminActionType {
   INVITE_TEACHER
   INVITE_STUDENT
@@ -49,6 +70,12 @@ enum AdminActionType {
   UPDATE_SYSTEM_SETTINGS
 }
 
+enum AnnouncementAudience {
+  BOTH
+  TEACHER_ONLY
+  STUDENT_ONLY
+}
+
 model User {
   id                        String                    @id @default(cuid())
   name                      String?
@@ -58,6 +85,12 @@ model User {
   passwordHash              String
   role                      Role                      @default(STUDENT)
   status                    UserStatus                @default(ACTIVE)
+  phone                     String?
+  guardianName              String?
+  guardianPhone             String?
+  country                   String?
+  state                     String?
+  department                String?
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
   accounts                  Account[]
@@ -73,6 +106,7 @@ model User {
   discussionParticipations  DiscussionParticipation[]
   submittedGradeEditRequest GradeEditRequest[]        @relation("GradeEditRequestedBy")
   reviewedGradeEditRequest  GradeEditRequest[]        @relation("GradeEditReviewedBy")
+  lessonCompletions         LessonCompletion[]
   adminActions              AdminActionLog[]          @relation("AdminActionActor")
   targetedAdminActions      AdminActionLog[]          @relation("AdminActionTargetUser")
   settingsUpdates           SystemSettings[]          @relation("SystemSettingsUpdatedBy")
@@ -116,6 +150,13 @@ model VerificationToken {
 model Invitation {
   id          String    @id @default(cuid())
   email       String
+  name        String?
+  phone       String?
+  department  String?
+  guardianName String?
+  guardianPhone String?
+  country     String?
+  state       String?
   role        Role
   token       String    @unique
   expiresAt   DateTime
@@ -147,6 +188,7 @@ model Announcement {
   title       String
   content     String
   isGlobal    Boolean   @default(true)
+  audience    AnnouncementAudience @default(BOTH)
   expiresAt   DateTime?
   createdById String
   createdBy   User      @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
@@ -156,6 +198,7 @@ model Announcement {
   updatedAt   DateTime  @updatedAt
 
   @@index([isGlobal, expiresAt])
+  @@index([audience, expiresAt])
 }
 
 model Course {
@@ -163,13 +206,79 @@ model Course {
   code        String       @unique
   title       String
   description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  visibility  CourseVisibility @default(DRAFT)
   teacherId   String?
   teacher     User?        @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   assignments Assignment[]
   discussions Discussion[]
   enrollments Enrollment[]
+  modules     CourseModule[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model CourseModule {
+  id             String               @id @default(cuid())
+  courseId       String
+  course         Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  position       Int                  @default(0)
+  releaseAt      DateTime?
+  visibilityRule ModuleVisibilityRule @default(ALL_VISIBLE)
+  lessons        Lesson[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([courseId, position])
+}
+
+model Lesson {
+  id            String           @id @default(cuid())
+  moduleId      String
+  module        CourseModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title         String
+  content       String?
+  position      Int              @default(0)
+  visibility    LessonVisibility @default(VISIBLE)
+  isRequired    Boolean          @default(true)
+  embedUrl      String?
+  attachments   LessonAttachment[]
+  completions   LessonCompletion[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([moduleId, position])
+}
+
+model LessonAttachment {
+  id           String             @id @default(cuid())
+  lessonId     String
+  lesson       Lesson             @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  kind         LessonAttachmentKind @default(FILE)
+  label        String?
+  fileName     String?
+  mimeType     String?
+  sizeBytes    Int?
+  storageKey   String?
+  publicUrl    String?
+  createdAt    DateTime           @default(now())
+
+  @@index([lessonId, kind])
+}
+
+model LessonCompletion {
+  id          String    @id @default(cuid())
+  lessonId    String
+  studentId   String
+  completedAt DateTime  @default(now())
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student     User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, studentId])
+  @@index([studentId, completedAt])
 }
 
 model Assignment {

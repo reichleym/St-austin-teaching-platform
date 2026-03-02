@@ -20,7 +20,7 @@ export const dashboardModules: DashboardModule[] = [
     slug: "courses",
     title: "Courses",
     description: "Manage and navigate academic course structures.",
-    roles: [Role.TEACHER, Role.STUDENT],
+    roles: [Role.SUPER_ADMIN, Role.TEACHER, Role.STUDENT],
   },
   {
     slug: "learning",
@@ -32,6 +32,12 @@ export const dashboardModules: DashboardModule[] = [
     slug: "engagement",
     title: "Engagement",
     description: "Discussions and classroom interaction management.",
+    roles: [Role.TEACHER, Role.STUDENT],
+  },
+  {
+    slug: "announcements-feed",
+    title: "Announcements",
+    description: "Read institution announcements and updates.",
     roles: [Role.TEACHER, Role.STUDENT],
   },
   {
@@ -52,6 +58,20 @@ export const dashboardModules: DashboardModule[] = [
     description: "User lifecycle, invites, and access policy controls.",
     roles: [Role.SUPER_ADMIN],
     parentSlug: "admin-controls",
+  },
+  {
+    slug: "view-teachers",
+    title: "All Teachers",
+    description: "View and add new Teachers",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "user-access",
+  },
+  {
+    slug: "view-students",
+    title: "All Students",
+    description: "View and add new students",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "user-access",
   },
   {
     slug: "announcements",

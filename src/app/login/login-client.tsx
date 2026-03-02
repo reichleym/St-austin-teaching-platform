@@ -11,16 +11,40 @@ type Props = {
   callbackUrl: string;
 };
 
+type LoginFailureCode =
+  | "MISSING_CREDENTIALS"
+  | "INVALID_CREDENTIALS"
+  | "INACTIVE_ACCOUNT"
+  | "INCORRECT_USER_TYPE"
+  | "EMAIL_NOT_VERIFIED";
+
+function getLoginErrorMessage(code: LoginFailureCode | string | undefined) {
+  if (code === "INACTIVE_ACCOUNT") return "This account is inactive. Contact your administrator.";
+  if (code === "INVALID_CREDENTIALS") return "Invalid email or password.";
+  if (code === "INCORRECT_USER_TYPE") return "Incorrect user type selected.";
+  if (code === "EMAIL_NOT_VERIFIED") return "Please verify your email before logging in.";
+  return "Unable to sign in right now.";
+}
+
 export default function LoginClient({ callbackUrl }: Props) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [resendError, setResendError] = useState("");
+  const [resendInfo, setResendInfo] = useState("");
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
+  const [isResendPending, setIsResendPending] = useState(false);
   const [isPending, setIsPending] = useState(false);
+  const [activeLoginAs, setActiveLoginAs] = useState<"STUDENT" | "TEACHER" | null>(null);
   const studentSignupCutoff = getStudentSelfSignupCutoffLabel();
   const studentSelfSignupAllowed = isStudentSelfSignupAllowed();
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isPending) return;
     setError("");
+    setResendError("");
+    setResendInfo("");
+    setPendingVerificationEmail("");
     setIsPending(true);
 
     const formData = new FormData(event.currentTarget);
@@ -29,8 +53,26 @@ export default function LoginClient({ callbackUrl }: Props) {
     const nativeSubmitEvent = event.nativeEvent as SubmitEvent;
     const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
     const loginAs = submitter?.value === "TEACHER" ? "TEACHER" : "STUDENT";
+    setActiveLoginAs(loginAs);
     const defaultRoleCallbackUrl = loginAs === "TEACHER" ? "/dashboard/teacher" : "/dashboard/student";
     const targetCallbackUrl = callbackUrl === "/dashboard" ? defaultRoleCallbackUrl : callbackUrl;
+
+    const precheck = await fetch("/api/auth/login-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, loginAs, audience: "USER" }),
+    });
+    const precheckRaw = await precheck.text();
+    const precheckResult = precheckRaw ? (JSON.parse(precheckRaw) as { ok?: boolean; code?: LoginFailureCode }) : {};
+    if (!precheck.ok || !precheckResult.ok) {
+      setIsPending(false);
+      setActiveLoginAs(null);
+      if (precheckResult.code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerificationEmail(String(email ?? ""));
+      }
+      setError(getLoginErrorMessage(precheckResult.code));
+      return;
+    }
 
     const result = await signIn("user-credentials", {
       email,
@@ -43,12 +85,44 @@ export default function LoginClient({ callbackUrl }: Props) {
     setIsPending(false);
 
     if (!result || result.error) {
-      setError("Invalid credentials, inactive account, or incorrect user type.");
+      setActiveLoginAs(null);
+      setError("Unable to sign in right now.");
       return;
     }
 
     router.push(result.url ?? targetCallbackUrl);
     router.refresh();
+  };
+
+  const onResendVerification = async () => {
+    if (!pendingVerificationEmail) return;
+    setResendError("");
+    setResendInfo("");
+    setIsResendPending(true);
+
+    try {
+      const response = await fetch("/api/auth/resend-student-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingVerificationEmail }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { ok?: boolean; error?: string; warning?: string; verifyUrl?: string }) : {};
+
+      if (!response.ok) {
+        setResendError(result.error ?? "Unable to resend verification email.");
+        return;
+      }
+
+      const infoMessage = result.verifyUrl
+        ? `Verification link generated: ${result.verifyUrl}`
+        : "Verification email sent. Please check your inbox.";
+      setResendInfo(result.warning ? `${infoMessage} ${result.warning}` : infoMessage);
+    } catch {
+      setResendError("Unable to resend verification email.");
+    } finally {
+      setIsResendPending(false);
+    }
   };
 
   return (
@@ -93,25 +167,39 @@ export default function LoginClient({ callbackUrl }: Props) {
           </label>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {pendingVerificationEmail ? (
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={onResendVerification}
+                disabled={isResendPending}
+                className="w-fit text-sm font-semibold text-[#1f518f] underline disabled:opacity-60"
+              >
+                {isResendPending ? "Resending..." : "Resend verification email"}
+              </button>
+              {resendError ? <p className="text-sm text-red-600">{resendError}</p> : null}
+              {resendInfo ? <p className="text-sm text-emerald-700">{resendInfo}</p> : null}
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               className="btn-brand-secondary px-4 py-2 disabled:opacity-60"
-              disabled={isPending}
+              disabled={isPending && activeLoginAs === "STUDENT"}
               type="submit"
               name="loginAs"
               value="STUDENT"
             >
-              {isPending ? "Signing in..." : "Sign in as Student"}
+              {isPending && activeLoginAs === "STUDENT" ? "Signing in..." : "Sign in as Student"}
             </button>
             <button
               className="btn-brand-primary px-4 py-2 disabled:opacity-60"
-              disabled={isPending}
+              disabled={isPending && activeLoginAs === "TEACHER"}
               type="submit"
               name="loginAs"
               value="TEACHER"
             >
-              {isPending ? "Signing in..." : "Sign in as Teacher"}
+              {isPending && activeLoginAs === "TEACHER" ? "Signing in..." : "Sign in as Teacher"}
             </button>
           </div>
         </form>

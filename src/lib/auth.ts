@@ -1,8 +1,8 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { Role, UserStatus } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { evaluateLoginAttempt } from "@/lib/login-validation";
 import { prisma } from "@/lib/prisma";
 
 type LoginAudience = "SUPER_ADMIN" | "USER";
@@ -22,54 +22,17 @@ async function authorizeCredentials(
   credentials: Record<"email" | "password" | "loginAs", string> | undefined,
   audience: LoginAudience
 ) {
-  if (!credentials?.email || !credentials?.password) {
-    return null;
-  }
-
   try {
-    const result = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        email: string;
-        name: string | null;
-        image: string | null;
-        passwordHash: string;
-        role: string;
-        status: string;
-      }>
-    >`SELECT "id","email","name","image","passwordHash","role"::text AS "role","status"::text AS "status" FROM "User" WHERE "email" = ${credentials.email.toLowerCase()} LIMIT 1`;
-    
-    if (!result || result.length === 0) {
+    const evaluated = await evaluateLoginAttempt({
+      email: credentials?.email,
+      password: credentials?.password,
+      loginAs: credentials?.loginAs,
+      audience,
+    });
+    if (!evaluated.ok) {
       return null;
     }
-    
-    const user = result[0];
-
-    if (!user || user.status !== "ACTIVE") {
-      return null;
-    }
-
-    const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-    if (!valid) {
-      return null;
-    }
-
-    const roleText = String(user.role);
-
-    if (audience === "SUPER_ADMIN" && roleText !== "SUPER_ADMIN" && roleText !== "ADMIN") {
-      return null;
-    }
-
-    if (audience === "USER" && (roleText === "SUPER_ADMIN" || roleText === "ADMIN")) {
-      return null;
-    }
-
-    if (audience === "USER" && credentials.loginAs) {
-      const targetRoleText = credentials.loginAs === "TEACHER" ? "TEACHER" : "STUDENT";
-      if (roleText !== targetRoleText) {
-        return null;
-      }
-    }
+    const user = evaluated.user;
 
     return {
       id: user.id,
