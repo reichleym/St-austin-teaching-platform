@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { Role } from "@prisma/client";
 import { getToken } from "next-auth/jwt";
 import { getRoleHomePath } from "@/lib/role-routing";
+
+type RoleLike = "SUPER_ADMIN" | "ADMIN" | "TEACHER" | "STUDENT" | undefined;
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
@@ -15,7 +16,7 @@ export async function middleware(req: NextRequest) {
   const isLoggedIn = Boolean(token);
 
   if (isAuthRoute && isLoggedIn) {
-    const redirectTo = getRoleHomePath(token?.role as Role | undefined);
+    const redirectTo = getRoleHomePath(token?.role as RoleLike);
     return NextResponse.redirect(new URL(redirectTo, req.nextUrl.origin));
   }
 
@@ -26,7 +27,7 @@ export async function middleware(req: NextRequest) {
   }
 
   const tokenRole = String(token?.role ?? "");
-  if (isAdminRoute && tokenRole !== Role.SUPER_ADMIN && tokenRole !== "ADMIN") {
+  if (isAdminRoute && tokenRole !== "SUPER_ADMIN" && tokenRole !== "ADMIN") {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
