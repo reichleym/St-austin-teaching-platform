@@ -42,6 +42,20 @@ a {
   text-decoration-color: rgba(0, 59, 143, 0.35);
 }
 
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  cursor: pointer;
+}
+
+button:disabled,
+input[type="button"]:disabled,
+input[type="submit"]:disabled,
+input[type="reset"]:disabled {
+  cursor: not-allowed;
+}
+
 ::selection {
   background: #c6e6ff;
   color: #00295f;

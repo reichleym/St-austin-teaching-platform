@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Role } from "@prisma/client";
 
 type RoleOverviewProps = {
@@ -7,8 +8,9 @@ type RoleOverviewProps = {
 
 type Metric = {
   label: string;
-  value: string;
+  value: string | number;
   delta: string;
+  href?: string;
 };
 
 type FocusItem = {
@@ -17,16 +19,21 @@ type FocusItem = {
   priority: "High" | "Medium" | "Low";
 };
 
-function getOverviewModel(role: Role) {
+type DynamicOverview = {
+  metrics: Metric[];
+};
+
+function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
   if (role === Role.SUPER_ADMIN) {
     return {
       heading: "Institution Operations",
       summary: "Governance, staffing, onboarding, and platform reliability across all schools and terms.",
-      metrics: [
-        { label: "Governance Scope", value: "Platform-wide", delta: "Single-admin authority" },
-        { label: "Open Invitations", value: "126", delta: "Teachers and students pending" },
-        { label: "Grade Edit Requests", value: "9", delta: "Awaiting final approval" },
-      ] as Metric[],
+      metrics:
+        dynamicOverview?.metrics ?? [
+          { label: "Announcements", value: 0, delta: "available for your role", href: "/dashboard?module=announcements" },
+          { label: "Courses", value: 0, delta: "institution total", href: "/dashboard?module=courses" },
+          { label: "Grade Edit Requests", value: 0, delta: "pending review", href: "/dashboard?module=assessment" },
+        ],
       focus: [
         {
           title: "User & access governance",
@@ -57,11 +64,12 @@ function getOverviewModel(role: Role) {
     return {
       heading: "Teaching Command Center",
       summary: "Course delivery, grading throughput, engagement signals, and learner support workflow.",
-      metrics: [
-        { label: "Classes Today", value: "5", delta: "2 with lab sessions" },
-        { label: "Submissions Pending", value: "42", delta: "13 due in 24 hours" },
-        { label: "Avg Class Engagement", value: "88%", delta: "+6% from last week" },
-      ] as Metric[],
+      metrics:
+        dynamicOverview?.metrics ?? [
+          { label: "Assigned Courses", value: 0, delta: "currently assigned", href: "/dashboard?module=courses" },
+          { label: "Submissions Pending", value: 0, delta: "awaiting grading", href: "/dashboard?module=assessment" },
+          { label: "Assignments", value: 0, delta: "in your courses", href: "/dashboard?module=assessment" },
+        ],
       focus: [
         {
           title: "Grade week 6 assessments",
@@ -91,11 +99,12 @@ function getOverviewModel(role: Role) {
   return {
     heading: "Student Learning Hub",
     summary: "Academic progress, deadlines, attendance performance, and personal learning actions.",
-    metrics: [
-      { label: "Current GPA", value: "3.72", delta: "+0.14 this term" },
-      { label: "Assignments Due", value: "4", delta: "2 due this week" },
-      { label: "Attendance Rate", value: "94%", delta: "On track for honors" },
-    ] as Metric[],
+    metrics:
+      dynamicOverview?.metrics ?? [
+        { label: "Enrolled Courses", value: 0, delta: "active enrollments", href: "/dashboard?module=courses" },
+        { label: "Assignments", value: 0, delta: "available to submit", href: "/dashboard?module=assessment" },
+        { label: "Announcements", value: 0, delta: "for your role", href: "/dashboard?module=announcements-feed" },
+      ],
     focus: [
       {
         title: "Complete Mathematics assignment set",
@@ -133,8 +142,8 @@ function PriorityBadge({ priority }: { priority: FocusItem["priority"] }) {
   return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}>{priority}</span>;
 }
 
-export function RoleOverview({ role, name }: RoleOverviewProps) {
-  const model = getOverviewModel(role);
+export function RoleOverview({ role, name, overview }: RoleOverviewProps & { overview?: DynamicOverview }) {
+  const model = getOverviewModel(role, overview);
   const displayName =
     name?.trim() || (role === Role.SUPER_ADMIN ? "Administrator" : role === Role.TEACHER ? "Faculty" : "Student");
 
@@ -151,11 +160,21 @@ export function RoleOverview({ role, name }: RoleOverviewProps) {
 
       <div className="grid gap-4 md:grid-cols-3">
         {model.metrics.map((item) => (
-          <article key={item.label} className="brand-card p-5">
-            <p className="brand-section-title">{item.label}</p>
-            <p className="mt-2 text-3xl font-black text-[#0b3e81]">{item.value}</p>
-            <p className="mt-1 text-xs font-semibold text-[#2a66a8]">{item.delta}</p>
-          </article>
+          item.href ? (
+            <Link key={item.label} href={item.href} className="block">
+              <article className="brand-card p-5 transition hover:border-[#90b7eb] hover:shadow-[0_8px_24px_rgba(11,62,129,0.08)]">
+                <p className="brand-section-title">{item.label}</p>
+                <p className="mt-2 text-3xl font-black text-[#0b3e81]">{item.value}</p>
+                <p className="mt-1 text-xs font-semibold text-[#2a66a8]">{item.delta}</p>
+              </article>
+            </Link>
+          ) : (
+            <article key={item.label} className="brand-card p-5">
+              <p className="brand-section-title">{item.label}</p>
+              <p className="mt-2 text-3xl font-black text-[#0b3e81]">{item.value}</p>
+              <p className="mt-1 text-xs font-semibold text-[#2a66a8]">{item.delta}</p>
+            </article>
+          )
         ))}
       </div>
 

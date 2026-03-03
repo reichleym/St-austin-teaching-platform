@@ -341,7 +341,8 @@ export function CoursesModule({ role }: Props) {
         {isLoading ? <p className="brand-muted mt-3 text-sm">Loading courses...</p> : null}
 
         {!isLoading && filteredCourses.length ? (
-          <table className="mt-3 min-w-full text-left text-sm">
+          <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
                 <th className="px-3 py-2 font-semibold">Code</th>
@@ -435,6 +436,7 @@ export function CoursesModule({ role }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         ) : null}
 
         {!isLoading && !filteredCourses.length ? (

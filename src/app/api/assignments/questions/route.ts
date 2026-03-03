@@ -28,6 +28,30 @@ function normalizeOptions(input: unknown) {
     .slice(0, 8);
 }
 
+async function getAssignmentAccess(assignmentId: string, user: { id: string; role: Role | string }) {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: { course: { select: { id: true, teacherId: true } } },
+  });
+  if (!assignment) return { assignment: null, allowed: false };
+
+  if (isSuperAdminRole(user.role)) return { assignment, allowed: true };
+  if (user.role === Role.TEACHER) {
+    return { assignment, allowed: assignment.course.teacherId === user.id };
+  }
+  if (user.role === Role.STUDENT) {
+    const enrolled = await prisma.enrollment.count({
+      where: {
+        courseId: assignment.course.id,
+        studentId: user.id,
+        status: "ACTIVE",
+      },
+    });
+    return { assignment, allowed: enrolled > 0 };
+  }
+  return { assignment, allowed: false };
+}
+
 async function ensureQuizQuestionSchema() {
   await prisma.$executeRawUnsafe(`
 CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
@@ -49,11 +73,18 @@ CREATE INDEX IF NOT EXISTS "AssignmentQuizQuestion_assignmentId_idx" ON "Assignm
 export async function GET(request: NextRequest) {
   try {
     await ensureQuizQuestionSchema();
-    await requireAuthenticatedUser();
+    const user = await requireAuthenticatedUser();
 
     const assignmentId = request.nextUrl.searchParams.get("assignmentId")?.trim() ?? "";
     if (!assignmentId) {
       return NextResponse.json({ error: "assignmentId is required." }, { status: 400 });
+    }
+    const access = await getAssignmentAccess(assignmentId, user);
+    if (!access.assignment) {
+      return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
+    }
+    if (!access.allowed) {
+      return NextResponse.json({ error: "You do not have access to this assignment." }, { status: 403 });
     }
 
     const questions = await prisma.$queryRaw<
@@ -74,10 +105,23 @@ export async function GET(request: NextRequest) {
     `;
 
     return NextResponse.json({
-      questions: questions.map((item) => ({
-        ...item,
-        options: Array.isArray(item.options) ? item.options : [],
-      })),
+      questions: questions.map((item) => {
+        const base = {
+          id: item.id,
+          assignmentId: item.assignmentId,
+          prompt: item.prompt,
+          options: Array.isArray(item.options) ? item.options : [],
+          points: item.points,
+          position: item.position,
+        };
+        if (user.role === Role.STUDENT) {
+          return base;
+        }
+        return {
+          ...base,
+          correctOptionIndex: item.correctOptionIndex,
+        };
+      }),
     });
   } catch (error) {
     if (error instanceof PermissionError) {
@@ -113,14 +157,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "points must be > 0." }, { status: 400 });
     }
 
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      include: { course: { select: { teacherId: true } } },
-    });
-    if (!assignment) {
+    const access = await getAssignmentAccess(assignmentId, user);
+    if (!access.assignment) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
     }
-    if (user.role === Role.TEACHER && assignment.course.teacherId !== user.id) {
+    if (!access.allowed) {
       return NextResponse.json({ error: "You can only manage quiz questions in your assigned courses." }, { status: 403 });
     }
 

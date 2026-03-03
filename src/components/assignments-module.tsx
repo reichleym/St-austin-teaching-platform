@@ -9,6 +9,10 @@ type CourseOption = {
   code: string;
   title: string;
   teacherId: string | null;
+  teacher?: {
+    name: string | null;
+    email: string;
+  } | null;
 };
 
 type AssignmentConfig = {
@@ -18,6 +22,8 @@ type AssignmentConfig = {
   allowedSubmissionTypes: Array<"TEXT" | "FILE">;
   maxAttempts: number;
   autoGrade: boolean;
+  allowLateSubmissions: boolean;
+  attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
   moduleId: string | null;
   lessonId: string | null;
@@ -66,6 +72,7 @@ type SubmissionItem = {
   rawScore: number | null;
   finalScore: number | null;
   feedback: string | null;
+  letterGrade?: string | null;
   publishedAt: string | null;
   status: string;
   plagiarismStatus?: "PENDING" | "COMPLETED" | "FAILED" | null;
@@ -89,6 +96,19 @@ type DraftQuizQuestion = {
   options: string[];
   correctOptionIndex: number;
   points: number;
+};
+
+type GradeEditRequestItem = {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  reason: string;
+  proposedPoints: number | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  assignment?: { id: string; title: string; courseId: string };
+  student?: { id: string; name: string | null; email: string };
+  requestedBy?: { id: string; name: string | null; email: string };
 };
 
 type Props = {
@@ -124,9 +144,19 @@ const plagiarismBand = (score: number | null | undefined) => {
   return "Low";
 };
 
+const isPublishedOrLockedState = (state: string) =>
+  state === "GRADE_PUBLISHED" ||
+  state === "GRADE_EDIT_REQUESTED" ||
+  state === "GRADE_EDIT_APPROVED" ||
+  state === "GRADE_EDIT_REJECTED" ||
+  state === "PUBLISHED";
+
 export function AssignmentsModule({ role }: Props) {
-  const canManage = role === "SUPER_ADMIN" || role === "TEACHER" || role === "ADMIN";
+  const canManage = role === "TEACHER";
   const isStudent = role === "STUDENT";
+  const isTeacher = role === "TEACHER";
+  const isSuperAdmin = role === "SUPER_ADMIN";
+  const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN";
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -146,6 +176,8 @@ export function AssignmentsModule({ role }: Props) {
   const [createAllowedText, setCreateAllowedText] = useState(true);
   const [createAllowedFile, setCreateAllowedFile] = useState(true);
   const [createAttempts, setCreateAttempts] = useState("1");
+  const [createAllowLateSubmissions, setCreateAllowLateSubmissions] = useState(true);
+  const [createAttemptScoringStrategy, setCreateAttemptScoringStrategy] = useState<"LATEST" | "HIGHEST">("LATEST");
   const [createTimerMinutes, setCreateTimerMinutes] = useState("");
   const [createRubric, setCreateRubric] = useState("");
   const [createModuleId, setCreateModuleId] = useState("");
@@ -169,6 +201,8 @@ export function AssignmentsModule({ role }: Props) {
   const [editAllowedText, setEditAllowedText] = useState(true);
   const [editAllowedFile, setEditAllowedFile] = useState(true);
   const [editAttempts, setEditAttempts] = useState("1");
+  const [editAllowLateSubmissions, setEditAllowLateSubmissions] = useState(true);
+  const [editAttemptScoringStrategy, setEditAttemptScoringStrategy] = useState<"LATEST" | "HIGHEST">("LATEST");
   const [editTimerMinutes, setEditTimerMinutes] = useState("");
   const [editRubric, setEditRubric] = useState("");
   const [editModuleId, setEditModuleId] = useState("");
@@ -198,6 +232,15 @@ export function AssignmentsModule({ role }: Props) {
   const [newQuestionPoints, setNewQuestionPoints] = useState("1");
   const [createQuestionPending, setCreateQuestionPending] = useState(false);
   const [deleteQuestionPendingId, setDeleteQuestionPendingId] = useState("");
+  const [gradeEditRequests, setGradeEditRequests] = useState<GradeEditRequestItem[]>([]);
+  const [gradeEditRequestsLoading, setGradeEditRequestsLoading] = useState(false);
+  const [requestEditForSubmissionId, setRequestEditForSubmissionId] = useState("");
+  const [requestEditReason, setRequestEditReason] = useState("");
+  const [requestEditProposedPoints, setRequestEditProposedPoints] = useState("");
+  const [requestEditPendingId, setRequestEditPendingId] = useState("");
+  const [reviewPendingId, setReviewPendingId] = useState("");
+  const [reviewApprovedPointsByRequest, setReviewApprovedPointsByRequest] = useState<Record<string, string>>({});
+  const [reviewNoteByRequest, setReviewNoteByRequest] = useState<Record<string, string>>({});
 
   const selectedAssignment = useMemo(
     () => assignments.find((item) => item.id === selectedAssignmentId) ?? null,
@@ -239,6 +282,27 @@ export function AssignmentsModule({ role }: Props) {
       setLoading(false);
     }
   }, []);
+
+  const loadGradeEditRequests = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    setGradeEditRequestsLoading(true);
+    try {
+      const response = await fetch("/api/admin/grade-edit-requests", { method: "GET" });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { requests?: GradeEditRequestItem[]; error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to load grade edit requests.");
+        setGradeEditRequests([]);
+        return;
+      }
+      setGradeEditRequests(result.requests ?? []);
+    } catch {
+      setError("Unable to load grade edit requests.");
+      setGradeEditRequests([]);
+    } finally {
+      setGradeEditRequestsLoading(false);
+    }
+  }, [isSuperAdmin]);
 
   const loadSubmissions = useCallback(async (assignmentId: string) => {
     if (!assignmentId) {
@@ -318,6 +382,12 @@ export function AssignmentsModule({ role }: Props) {
   }, [load]);
 
   useEffect(() => {
+    if (isSuperAdmin) {
+      void loadGradeEditRequests();
+    }
+  }, [isSuperAdmin, loadGradeEditRequests]);
+
+  useEffect(() => {
     if (canManage && createCourseId) {
       void loadCourseStructure(createCourseId);
     }
@@ -364,6 +434,8 @@ export function AssignmentsModule({ role }: Props) {
     setEditAllowedText(selected.config.allowedSubmissionTypes.includes("TEXT"));
     setEditAllowedFile(selected.config.allowedSubmissionTypes.includes("FILE"));
     setEditAttempts(String(selected.config.maxAttempts));
+    setEditAllowLateSubmissions(selected.config.allowLateSubmissions !== false);
+    setEditAttemptScoringStrategy(selected.config.attemptScoringStrategy ?? "LATEST");
     setEditTimerMinutes(selected.config.timerMinutes ? String(selected.config.timerMinutes) : "");
     setEditRubric(selected.config.rubricSteps.join("\n"));
     setEditModuleId(selected.config.moduleId ?? "");
@@ -426,6 +498,8 @@ export function AssignmentsModule({ role }: Props) {
           assignmentType: createType,
           allowedSubmissionTypes: buildAllowedTypes(createAllowedText, createAllowedFile),
           maxAttempts: Number(createAttempts),
+          allowLateSubmissions: createAllowLateSubmissions,
+          attemptScoringStrategy: createAttemptScoringStrategy,
           timerMinutes: createType === "QUIZ" ? Number(createTimerMinutes || 0) || null : null,
           rubricSteps: createRubric.split("\n").map((item) => item.trim()).filter(Boolean),
           autoGrade: createType === "QUIZ",
@@ -469,6 +543,8 @@ export function AssignmentsModule({ role }: Props) {
       setCreateMaxPoints("100");
       setCreateType("HOMEWORK");
       setCreateAttempts("1");
+      setCreateAllowLateSubmissions(true);
+      setCreateAttemptScoringStrategy("LATEST");
       setCreateTimerMinutes("");
       setCreateRubric("");
       setCreateModuleId("");
@@ -502,6 +578,8 @@ export function AssignmentsModule({ role }: Props) {
           assignmentType: editType,
           allowedSubmissionTypes: buildAllowedTypes(editAllowedText, editAllowedFile),
           maxAttempts: Number(editAttempts),
+          allowLateSubmissions: editAllowLateSubmissions,
+          attemptScoringStrategy: editAttemptScoringStrategy,
           timerMinutes: editType === "QUIZ" ? Number(editTimerMinutes || 0) || null : null,
           rubricSteps: editRubric.split("\n").map((item) => item.trim()).filter(Boolean),
           autoGrade: editType === "QUIZ",
@@ -711,6 +789,73 @@ export function AssignmentsModule({ role }: Props) {
     }
   };
 
+  const onRequestGradeEdit = async (submission: SubmissionItem) => {
+    if (!selectedAssignment || !isTeacher) return;
+    const proposedPointsValue = Number(requestEditProposedPoints);
+    if (!Number.isFinite(proposedPointsValue) || proposedPointsValue < 0) {
+      setError("Proposed points are required and must be non-negative.");
+      return;
+    }
+    setRequestEditPendingId(submission.id);
+    setError("");
+    try {
+      const response = await fetch("/api/teacher/grade-edit-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignmentId: selectedAssignment.id,
+          studentId: submission.studentId,
+          reason: requestEditReason,
+          proposedPoints: proposedPointsValue,
+        }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to submit grade edit request.");
+        return;
+      }
+      setRequestEditForSubmissionId("");
+      setRequestEditReason("");
+      setRequestEditProposedPoints("");
+    } catch {
+      setError("Unable to submit grade edit request.");
+    } finally {
+      setRequestEditPendingId("");
+    }
+  };
+
+  const onReviewGradeEditRequest = async (requestId: string, decision: "APPROVE" | "REJECT") => {
+    setReviewPendingId(requestId);
+    setError("");
+    try {
+      const approvedPointsRaw = reviewApprovedPointsByRequest[requestId];
+      const response = await fetch(`/api/admin/grade-edit-requests/${encodeURIComponent(requestId)}/decision`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision,
+          reviewNote: reviewNoteByRequest[requestId] ?? undefined,
+          approvedPoints: approvedPointsRaw !== undefined && approvedPointsRaw !== "" ? Number(approvedPointsRaw) : undefined,
+        }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to process grade edit decision.");
+        return;
+      }
+      await loadGradeEditRequests();
+      if (selectedAssignmentId) {
+        await loadSubmissions(selectedAssignmentId);
+      }
+    } catch {
+      setError("Unable to process grade edit decision.");
+    } finally {
+      setReviewPendingId("");
+    }
+  };
+
   const quizRemainingSeconds = useMemo(() => {
     if (
       !isStudent ||
@@ -728,14 +873,77 @@ export function AssignmentsModule({ role }: Props) {
   }, [isStudent, nowTick, selectedAssignment, studentQuizStartedAt]);
 
   return (
-    <section className="grid gap-4">
-      <section className="brand-card p-5">
+    <section className="grid min-w-0 gap-4">
+      {isSuperAdmin ? (
+        <section className="brand-card min-w-0 overflow-hidden p-5">
+          <p className="brand-section-title">Pending Grade Edit Requests</p>
+          {gradeEditRequestsLoading ? <p className="brand-muted mt-3 text-sm">Loading requests...</p> : null}
+          {!gradeEditRequestsLoading && gradeEditRequests.length === 0 ? (
+            <p className="brand-muted mt-3 text-sm">No pending requests.</p>
+          ) : null}
+          <div className="mt-3 grid gap-3">
+            {gradeEditRequests.map((request) => (
+              <article key={request.id} className="rounded-md border border-[#dbe9fb] p-3">
+                <p className="text-sm font-semibold text-[#0d3f80]">
+                  {request.assignment?.title ?? "Assignment"} - {request.student?.name || request.student?.email || "Student"}
+                </p>
+                <p className="mt-1 text-xs text-[#3a689f]">Reason: {request.reason}</p>
+                <p className="mt-1 text-xs text-[#3a689f]">
+                  Proposed: {request.proposedPoints ?? "N/A"} | Requested by: {request.requestedBy?.name || request.requestedBy?.email || "Teacher"}
+                </p>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <input
+                    className="brand-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Approved points (optional)"
+                    value={reviewApprovedPointsByRequest[request.id] ?? ""}
+                    onChange={(event) =>
+                      setReviewApprovedPointsByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
+                    }
+                  />
+                  <input
+                    className="brand-input"
+                    placeholder="Review note (optional)"
+                    value={reviewNoteByRequest[request.id] ?? ""}
+                    onChange={(event) =>
+                      setReviewNoteByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
+                    }
+                  />
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-brand-primary px-3 py-1.5 text-xs font-semibold"
+                    disabled={reviewPendingId === request.id}
+                    onClick={() => void onReviewGradeEditRequest(request.id, "APPROVE")}
+                  >
+                    {reviewPendingId === request.id ? "Processing..." : "Approve"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
+                    disabled={reviewPendingId === request.id}
+                    onClick={() => void onReviewGradeEditRequest(request.id, "REJECT")}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="brand-card min-w-0 overflow-hidden p-5">
         <p className="brand-section-title">Assignment List</p>
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         {loading ? <p className="brand-muted mt-3 text-sm">Loading assignments...</p> : null}
 
         {!loading && assignments.length ? (
-          <table className="mt-3 min-w-full text-left text-sm">
+          <div className="mt-3 w-full max-w-full overflow-x-auto">
+          <table className="w-full min-w-[780px] text-left text-sm lg:min-w-full">
             <thead>
               <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
                 <th className="px-3 py-2 font-semibold">Course</th>
@@ -799,15 +1007,16 @@ export function AssignmentsModule({ role }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         ) : null}
 
         {!loading && !assignments.length ? <p className="brand-muted mt-3 text-sm">No assignments found.</p> : null}
       </section>
 
       {selectedAssignment ? (
-        <section className="brand-card p-5">
+        <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
-          <p className="brand-muted mt-2 text-sm">
+          <p className="brand-muted mt-2 break-words text-sm">
             Submission Types: {selectedAssignment.config.allowedSubmissionTypes.join(", ")} | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
             {selectedAssignment.config.assignmentType === "QUIZ" && selectedAssignment.config.timerMinutes
               ? ` | Timer: ${selectedAssignment.config.timerMinutes} min`
@@ -922,12 +1131,54 @@ export function AssignmentsModule({ role }: Props) {
             </div>
           ) : null}
 
-          {(canManage || isStudent) ? (
+          {(canManage || isStudent || isAdminReadOnly) ? (
             <div className="mt-4 space-y-2">
               <p className="brand-label">Submissions</p>
               {submissionsLoading ? <p className="brand-muted text-sm">Loading submissions...</p> : null}
               {!submissionsLoading && submissions.length === 0 ? <p className="brand-muted text-sm">No submissions yet.</p> : null}
-              {submissions.map((submission) => (
+              {isAdminReadOnly && submissions.length ? (
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
+                        <th className="px-3 py-2 font-semibold">Course</th>
+                        <th className="px-3 py-2 font-semibold">Teacher</th>
+                        <th className="px-3 py-2 font-semibold">Student</th>
+                        <th className="px-3 py-2 font-semibold">Attempt</th>
+                        <th className="px-3 py-2 font-semibold">Score</th>
+                        <th className="px-3 py-2 font-semibold">Letter</th>
+                        <th className="px-3 py-2 font-semibold">Status</th>
+                        <th className="px-3 py-2 font-semibold">Plagiarism</th>
+                        <th className="px-3 py-2 font-semibold">Submitted</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {submissions.map((submission) => (
+                        <tr key={submission.id} className="border-b border-[#e7f0fc] text-[#0d3f80]">
+                          <td className="px-3 py-2">
+                            {selectedAssignment?.course.code} - {selectedAssignment?.course.title}
+                          </td>
+                          <td className="px-3 py-2">
+                            {selectedAssignment?.course.teacher?.name || selectedAssignment?.course.teacher?.email || "Unassigned"}
+                          </td>
+                          <td className="px-3 py-2">{submission.studentName || submission.studentEmail || "Student"}</td>
+                          <td className="px-3 py-2">{submission.attemptNumber}</td>
+                          <td className="px-3 py-2">{submission.finalScore ?? "-"}</td>
+                          <td className="px-3 py-2">{submission.letterGrade ?? "-"}</td>
+                          <td className="px-3 py-2">{submission.status}</td>
+                          <td className="px-3 py-2">
+                            {submission.plagiarismStatus === "COMPLETED"
+                              ? `${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)`
+                              : submission.plagiarismStatus ?? "-"}
+                          </td>
+                          <td className="px-3 py-2">{formatDate(submission.submittedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {!isAdminReadOnly ? submissions.map((submission) => (
                 <div key={submission.id} className="rounded-md border border-[#dbe9fb] p-3">
                   <p className="text-xs font-semibold text-[#285f9f]">
                     Attempt {submission.attemptNumber}
@@ -936,6 +1187,12 @@ export function AssignmentsModule({ role }: Props) {
                   <p className="mt-1 text-xs text-[#3a689f]">
                     Submitted: {formatDate(submission.submittedAt)} | Late: {submission.isLate ? `${formatMinutes(submission.lateByMinutes)} (${submission.latePenaltyPct}%)` : "No"}
                   </p>
+                  {submission.finalScore !== null ? (
+                    <p className="mt-1 text-xs text-[#3a689f]">
+                      Final Score: {submission.finalScore}
+                      {submission.letterGrade ? ` | Letter: ${submission.letterGrade}` : ""}
+                    </p>
+                  ) : null}
                   {canManage ? (
                     <p className="mt-1 text-xs text-[#3a689f]">
                       Plagiarism: {submission.plagiarismStatus ?? "PENDING"}
@@ -950,7 +1207,7 @@ export function AssignmentsModule({ role }: Props) {
                     </a>
                   ) : null}
 
-                  {canManage ? (
+                  {canManage && !isPublishedOrLockedState(submission.status) ? (
                     <div className="mt-3 grid gap-2">
                       <input
                         className="brand-input"
@@ -993,15 +1250,66 @@ export function AssignmentsModule({ role }: Props) {
                       </div>
                     </div>
                   ) : null}
+                  {canManage && isPublishedOrLockedState(submission.status) ? (
+                    <div className="mt-3 grid gap-2">
+                      <p className="text-xs font-semibold text-[#285f9f]">
+                        Published grade is locked. Use grade edit request flow for changes.
+                      </p>
+                      {isTeacher && submission.status === "GRADE_PUBLISHED" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold"
+                            onClick={() =>
+                              setRequestEditForSubmissionId((prev) => (prev === submission.id ? "" : submission.id))
+                            }
+                          >
+                            {requestEditForSubmissionId === submission.id ? "Cancel Request" : "Request Grade Edit"}
+                          </button>
+                          {requestEditForSubmissionId === submission.id ? (
+                            <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-3">
+                              <textarea
+                                className="brand-input min-h-[78px]"
+                                placeholder="Reason for grade edit request"
+                                value={requestEditReason}
+                                onChange={(event) => setRequestEditReason(event.currentTarget.value)}
+                              />
+                              <input
+                                className="brand-input"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="Proposed points"
+                                value={requestEditProposedPoints}
+                                onChange={(event) => setRequestEditProposedPoints(event.currentTarget.value)}
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="btn-brand-primary w-fit px-3 py-1.5 text-xs font-semibold"
+                                disabled={requestEditPendingId === submission.id}
+                                onClick={() => void onRequestGradeEdit(submission)}
+                              >
+                                {requestEditPendingId === submission.id ? "Submitting..." : "Submit Request"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {isTeacher && submission.status !== "GRADE_PUBLISHED" ? (
+                        <p className="text-xs text-[#3a689f]">Grade edit is already under admin review or processed.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+              )) : null}
             </div>
           ) : null}
         </section>
       ) : null}
 
       {canManage ? (
-        <section className="brand-card p-5">
+        <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Create Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onCreate}>
             <select className="brand-input" value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
@@ -1018,6 +1326,22 @@ export function AssignmentsModule({ role }: Props) {
               <input className="brand-input" type="number" min="1" step="0.01" value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
               <input className="brand-input" type="number" min="1" step="1" value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
             </div>
+            <select
+              className="brand-input"
+              value={createAttemptScoringStrategy}
+              onChange={(event) => setCreateAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
+            >
+              <option value="LATEST">Attempt Rule: Latest attempt counts</option>
+              <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+            </select>
+            <label className="brand-input inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={createAllowLateSubmissions}
+                onChange={(event) => setCreateAllowLateSubmissions(event.currentTarget.checked)}
+              />
+              Allow late submissions
+            </label>
             <div className="grid gap-3 md:grid-cols-3">
               <select className="brand-input" value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
                 <option value="HOMEWORK">HOMEWORK</option>
@@ -1133,7 +1457,7 @@ export function AssignmentsModule({ role }: Props) {
       ) : null}
 
       {canManage && editId ? (
-        <section className="brand-card p-5">
+        <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Edit Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onUpdate}>
             <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
@@ -1144,6 +1468,22 @@ export function AssignmentsModule({ role }: Props) {
               <input className="brand-input" type="number" min="1" step="0.01" value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
               <input className="brand-input" type="number" min="1" step="1" value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
             </div>
+            <select
+              className="brand-input"
+              value={editAttemptScoringStrategy}
+              onChange={(event) => setEditAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
+            >
+              <option value="LATEST">Attempt Rule: Latest attempt counts</option>
+              <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+            </select>
+            <label className="brand-input inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={editAllowLateSubmissions}
+                onChange={(event) => setEditAllowLateSubmissions(event.currentTarget.checked)}
+              />
+              Allow late submissions
+            </label>
             <div className="grid gap-3 md:grid-cols-3">
               <select className="brand-input" value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
                 <option value="HOMEWORK">HOMEWORK</option>

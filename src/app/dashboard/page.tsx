@@ -486,33 +486,69 @@ export default async function DashboardPage({ searchParams }: Props) {
   }
 
   let moduleKpiLabel = "Module Status";
-  let moduleKpiValue: string | number = "Ready";
-  let moduleKpiHint = `${selected.title} module`;
+  let moduleKpiValue: string | number = 0;
+  let moduleKpiHint = "live count";
+
+  const coursesCount = await prisma.course.count({
+    where: isSuperAdmin
+      ? {}
+      : session.user.role === Role.TEACHER
+        ? { teacherId: session.user.id }
+        : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
+  });
+  const assignmentCount = await prisma.assignment.count({
+    where:
+      session.user.role === Role.SUPER_ADMIN
+        ? {}
+        : session.user.role === Role.TEACHER
+          ? { course: { teacherId: session.user.id } }
+          : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
+  });
+  const pendingGradeEditCount = isSuperAdmin
+    ? await prisma.gradeEditRequest.count({ where: { status: "PENDING" } })
+    : session.user.role === Role.TEACHER
+      ? await prisma.gradeEditRequest.count({ where: { requestedById: session.user.id, status: "PENDING" } })
+      : 0;
+  const pendingSubmissionCount =
+    session.user.role === Role.TEACHER
+      ? await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "AssignmentSubmission" s
+          JOIN "Assignment" a ON a."id" = s."assignmentId"
+          JOIN "Course" c ON c."id" = a."courseId"
+          WHERE c."teacherId" = ${session.user.id}
+            AND s."status" IN ('SUBMITTED','GRADED_DRAFT')
+        `.then((rows) => Number(rows[0]?.count ?? 0)).catch(() => 0)
+      : 0;
+
+  const overviewMetrics =
+    session.user.role === Role.SUPER_ADMIN
+      ? [
+          { label: "Announcements", value: announcementCount, delta: "available for your role", href: "/dashboard?module=announcements" },
+          { label: "Courses", value: coursesCount, delta: "institution total", href: "/dashboard?module=courses" },
+          { label: "Grade Edit Requests", value: pendingGradeEditCount, delta: "pending review", href: "/dashboard?module=assessment" },
+        ]
+      : session.user.role === Role.TEACHER
+        ? [
+            { label: "Assigned Courses", value: coursesCount, delta: "currently assigned", href: "/dashboard?module=courses" },
+            { label: "Submissions Pending", value: pendingSubmissionCount, delta: "awaiting grading", href: "/dashboard?module=assessment" },
+            { label: "Assignments", value: assignmentCount, delta: "in your courses", href: "/dashboard?module=assessment" },
+          ]
+        : [
+            { label: "Enrolled Courses", value: coursesCount, delta: "active enrollments", href: "/dashboard?module=courses" },
+            { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
+            { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
+          ];
 
   if (selected.slug === "announcements" || selected.slug === "announcements-feed" || selected.slug === "overview") {
     moduleKpiLabel = "Announcements";
     moduleKpiValue = announcementCount;
     moduleKpiHint = "available for your role";
   } else if (selected.slug === "courses") {
-    const coursesCount = await prisma.course.count({
-      where: isSuperAdmin
-        ? {}
-        : session.user.role === Role.TEACHER
-          ? { teacherId: session.user.id }
-          : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
-    });
     moduleKpiLabel = session.user.role === Role.STUDENT ? "Enrolled Courses" : "Courses";
     moduleKpiValue = coursesCount;
     moduleKpiHint = "in this module";
   } else if (selected.slug === "assessment") {
-    const assignmentCount = await prisma.assignment.count({
-      where:
-        session.user.role === Role.SUPER_ADMIN
-          ? {}
-          : session.user.role === Role.TEACHER
-            ? { course: { teacherId: session.user.id } }
-            : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
-    });
     moduleKpiLabel = "Assignments";
     moduleKpiValue = assignmentCount;
     moduleKpiHint = "in this module";
@@ -552,7 +588,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
         {selected.slug === "overview" ? (
           <section className="grid gap-4">
-            <RoleOverview role={session.user.role} name={session.user.name} />
+            <RoleOverview role={session.user.role} name={session.user.name} overview={{ metrics: overviewMetrics }} />
             <section className="brand-card p-5">
               <p className="brand-section-title">Announcements</p>
               <div className="mt-3 space-y-2">
