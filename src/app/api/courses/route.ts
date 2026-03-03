@@ -92,6 +92,27 @@ CREATE INDEX IF NOT EXISTS "EnrollmentRequest_status_created_idx"
   `);
 }
 
+async function ensureEngagementDiscussionSchema() {
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "EngagementDiscussion" (
+  "id" TEXT NOT NULL,
+  "courseId" TEXT NOT NULL,
+  "moduleId" TEXT,
+  "title" TEXT NOT NULL,
+  "prompt" TEXT NOT NULL,
+  "openAt" TIMESTAMP(3),
+  "closeAt" TIMESTAMP(3),
+  "allowLate" BOOLEAN NOT NULL DEFAULT false,
+  "isLocked" BOOLEAN NOT NULL DEFAULT false,
+  "createdById" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "EngagementDiscussion_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "EngagementDiscussion_course_created_idx" ON "EngagementDiscussion"("courseId","createdAt");
+  `);
+}
+
 async function ensureTeacherIfProvided(teacherId: string | null) {
   if (!teacherId) return null;
   const teacher = await prisma.user.findUnique({
@@ -518,6 +539,47 @@ export async function POST(request: NextRequest) {
 
       return course;
     });
+
+    try {
+      await ensureEngagementDiscussionSchema();
+      const existingDiscussion = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "EngagementDiscussion"
+        WHERE "courseId" = ${created.id}
+        LIMIT 1
+      `;
+      const firstModule = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "CourseModule"
+        WHERE "courseId" = ${created.id}
+        ORDER BY "position" ASC, "createdAt" ASC
+        LIMIT 1
+      `;
+      if (!existingDiscussion[0] && firstModule[0]) {
+        const discussionId = `dsc_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+        await prisma.$executeRaw`
+          INSERT INTO "EngagementDiscussion"
+            ("id","courseId","moduleId","title","prompt","openAt","closeAt","allowLate","isLocked","createdById","createdAt","updatedAt")
+          VALUES
+            (
+              ${discussionId},
+              ${created.id},
+              ${firstModule[0].id},
+              ${`General Discussion - ${created.title}`},
+              ${`Introduce yourself and share your learning goals for ${created.title}. Reply to at least two classmates.`},
+              ${created.startDate},
+              ${created.endDate},
+              ${true},
+              ${false},
+              ${user.id},
+              NOW(),
+              NOW()
+            )
+        `;
+      }
+    } catch {
+      // Avoid blocking course creation if engagement bootstrap is temporarily unavailable.
+    }
 
     return NextResponse.json(
       {
