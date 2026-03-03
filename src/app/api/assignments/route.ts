@@ -22,6 +22,11 @@ type AssignmentConfigRecord = {
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
 };
 
+type SubmissionCountRow = {
+  assignmentId: string;
+  count: bigint | number;
+};
+
 type CreateAssignmentBody = {
   courseId?: string;
   title?: string;
@@ -374,6 +379,23 @@ export async function GET() {
       : [];
 
     const configByAssignmentId = await loadAssignmentConfigs(assignments.map((item) => item.id));
+    const submissionCountByAssignmentId = new Map<string, number>();
+    if (assignments.length) {
+      const tableExistsRows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT to_regclass('public."AssignmentSubmission"') IS NOT NULL AS "exists"
+      `;
+      if (tableExistsRows[0]?.exists) {
+        const rows = await prisma.$queryRaw<SubmissionCountRow[]>`
+          SELECT "assignmentId", COUNT(*)::bigint AS count
+          FROM "AssignmentSubmission"
+          WHERE "assignmentId" IN (${Prisma.join(assignments.map((item) => item.id))})
+          GROUP BY "assignmentId"
+        `;
+        for (const row of rows) {
+          submissionCountByAssignmentId.set(row.assignmentId, Number(row.count));
+        }
+      }
+    }
 
     return NextResponse.json({
       courses,
@@ -388,6 +410,7 @@ export async function GET() {
         updatedAt: item.updatedAt.toISOString(),
         course: item.course,
         config: configByAssignmentId.get(item.id) ?? defaultConfig(item.id),
+        submissionCount: submissionCountByAssignmentId.get(item.id) ?? 0,
       })),
     });
   } catch (error) {

@@ -52,6 +52,7 @@ type AssignmentItem = {
   updatedAt: string;
   course: CourseOption;
   config: AssignmentConfig;
+  submissionCount?: number;
 };
 
 type SubmissionItem = {
@@ -162,6 +163,7 @@ export function AssignmentsModule({ role }: Props) {
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeMenu, setActiveMenu] = useState<"ALL" | "SUBMITTED">("ALL");
 
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
@@ -191,6 +193,7 @@ export function AssignmentsModule({ role }: Props) {
   const [createQuestionOptionD, setCreateQuestionOptionD] = useState("");
   const [createQuestionCorrectIndex, setCreateQuestionCorrectIndex] = useState("0");
   const [createQuestionPoints, setCreateQuestionPoints] = useState("1");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [editId, setEditId] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -250,6 +253,12 @@ export function AssignmentsModule({ role }: Props) {
     () => assignments.find((item) => item.id === editId) ?? null,
     [assignments, editId]
   );
+  const filteredAssignments = useMemo(() => {
+    if (activeMenu === "SUBMITTED") {
+      return assignments.filter((item) => (item.submissionCount ?? 0) > 0);
+    }
+    return assignments;
+  }, [activeMenu, assignments]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -552,6 +561,7 @@ export function AssignmentsModule({ role }: Props) {
       setCreateAllowedText(true);
       setCreateAllowedFile(true);
       setCreateDraftQuestions([]);
+      setShowCreateModal(false);
       await load();
     } catch {
       setError("Unable to create assignment.");
@@ -937,11 +947,34 @@ export function AssignmentsModule({ role }: Props) {
       ) : null}
 
       <section className="brand-card min-w-0 overflow-hidden p-5">
-        <p className="brand-section-title">Assignment List</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="brand-section-title">Assignment List</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${activeMenu === "ALL" ? "border-[#2d6fbf] bg-[#edf5ff] text-[#114b8d]" : "border-[#9bbfed] text-[#1f518f]"}`}
+              onClick={() => setActiveMenu("ALL")}
+            >
+              All Assignments
+            </button>
+            <button
+              type="button"
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${activeMenu === "SUBMITTED" ? "border-[#2d6fbf] bg-[#edf5ff] text-[#114b8d]" : "border-[#9bbfed] text-[#1f518f]"}`}
+              onClick={() => setActiveMenu("SUBMITTED")}
+            >
+              Submitted Only
+            </button>
+            {canManage ? (
+              <button type="button" className="btn-brand-primary px-3 py-1.5 text-xs font-semibold" onClick={() => setShowCreateModal(true)}>
+                Create Assignment
+              </button>
+            ) : null}
+          </div>
+        </div>
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         {loading ? <p className="brand-muted mt-3 text-sm">Loading assignments...</p> : null}
 
-        {!loading && assignments.length ? (
+        {!loading && filteredAssignments.length ? (
           <div className="mt-3 w-full max-w-full overflow-x-auto">
           <table className="w-full min-w-[780px] text-left text-sm lg:min-w-full">
             <thead>
@@ -953,12 +986,17 @@ export function AssignmentsModule({ role }: Props) {
                 <th className="px-3 py-2 font-semibold">Attempts</th>
                 <th className="px-3 py-2 font-semibold">Due</th>
                 <th className="px-3 py-2 font-semibold">Max Points</th>
+                <th className="px-3 py-2 font-semibold">Submissions</th>
                 <th className="px-3 py-2 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {assignments.map((item) => (
-                <tr key={item.id} className="border-b border-[#e7f0fc] text-[#0d3f80]">
+              {filteredAssignments.map((item) => (
+                <tr
+                  key={item.id}
+                  className={`border-b border-[#e7f0fc] text-[#0d3f80] transition ${selectedAssignmentId === item.id ? "bg-[#f4f9ff]" : "hover:bg-[#f8fbff]"} ${canManage || isStudent || isAdminReadOnly ? "cursor-pointer" : ""}`}
+                  onClick={() => setSelectedAssignmentId(item.id)}
+                >
                   <td className="px-3 py-2">{item.course.code} - {item.course.title}</td>
                   <td className="px-3 py-2">
                     <p>{item.title}</p>
@@ -973,21 +1011,18 @@ export function AssignmentsModule({ role }: Props) {
                   <td className="px-3 py-2">{item.config.maxAttempts}</td>
                   <td className="px-3 py-2">{formatDate(item.dueAt)}</td>
                   <td className="px-3 py-2">{item.maxPoints}</td>
+                  <td className="px-3 py-2">{item.submissionCount ?? 0}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                        onClick={() => setSelectedAssignmentId(item.id)}
-                      >
-                        Open
-                      </button>
                       {canManage ? (
                         <>
                           <button
                             type="button"
                             className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                            onClick={() => setEditId(item.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditId(item.id);
+                            }}
                           >
                             Edit
                           </button>
@@ -995,7 +1030,10 @@ export function AssignmentsModule({ role }: Props) {
                             type="button"
                             className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
                             disabled={deletePendingId === item.id}
-                            onClick={() => void onDelete(item.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void onDelete(item.id);
+                            }}
                           >
                             {deletePendingId === item.id ? "Deleting..." : "Delete"}
                           </button>
@@ -1010,7 +1048,9 @@ export function AssignmentsModule({ role }: Props) {
           </div>
         ) : null}
 
-        {!loading && !assignments.length ? <p className="brand-muted mt-3 text-sm">No assignments found.</p> : null}
+        {!loading && !filteredAssignments.length ? (
+          <p className="brand-muted mt-3 text-sm">{activeMenu === "SUBMITTED" ? "No submitted assignments yet." : "No assignments found."}</p>
+        ) : null}
       </section>
 
       {selectedAssignment ? (
@@ -1308,8 +1348,9 @@ export function AssignmentsModule({ role }: Props) {
         </section>
       ) : null}
 
-      {canManage ? (
-        <section className="brand-card min-w-0 overflow-hidden p-5">
+      {canManage && showCreateModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
+        <section className="brand-card min-w-0 w-full max-w-5xl overflow-hidden p-5">
           <p className="brand-section-title">Create Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onCreate}>
             <select className="brand-input" value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
@@ -1449,15 +1490,22 @@ export function AssignmentsModule({ role }: Props) {
                   )) ?? null}
               </select>
             </div>
-            <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createPending}>
-              {createPending ? "Creating..." : "Create Assignment"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createPending}>
+                {createPending ? "Creating..." : "Create Assignment"}
+              </button>
+              <button type="button" className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]" onClick={() => setShowCreateModal(false)}>
+                Cancel
+              </button>
+            </div>
           </form>
         </section>
+        </div>
       ) : null}
 
       {canManage && editId ? (
-        <section className="brand-card min-w-0 overflow-hidden p-5">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
+        <section className="brand-card min-w-0 w-full max-w-4xl overflow-hidden p-5">
           <p className="brand-section-title">Edit Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onUpdate}>
             <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
@@ -1545,6 +1593,7 @@ export function AssignmentsModule({ role }: Props) {
             </div>
           </form>
         </section>
+        </div>
       ) : null}
     </section>
   );
