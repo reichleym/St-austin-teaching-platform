@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
       ? await prisma.user.findMany({
           where: { role: Role.TEACHER, status: UserStatus.ACTIVE },
           orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, phone: true },
         })
       : [];
 
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
       ? await prisma.user.findMany({
           where: { role: Role.STUDENT, status: UserStatus.ACTIVE },
           orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, phone: true },
         })
       : [];
 

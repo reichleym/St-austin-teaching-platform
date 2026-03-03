@@ -38,6 +38,7 @@ type PersonOption = {
   id: string;
   name: string | null;
   email: string;
+  phone?: string | null;
 };
 
 type Props = {
@@ -124,6 +125,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [createVisibility, setCreateVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [createTeacherId, setCreateTeacherId] = useState("");
   const [createStudentIds, setCreateStudentIds] = useState<string[]>([]);
+  const [createStudentSearch, setCreateStudentSearch] = useState("");
   const [createPending, setCreatePending] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
@@ -216,6 +218,17 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     [courses, filterCourseId, filterStudentId, filterTeacherId]
   );
 
+  const filteredCreateStudents = useMemo(() => {
+    const query = createStudentSearch.trim().toLowerCase();
+    if (!query) return students;
+    return students.filter((student) => {
+      const name = (student.name ?? "").toLowerCase();
+      const email = (student.email ?? "").toLowerCase();
+      const phone = (student.phone ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query) || phone.includes(query);
+    });
+  }, [createStudentSearch, students]);
+
   const onCreateCourse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreatePending(true);
@@ -252,6 +265,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       setCreateVisibility("DRAFT");
       setCreateTeacherId("");
       setCreateStudentIds([]);
+      setCreateStudentSearch("");
       await loadData();
     } catch {
       setError("Unable to create course.");
@@ -437,8 +451,8 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
         <div className="flex items-center justify-between gap-3">
           <p className="brand-section-title">Course List</p>
           {canManage ? (
-            <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={() => setShowCreate((prev) => !prev)}>
-              {showCreate ? "Close Create" : "Create Course"}
+            <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={() => setShowCreate(true)}>
+              Create Course
             </button>
           ) : null}
         </div>
@@ -630,7 +644,8 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       </section>
 
       {canManage && showCreate ? (
-        <section className="brand-card p-5">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
+        <section className="brand-card w-full max-w-5xl p-5">
           <p className="brand-section-title">Create Course</p>
           <form className="mt-3 grid gap-4" onSubmit={onCreateCourse}>
             <label className="grid gap-1.5">
@@ -671,28 +686,46 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
             </label>
             <div className="grid gap-1.5">
               <span className="brand-label">Enroll Students During Creation</span>
+              <input
+                className="brand-input"
+                placeholder="Search by name, phone, or email"
+                value={createStudentSearch}
+                onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
+              />
               <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
-                {students.length ? (
-                  students.map((student) => (
+                {filteredCreateStudents.length ? (
+                  filteredCreateStudents.map((student) => (
                     <label key={student.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
                       <input
                         type="checkbox"
                         checked={createStudentIds.includes(student.id)}
                         onChange={() => toggleCreateStudent(student.id)}
                       />
-                      <span>{(student.name || "Unnamed Student") + " - " + student.email}</span>
+                      <span>{(student.name || "Unnamed Student") + " - " + (student.phone ? `${student.phone} - ` : "") + student.email}</span>
                     </label>
                   ))
                 ) : (
-                  <p className="text-sm text-[#3f70ae]">No active students found.</p>
+                  <p className="text-sm text-[#3f70ae]">
+                    {students.length ? "No students match the search." : "No active students found."}
+                  </p>
                 )}
               </div>
             </div>
-            <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={createPending}>
-              {createPending ? "Creating..." : "Create Course"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={createPending}>
+                {createPending ? "Creating..." : "Create Course"}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
+                onClick={() => setShowCreate(false)}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         </section>
+        </div>
       ) : null}
 
       {canManage && editCourseId ? (
