@@ -1,4 +1,6 @@
 import { Prisma, Role } from "@prisma/client";
+import { promises as fs } from "fs";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +23,10 @@ type UpdateSubmissionBody = {
   feedback?: string | null;
   publish?: boolean;
 };
+
+type PlagiarismStatus = "PENDING" | "COMPLETED" | "FAILED";
+
+export const runtime = "nodejs";
 
 async function ensureSubmissionSchema() {
   await prisma.$executeRawUnsafe(`
@@ -68,6 +74,25 @@ CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
   CONSTRAINT "AssignmentQuizQuestion_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX IF NOT EXISTS "AssignmentQuizQuestion_assignmentId_idx" ON "AssignmentQuizQuestion"("assignmentId");
+`);
+
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "PlagiarismReport" (
+  "id" TEXT NOT NULL,
+  "submissionId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "provider" TEXT NOT NULL DEFAULT 'INTERNAL_HEURISTIC',
+  "similarityScore" DOUBLE PRECISION,
+  "summary" TEXT,
+  "matchedSources" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "errorMessage" TEXT,
+  "checkedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PlagiarismReport_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PlagiarismReport_submissionId_key" ON "PlagiarismReport"("submissionId");
+CREATE INDEX IF NOT EXISTS "PlagiarismReport_status_idx" ON "PlagiarismReport"("status");
 `);
 }
 
@@ -149,6 +174,185 @@ function parseQuizStartedAt(input: unknown) {
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function tokenize(text: string) {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 2)
+  );
+}
+
+function similarityPercent(a: string, b: string) {
+  const tokensA = tokenize(a);
+  const tokensB = tokenize(b);
+  if (!tokensA.size || !tokensB.size) return 0;
+  let intersection = 0;
+  for (const token of tokensA) {
+    if (tokensB.has(token)) intersection += 1;
+  }
+  const union = new Set([...tokensA, ...tokensB]).size;
+  if (!union) return 0;
+  return Math.round((intersection / union) * 10000) / 100;
+}
+
+function canCheckFileType(fileName: string | null, mimeType: string | null) {
+  const ext = (fileName ? path.extname(fileName) : "").toLowerCase();
+  const mime = (mimeType ?? "").toLowerCase();
+  return ext === ".txt" || mime === "text/plain";
+}
+
+async function extractSubmissionContent(submission: {
+  textResponse: string | null;
+  fileUrl: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+}) {
+  const chunks: string[] = [];
+  if (submission.textResponse?.trim()) {
+    chunks.push(submission.textResponse.trim());
+  }
+  if (submission.fileUrl && canCheckFileType(submission.fileName, submission.mimeType)) {
+    const relative = submission.fileUrl.startsWith("/") ? submission.fileUrl.slice(1) : submission.fileUrl;
+    const absolute = path.join(process.cwd(), "public", relative);
+    try {
+      const content = await fs.readFile(absolute, "utf8");
+      if (content.trim()) chunks.push(content.trim());
+    } catch {
+      // Ignore file extraction failures and continue with available content.
+    }
+  }
+  return chunks.join("\n\n").trim();
+}
+
+async function upsertPlagiarismReport(
+  submissionId: string,
+  payload: {
+    status: PlagiarismStatus;
+    similarityScore: number | null;
+    summary: string;
+    matchedSources: unknown[];
+    errorMessage: string | null;
+    checkedAt: Date | null;
+  }
+) {
+  const id = `plg_${submissionId}`;
+  await prisma.$executeRaw`
+    INSERT INTO "PlagiarismReport"
+      ("id","submissionId","status","provider","similarityScore","summary","matchedSources","errorMessage","checkedAt","updatedAt")
+    VALUES
+      (${id}, ${submissionId}, ${payload.status}, ${"INTERNAL_HEURISTIC"}, ${payload.similarityScore}, ${payload.summary}, ${JSON.stringify(payload.matchedSources)}::jsonb, ${payload.errorMessage}, ${payload.checkedAt}, NOW())
+    ON CONFLICT ("submissionId")
+    DO UPDATE SET
+      "status" = EXCLUDED."status",
+      "provider" = EXCLUDED."provider",
+      "similarityScore" = EXCLUDED."similarityScore",
+      "summary" = EXCLUDED."summary",
+      "matchedSources" = EXCLUDED."matchedSources",
+      "errorMessage" = EXCLUDED."errorMessage",
+      "checkedAt" = EXCLUDED."checkedAt",
+      "updatedAt" = NOW()
+  `;
+}
+
+async function queuePlagiarismCheck(submissionId: string) {
+  await upsertPlagiarismReport(submissionId, {
+    status: "PENDING",
+    similarityScore: null,
+    summary: "Plagiarism check queued.",
+    matchedSources: [],
+    errorMessage: null,
+    checkedAt: null,
+  });
+}
+
+async function runPlagiarismCheck(submissionId: string) {
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        assignmentId: string;
+        studentId: string;
+        textResponse: string | null;
+        fileUrl: string | null;
+        fileName: string | null;
+        mimeType: string | null;
+      }>
+    >`
+      SELECT "id","assignmentId","studentId","textResponse","fileUrl","fileName","mimeType"
+      FROM "AssignmentSubmission"
+      WHERE "id" = ${submissionId}
+      LIMIT 1
+    `;
+    const submission = rows[0];
+    if (!submission) {
+      return;
+    }
+
+    const content = await extractSubmissionContent(submission);
+    if (!content) {
+      await upsertPlagiarismReport(submissionId, {
+        status: "FAILED",
+        similarityScore: null,
+        summary: "No supported content found for plagiarism check.",
+        matchedSources: [],
+        errorMessage: "Only text and TXT files are checked in MVP.",
+        checkedAt: new Date(),
+      });
+      return;
+    }
+
+    const candidates = await prisma.$queryRaw<
+      Array<{ id: string; studentId: string; textResponse: string | null }>
+    >`
+      SELECT "id","studentId","textResponse"
+      FROM "AssignmentSubmission"
+      WHERE "assignmentId" = ${submission.assignmentId} AND "id" <> ${submissionId}
+      ORDER BY "submittedAt" DESC
+      LIMIT 100
+    `;
+
+    const matches = candidates
+      .map((item) => ({
+        submissionId: item.id,
+        studentId: item.studentId,
+        similarity: similarityPercent(content, item.textResponse ?? ""),
+      }))
+      .filter((item) => item.similarity > 0)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+
+    const similarityScore = matches.length ? matches[0].similarity : 0;
+    const summary =
+      similarityScore >= 70
+        ? "High similarity detected. Teacher review recommended."
+        : similarityScore >= 40
+        ? "Medium similarity detected. Review context before grading."
+        : "Low similarity detected.";
+
+    await upsertPlagiarismReport(submissionId, {
+      status: "COMPLETED",
+      similarityScore,
+      summary,
+      matchedSources: matches,
+      errorMessage: null,
+      checkedAt: new Date(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Plagiarism check failed.";
+    await upsertPlagiarismReport(submissionId, {
+      status: "FAILED",
+      similarityScore: null,
+      summary: "Plagiarism check failed.",
+      matchedSources: [],
+      errorMessage: message,
+      checkedAt: new Date(),
+    });
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -242,11 +446,23 @@ export async function GET(request: NextRequest) {
         status: string;
         studentName: string | null;
         studentEmail: string;
+        plagiarismStatus: string | null;
+        plagiarismScore: number | null;
+        plagiarismSummary: string | null;
+        plagiarismCheckedAt: Date | null;
       }>
     >`
-      SELECT s.*, u."name" AS "studentName", u."email" AS "studentEmail"
+      SELECT
+        s.*,
+        u."name" AS "studentName",
+        u."email" AS "studentEmail",
+        p."status" AS "plagiarismStatus",
+        p."similarityScore" AS "plagiarismScore",
+        p."summary" AS "plagiarismSummary",
+        p."checkedAt" AS "plagiarismCheckedAt"
       FROM "AssignmentSubmission" s
       JOIN "User" u ON u."id" = s."studentId"
+      LEFT JOIN "PlagiarismReport" p ON p."submissionId" = s."id"
       WHERE s."assignmentId" = ${assignmentId}
       ORDER BY s."studentId" ASC, s."attemptNumber" ASC
     `;
@@ -257,6 +473,10 @@ export async function GET(request: NextRequest) {
         submittedAt: item.submittedAt.toISOString(),
         gradedAt: item.gradedAt?.toISOString() ?? null,
         publishedAt: item.publishedAt?.toISOString() ?? null,
+        plagiarismStatus: item.plagiarismStatus,
+        plagiarismScore: item.plagiarismScore,
+        plagiarismSummary: item.plagiarismSummary,
+        plagiarismCheckedAt: item.plagiarismCheckedAt?.toISOString() ?? null,
       })),
     });
   } catch (error) {
@@ -436,6 +656,9 @@ export async function POST(request: NextRequest) {
       VALUES
       (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${textResponse}, ${fileUrl}, ${fileName}, ${mimeType}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${"SUBMITTED"})
     `;
+
+    await queuePlagiarismCheck(id);
+    void runPlagiarismCheck(id);
 
     return NextResponse.json({ ok: true, assignmentId, attemptNumber, latePenaltyPct }, { status: 201 });
   } catch (error) {

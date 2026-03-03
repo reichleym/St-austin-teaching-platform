@@ -68,6 +68,10 @@ type SubmissionItem = {
   feedback: string | null;
   publishedAt: string | null;
   status: string;
+  plagiarismStatus?: "PENDING" | "COMPLETED" | "FAILED" | null;
+  plagiarismScore?: number | null;
+  plagiarismSummary?: string | null;
+  plagiarismCheckedAt?: string | null;
 };
 
 type QuizQuestion = {
@@ -111,6 +115,13 @@ const formatMinutes = (minutes: number) => {
   const hours = Math.floor((minutes % (60 * 24)) / 60);
   if (days > 0) return `${days}d ${hours}h`;
   return `${hours}h ${minutes % 60}m`;
+};
+
+const plagiarismBand = (score: number | null | undefined) => {
+  if (score === null || score === undefined) return "N/A";
+  if (score >= 70) return "High";
+  if (score >= 40) return "Medium";
+  return "Low";
 };
 
 export function AssignmentsModule({ role }: Props) {
@@ -925,6 +936,13 @@ export function AssignmentsModule({ role }: Props) {
                   <p className="mt-1 text-xs text-[#3a689f]">
                     Submitted: {formatDate(submission.submittedAt)} | Late: {submission.isLate ? `${formatMinutes(submission.lateByMinutes)} (${submission.latePenaltyPct}%)` : "No"}
                   </p>
+                  {canManage ? (
+                    <p className="mt-1 text-xs text-[#3a689f]">
+                      Plagiarism: {submission.plagiarismStatus ?? "PENDING"}
+                      {submission.plagiarismStatus === "COMPLETED" ? ` | ${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)` : ""}
+                      {submission.plagiarismSummary ? ` | ${submission.plagiarismSummary}` : ""}
+                    </p>
+                  ) : null}
                   {submission.textResponse ? <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{submission.textResponse}</p> : null}
                   {submission.fileUrl ? (
                     <a href={submission.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-[#1f518f] underline">
