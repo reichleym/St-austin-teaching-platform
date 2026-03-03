@@ -743,6 +743,14 @@ export async function POST(request: NextRequest) {
       WHERE "assignmentId" = ${assignmentId} AND "studentId" = ${user.id}
     `;
     const attemptCount = Number(countRows[0]?.count ?? 0);
+
+    if (config.assignmentType !== "QUIZ" && attemptCount >= 1) {
+      return NextResponse.json(
+        { error: "This assignment already has a submission. Only one submission is allowed." },
+        { status: 400 }
+      );
+    }
+
     if (attemptCount >= config.maxAttempts) {
       return NextResponse.json({ error: `Maximum attempts reached (${config.maxAttempts}).` }, { status: 400 });
     }

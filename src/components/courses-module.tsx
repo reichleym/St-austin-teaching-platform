@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CourseStructurePanel } from "@/components/course-structure-panel";
 
 type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
@@ -30,6 +30,8 @@ type CourseItem = {
     status: "ACTIVE" | "DROPPED" | "COMPLETED";
   }>;
   myEnrollmentStatus: "ACTIVE" | "DROPPED" | "COMPLETED" | null;
+  myEnrollmentRequestStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  courseProgressPercent: number | null;
 };
 
 type PersonOption = {
@@ -40,12 +42,19 @@ type PersonOption = {
 
 type Props = {
   role: AppRole;
+  viewMode?: "all" | "enrolled";
 };
 
-const formatDate = (input: string) => {
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString();
+type EnrollmentRequestItem = {
+  id: string;
+  courseId: string;
+  studentId: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  courseCode: string;
+  courseTitle: string;
+  studentName: string | null;
+  studentEmail: string;
 };
 
 const toDateInputValue = (input: string | null) => {
@@ -55,14 +64,48 @@ const toDateInputValue = (input: string | null) => {
   return date.toISOString().slice(0, 10);
 };
 
+const formatDurationYmd = (startIso: string | null, endIso: string | null) => {
+  if (!startIso || !endIso) return "-";
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "-";
+  if (end < start) return "0Y 0M 0D";
+
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const target = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+  let years = target.getFullYear() - cursor.getFullYear();
+  const yearCandidate = new Date(cursor);
+  yearCandidate.setFullYear(cursor.getFullYear() + years);
+  if (yearCandidate > target) {
+    years -= 1;
+  }
+  cursor.setFullYear(cursor.getFullYear() + years);
+
+  let months = 0;
+  while (true) {
+    const next = new Date(cursor);
+    next.setMonth(next.getMonth() + 1);
+    if (next > target) break;
+    months += 1;
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const days = Math.max(0, Math.floor((target.getTime() - cursor.getTime()) / dayMs));
+
+  return `${years}Y ${months}M ${days}D`;
+};
+
 function PersonLabel({ person }: { person: PersonOption }) {
   return <>{(person.name || "Unnamed") + " - " + person.email}</>;
 }
 
-export function CoursesModule({ role }: Props) {
+export function CoursesModule({ role, viewMode = "all" }: Props) {
   const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
   const isStudent = role === "STUDENT";
   const canManage = isSuperAdmin;
+  const studentSimpleView = isStudent;
 
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [teachers, setTeachers] = useState<PersonOption[]>([]);
@@ -97,12 +140,16 @@ export function CoursesModule({ role }: Props) {
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
   const [filterStudentId, setFilterStudentId] = useState("");
+  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestItem[]>([]);
+  const [requestActionId, setRequestActionId] = useState("");
+  const [enrollPendingCourseId, setEnrollPendingCourseId] = useState("");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/courses", { method: "GET" });
+      const endpoint = viewMode === "enrolled" ? "/api/courses?scope=enrolled" : "/api/courses";
+      const response = await fetch(endpoint, { method: "GET" });
       const raw = await response.text();
       const result = raw
         ? (JSON.parse(raw) as {
@@ -120,6 +167,14 @@ export function CoursesModule({ role }: Props) {
       setCourses(result.courses ?? []);
       setTeachers(result.teachers ?? []);
       setStudents(result.students ?? []);
+      if (isSuperAdmin) {
+        const requestResponse = await fetch("/api/courses/enrollment-requests", { method: "GET" });
+        const requestRaw = await requestResponse.text();
+        const requestResult = requestRaw ? (JSON.parse(requestRaw) as { requests?: EnrollmentRequestItem[] }) : {};
+        setEnrollmentRequests(requestResult.requests ?? []);
+      } else {
+        setEnrollmentRequests([]);
+      }
     } catch {
       setError("Unable to load courses.");
       setCourses([]);
@@ -128,11 +183,11 @@ export function CoursesModule({ role }: Props) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isSuperAdmin, viewMode]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     if (!editCourseId) return;
@@ -287,8 +342,97 @@ export function CoursesModule({ role }: Props) {
     setEditStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
   };
 
+  const onRequestEnrollment = async (courseId: string) => {
+    setEnrollPendingCourseId(courseId);
+    setError("");
+    try {
+      const response = await fetch("/api/courses/enrollment-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to submit enrollment request.");
+        return;
+      }
+      await loadData();
+    } catch {
+      setError("Unable to submit enrollment request.");
+    } finally {
+      setEnrollPendingCourseId("");
+    }
+  };
+
+  const onReviewEnrollmentRequest = async (requestId: string, decision: "APPROVE" | "REJECT") => {
+    setRequestActionId(requestId);
+    setError("");
+    try {
+      const response = await fetch("/api/courses/enrollment-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, decision }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to review enrollment request.");
+        return;
+      }
+      await loadData();
+    } catch {
+      setError("Unable to review enrollment request.");
+    } finally {
+      setRequestActionId("");
+    }
+  };
+
   return (
     <section className="grid gap-4">
+      {canManage ? (
+        <section className="brand-card p-5">
+          <p className="brand-section-title">Course Enrollment Requests</p>
+          {!enrollmentRequests.length ? (
+            <p className="brand-muted mt-3 text-sm">No enrollment requests yet.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {enrollmentRequests.map((request) => (
+                <article key={request.id} className="rounded-md border border-[#dbe9fb] bg-white p-3">
+                  <p className="text-sm font-semibold text-[#0d3f80]">
+                    {request.courseCode} - {request.courseTitle}
+                  </p>
+                  <p className="mt-1 text-xs text-[#3a689f]">
+                    Student: {(request.studentName || "Unnamed Student") + " - " + request.studentEmail}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-[#285f9f]">Status: {request.status}</p>
+                  {request.status === "PENDING" ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-brand-primary px-3 py-1.5 text-xs font-semibold"
+                        disabled={requestActionId === request.id}
+                        onClick={() => void onReviewEnrollmentRequest(request.id, "APPROVE")}
+                      >
+                        {requestActionId === request.id ? "Processing..." : "Approve"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        disabled={requestActionId === request.id}
+                        onClick={() => void onReviewEnrollmentRequest(request.id, "REJECT")}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
       <section className="brand-card overflow-x-auto p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="brand-section-title">Course List</p>
@@ -348,10 +492,11 @@ export function CoursesModule({ role }: Props) {
                 <th className="px-3 py-2 font-semibold">Code</th>
                 <th className="px-3 py-2 font-semibold">Title</th>
                 <th className="px-3 py-2 font-semibold">Duration</th>
-                <th className="px-3 py-2 font-semibold">Visibility</th>
                 <th className="px-3 py-2 font-semibold">Teacher</th>
-                <th className="px-3 py-2 font-semibold">Enrolled Students</th>
-                <th className="px-3 py-2 font-semibold">Enrollments</th>
+                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
+                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrolled Students</th> : null}
+                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
+                {isStudent && viewMode === "enrolled" ? <th className="px-3 py-2 font-semibold">Progress</th> : null}
                 <th className="px-3 py-2 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -365,27 +510,32 @@ export function CoursesModule({ role }: Props) {
                       {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                     </td>
                     <td className="px-3 py-2">
-                      {course.startDate && course.endDate ? `${formatDate(course.startDate)} - ${formatDate(course.endDate)}` : "-"}
+                      {formatDurationYmd(course.startDate, course.endDate)}
                     </td>
-                    <td className="px-3 py-2">{course.visibility}</td>
                     <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
-                    <td className="px-3 py-2">
-                      {course.enrolledStudents.length ? (
-                        <div className="max-w-[280px] space-y-1">
-                          {course.enrolledStudents.slice(0, 5).map((student) => (
-                            <p key={student.id} className="truncate text-xs text-[#2f5d96]">
-                              {(student.name || "Unnamed Student") + " - " + student.email}
-                            </p>
-                          ))}
-                          {course.enrolledStudents.length > 5 ? (
-                            <p className="text-xs text-[#3f70ae]">+{course.enrolledStudents.length - 5} more</p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{course.enrollmentCount}</td>
+                    {!studentSimpleView ? <td className="px-3 py-2">{course.visibility}</td> : null}
+                    {!studentSimpleView ? (
+                      <td className="px-3 py-2">
+                        {course.enrolledStudents.length ? (
+                          <div className="max-w-[280px] space-y-1">
+                            {course.enrolledStudents.slice(0, 5).map((student) => (
+                              <p key={student.id} className="truncate text-xs text-[#2f5d96]">
+                                {(student.name || "Unnamed Student") + " - " + student.email}
+                              </p>
+                            ))}
+                            {course.enrolledStudents.length > 5 ? (
+                              <p className="text-xs text-[#3f70ae]">+{course.enrolledStudents.length - 5} more</p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    ) : null}
+                    {!studentSimpleView ? <td className="px-3 py-2">{course.enrollmentCount}</td> : null}
+                    {isStudent && viewMode === "enrolled" ? (
+                      <td className="px-3 py-2">{course.courseProgressPercent ?? 0}%</td>
+                    ) : null}
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <button
@@ -417,12 +567,41 @@ export function CoursesModule({ role }: Props) {
                             </button>
                           </>
                         ) : null}
+                        {isStudent && viewMode === "all" ? (
+                          <button
+                            type="button"
+                            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
+                            disabled={
+                              enrollPendingCourseId === course.id ||
+                              course.myEnrollmentStatus === "ACTIVE" ||
+                              course.myEnrollmentRequestStatus === "PENDING"
+                            }
+                            onClick={() => void onRequestEnrollment(course.id)}
+                          >
+                            {course.myEnrollmentStatus === "ACTIVE"
+                              ? "Enrolled"
+                              : course.myEnrollmentRequestStatus === "PENDING"
+                                ? "Request Pending"
+                                : enrollPendingCourseId === course.id
+                                  ? "Requesting..."
+                                  : "Enroll Now"}
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
                   {expandedCourseId === course.id ? (
                     <tr className="border-b border-[#e7f0fc]">
-                      <td className="px-3 py-3" colSpan={8}>
+                      <td
+                        className="px-3 py-3"
+                        colSpan={
+                          studentSimpleView
+                            ? viewMode === "enrolled"
+                              ? 6
+                              : 5
+                            : 8
+                        }
+                      >
                         <CourseStructurePanel
                           role={role}
                           courses={[{ id: course.id, code: course.code, title: course.title }]}
@@ -441,7 +620,11 @@ export function CoursesModule({ role }: Props) {
 
         {!isLoading && !filteredCourses.length ? (
           <p className="brand-muted mt-3 text-sm">
-            {isStudent ? "You are not enrolled in any courses yet." : "No courses match the current filters."}
+            {isStudent && viewMode === "enrolled"
+              ? "You are not enrolled in any courses yet."
+              : isStudent
+                ? "No published courses available right now."
+                : "No courses match the current filters."}
           </p>
         ) : null}
       </section>
