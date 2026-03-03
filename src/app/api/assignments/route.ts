@@ -2,6 +2,7 @@ import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
 
 type AssignmentType = "HOMEWORK" | "QUIZ" | "EXAM";
 type SubmissionType = "TEXT" | "FILE";
@@ -13,6 +14,8 @@ type AssignmentConfigRecord = {
   allowedSubmissionTypes: SubmissionType[];
   maxAttempts: number;
   autoGrade: boolean;
+  allowLateSubmissions: boolean;
+  attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
   moduleId: string | null;
   lessonId: string | null;
@@ -30,6 +33,8 @@ type CreateAssignmentBody = {
   allowedSubmissionTypes?: SubmissionType[];
   maxAttempts?: number;
   autoGrade?: boolean;
+  allowLateSubmissions?: boolean;
+  attemptScoringStrategy?: "LATEST" | "HIGHEST";
   timerMinutes?: number | string | null;
   moduleId?: string | null;
   lessonId?: string | null;
@@ -47,6 +52,8 @@ type UpdateAssignmentBody = {
   allowedSubmissionTypes?: SubmissionType[];
   maxAttempts?: number;
   autoGrade?: boolean;
+  allowLateSubmissions?: boolean;
+  attemptScoringStrategy?: "LATEST" | "HIGHEST";
   timerMinutes?: number | string | null;
   moduleId?: string | null;
   lessonId?: string | null;
@@ -112,6 +119,10 @@ function parseTimerMinutes(input: unknown, assignmentType: AssignmentType) {
   return Math.min(value, 240);
 }
 
+function parseAttemptScoringStrategy(input: unknown): "LATEST" | "HIGHEST" {
+  return input === "HIGHEST" ? "HIGHEST" : "LATEST";
+}
+
 function canManageByRole(role: Role | string) {
   return isSuperAdminRole(role) || role === Role.TEACHER;
 }
@@ -125,6 +136,8 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
   "allowedSubmissionTypes" JSONB NOT NULL DEFAULT '["TEXT","FILE"]'::jsonb,
   "maxAttempts" INTEGER NOT NULL DEFAULT 1,
   "autoGrade" BOOLEAN NOT NULL DEFAULT false,
+  "allowLateSubmissions" BOOLEAN NOT NULL DEFAULT true,
+  "attemptScoringStrategy" TEXT NOT NULL DEFAULT 'LATEST',
   "timerMinutes" INTEGER,
   "moduleId" TEXT,
   "lessonId" TEXT,
@@ -136,6 +149,8 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_moduleId_idx" ON "AssignmentConfig"("moduleId");
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_lessonId_idx" ON "AssignmentConfig"("lessonId");
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "timerMinutes" INTEGER;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "allowLateSubmissions" BOOLEAN;
 `);
 }
 
@@ -143,7 +158,13 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
   if (isSuperAdminRole(user.role)) {
     return prisma.course.findMany({
       orderBy: [{ createdAt: "desc" }],
-      select: { id: true, code: true, title: true, teacherId: true },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        teacherId: true,
+        teacher: { select: { name: true, email: true } },
+      },
     });
   }
 
@@ -151,12 +172,19 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
     return prisma.course.findMany({
       where: { teacherId: user.id },
       orderBy: [{ createdAt: "desc" }],
-      select: { id: true, code: true, title: true, teacherId: true },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        teacherId: true,
+        teacher: { select: { name: true, email: true } },
+      },
     });
   }
 
   return prisma.course.findMany({
     where: {
+      visibility: COURSE_VISIBILITY_PUBLISHED,
       enrollments: {
         some: {
           studentId: user.id,
@@ -165,7 +193,13 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
       },
     },
     orderBy: [{ createdAt: "desc" }],
-    select: { id: true, code: true, title: true, teacherId: true },
+    select: {
+      id: true,
+      code: true,
+      title: true,
+      teacherId: true,
+      teacher: { select: { name: true, email: true } },
+    },
   });
 }
 
@@ -180,6 +214,8 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowedSubmissionTypes: Prisma.JsonValue;
       maxAttempts: number;
       autoGrade: boolean;
+      allowLateSubmissions: boolean | null;
+      attemptScoringStrategy: string | null;
       timerMinutes: number | null;
       moduleId: string | null;
       lessonId: string | null;
@@ -193,6 +229,8 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       "allowedSubmissionTypes",
       "maxAttempts",
       "autoGrade",
+      "allowLateSubmissions",
+      "attemptScoringStrategy",
       "timerMinutes",
       "moduleId",
       "lessonId",
@@ -210,6 +248,8 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowedSubmissionTypes: parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
       maxAttempts: parseMaxAttempts(row.maxAttempts, parseAssignmentType(row.assignmentType)),
       autoGrade: !!row.autoGrade,
+      allowLateSubmissions: row.allowLateSubmissions !== false,
+      attemptScoringStrategy: parseAttemptScoringStrategy(row.attemptScoringStrategy),
       timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
       moduleId: row.moduleId,
       lessonId: row.lessonId,
@@ -225,6 +265,8 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
   const allowedSubmissionTypes = parseSubmissionTypes(input.allowedSubmissionTypes);
   const maxAttempts = parseMaxAttempts(input.maxAttempts, assignmentType);
   const autoGrade = assignmentType === "QUIZ" ? !!input.autoGrade : false;
+  const allowLateSubmissions = input.allowLateSubmissions !== false;
+  const attemptScoringStrategy = parseAttemptScoringStrategy(input.attemptScoringStrategy);
   const timerMinutes = parseTimerMinutes(input.timerMinutes, assignmentType);
   const moduleId = typeof input.moduleId === "string" && input.moduleId.trim() ? input.moduleId.trim() : null;
   const lessonId = typeof input.lessonId === "string" && input.lessonId.trim() ? input.lessonId.trim() : null;
@@ -232,9 +274,9 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
 
   await prisma.$executeRaw`
     INSERT INTO "AssignmentConfig"
-      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","timerMinutes","moduleId","lessonId","completionRule","updatedAt")
+      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","allowLateSubmissions","attemptScoringStrategy","timerMinutes","moduleId","lessonId","completionRule","updatedAt")
     VALUES
-      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${timerMinutes}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
+      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${allowLateSubmissions}, ${attemptScoringStrategy}, ${timerMinutes}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
     ON CONFLICT ("assignmentId")
     DO UPDATE SET
       "assignmentType" = EXCLUDED."assignmentType",
@@ -242,6 +284,8 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
       "allowedSubmissionTypes" = EXCLUDED."allowedSubmissionTypes",
       "maxAttempts" = EXCLUDED."maxAttempts",
       "autoGrade" = EXCLUDED."autoGrade",
+      "allowLateSubmissions" = EXCLUDED."allowLateSubmissions",
+      "attemptScoringStrategy" = EXCLUDED."attemptScoringStrategy",
       "timerMinutes" = EXCLUDED."timerMinutes",
       "moduleId" = EXCLUDED."moduleId",
       "lessonId" = EXCLUDED."lessonId",
@@ -294,6 +338,8 @@ function defaultConfig(assignmentId: string): AssignmentConfigRecord {
     allowedSubmissionTypes: ["TEXT", "FILE"],
     maxAttempts: 1,
     autoGrade: false,
+    allowLateSubmissions: true,
+    attemptScoringStrategy: "LATEST",
     timerMinutes: null,
     moduleId: null,
     lessonId: null,
@@ -315,7 +361,13 @@ export async function GET() {
           orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
           include: {
             course: {
-              select: { id: true, code: true, title: true, teacherId: true },
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                teacherId: true,
+                teacher: { select: { name: true, email: true } },
+              },
             },
           },
         })
@@ -399,7 +451,15 @@ export async function POST(request: NextRequest) {
         maxPoints: new Prisma.Decimal(maxPoints),
       },
       include: {
-        course: { select: { id: true, code: true, title: true, teacherId: true } },
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            teacherId: true,
+            teacher: { select: { name: true, email: true } },
+          },
+        },
       },
     });
 
@@ -502,14 +562,30 @@ export async function PATCH(request: NextRequest) {
         where: { id: assignmentId },
         data,
         include: {
-          course: { select: { id: true, code: true, title: true, teacherId: true } },
+          course: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              teacherId: true,
+              teacher: { select: { name: true, email: true } },
+            },
+          },
         },
       });
     } else {
       updated = await prisma.assignment.findUniqueOrThrow({
         where: { id: assignmentId },
         include: {
-          course: { select: { id: true, code: true, title: true, teacherId: true } },
+          course: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              teacherId: true,
+              teacher: { select: { name: true, email: true } },
+            },
+          },
         },
       });
     }

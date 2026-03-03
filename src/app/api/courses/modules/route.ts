@@ -69,6 +69,10 @@ type RawCompletion = {
   completedAt: Date;
 };
 
+type RawModuleAssignment = {
+  moduleId: string;
+};
+
 function isCourseVisibilityCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
   return (
@@ -174,6 +178,19 @@ CREATE INDEX IF NOT EXISTS "Lesson_moduleId_position_idx" ON "Lesson"("moduleId"
 CREATE INDEX IF NOT EXISTS "LessonAttachment_lessonId_kind_idx" ON "LessonAttachment"("lessonId", "kind");
 CREATE INDEX IF NOT EXISTS "LessonCompletion_studentId_completedAt_idx" ON "LessonCompletion"("studentId", "completedAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "LessonCompletion_lessonId_studentId_key" ON "LessonCompletion"("lessonId", "studentId");
+
+CREATE TABLE IF NOT EXISTS "ModuleAssignment" (
+  "id" TEXT NOT NULL,
+  "moduleId" TEXT NOT NULL,
+  "studentId" TEXT NOT NULL,
+  "assignedById" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ModuleAssignment_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "ModuleAssignment_moduleId_studentId_key" ON "ModuleAssignment"("moduleId", "studentId");
+CREATE INDEX IF NOT EXISTS "ModuleAssignment_moduleId_idx" ON "ModuleAssignment"("moduleId");
 `);
 }
 
@@ -270,6 +287,19 @@ async function listModulesRaw(courseId: string, user: { id: string; role: Role |
     `
     : [];
 
+  const assignedModuleSet =
+    user.role === Role.STUDENT && moduleIds.length
+      ? new Set(
+          (
+            await prisma.$queryRaw<RawModuleAssignment[]>`
+              SELECT "moduleId"
+              FROM "ModuleAssignment"
+              WHERE "studentId" = ${user.id} AND "moduleId" IN (${Prisma.join(moduleIds)})
+            `
+          ).map((item) => item.moduleId)
+        )
+      : null;
+
   const now = new Date();
   let totalLessons = 0;
   let completedLessons = 0;
@@ -278,12 +308,12 @@ async function listModulesRaw(courseId: string, user: { id: string; role: Role |
     const moduleLessons = lessons.filter((item) => item.moduleId === module.id);
     const visibleLessons = moduleLessons.filter((item) => canManage || item.visibility === "VISIBLE");
 
+    const notAssignedForStudent = user.role === Role.STUDENT && !(assignedModuleSet?.has(module.id) ?? false);
     const lockedForStudent =
       !canManage &&
       user.role === Role.STUDENT &&
-      module.visibilityRule === MODULE_VISIBILITY_LIMITED &&
-      !!module.releaseAt &&
-      now < module.releaseAt;
+      (notAssignedForStudent ||
+        (module.visibilityRule === MODULE_VISIBILITY_LIMITED && !!module.releaseAt && now < module.releaseAt));
 
     const lessonsForResponse = lockedForStudent
       ? []
@@ -362,7 +392,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(await listModulesRaw(courseId, user, access.canManage));
     }
 
-    const modules = await courseModule.findMany({
+  const modules = await courseModule.findMany({
       where: { courseId },
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       include: {
@@ -385,16 +415,29 @@ export async function GET(request: NextRequest) {
     });
 
     const now = new Date();
+    const moduleIds = modules.map((module) => module.id);
+    const assignedModuleSet =
+      user.role === Role.STUDENT && moduleIds.length
+        ? new Set(
+            (
+              await prisma.$queryRaw<RawModuleAssignment[]>`
+                SELECT "moduleId"
+                FROM "ModuleAssignment"
+                WHERE "studentId" = ${user.id} AND "moduleId" IN (${Prisma.join(moduleIds)})
+              `
+            ).map((item) => item.moduleId)
+          )
+        : null;
     let totalLessons = 0;
     let completedLessons = 0;
 
     const payload = modules.map((module) => {
+      const notAssignedForStudent = user.role === Role.STUDENT && !(assignedModuleSet?.has(module.id) ?? false);
       const lockedForStudent =
         !access.canManage &&
         user.role === Role.STUDENT &&
-        module.visibilityRule === MODULE_VISIBILITY_LIMITED &&
-        !!module.releaseAt &&
-        now < module.releaseAt;
+        (notAssignedForStudent ||
+          (module.visibilityRule === MODULE_VISIBILITY_LIMITED && !!module.releaseAt && now < module.releaseAt));
 
       const visibleLessons = module.lessons.filter((lesson) => access.canManage || lesson.visibility === "VISIBLE");
       const lessonsForResponse = lockedForStudent

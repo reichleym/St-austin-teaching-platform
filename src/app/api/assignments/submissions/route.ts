@@ -4,8 +4,16 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
 
-type SubmissionStatus = "SUBMITTED" | "GRADED" | "PUBLISHED";
+type GradeLifecycleState =
+  | "NOT_SUBMITTED"
+  | "SUBMITTED"
+  | "GRADED_DRAFT"
+  | "GRADE_PUBLISHED"
+  | "GRADE_EDIT_REQUESTED"
+  | "GRADE_EDIT_APPROVED"
+  | "GRADE_EDIT_REJECTED";
 
 type CreateSubmissionBody = {
   assignmentId?: string;
@@ -25,6 +33,14 @@ type UpdateSubmissionBody = {
 };
 
 type PlagiarismStatus = "PENDING" | "COMPLETED" | "FAILED";
+type AttemptScoringStrategy = "LATEST" | "HIGHEST";
+
+const PUBLISHED_STATES: GradeLifecycleState[] = [
+  "GRADE_PUBLISHED",
+  "GRADE_EDIT_REQUESTED",
+  "GRADE_EDIT_APPROVED",
+  "GRADE_EDIT_REJECTED",
+];
 
 export const runtime = "nodejs";
 
@@ -58,6 +74,9 @@ ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizAnswers" JSONB;
 ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizAutoScore" DOUBLE PRECISION;
 ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizMaxScore" DOUBLE PRECISION;
 ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizStartedAt" TIMESTAMP(3);
+`);
+  await prisma.$executeRawUnsafe(`
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
 `);
 
   await prisma.$executeRawUnsafe(`
@@ -94,6 +113,42 @@ CREATE TABLE IF NOT EXISTS "PlagiarismReport" (
 CREATE UNIQUE INDEX IF NOT EXISTS "PlagiarismReport_submissionId_key" ON "PlagiarismReport"("submissionId");
 CREATE INDEX IF NOT EXISTS "PlagiarismReport_status_idx" ON "PlagiarismReport"("status");
 `);
+
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "GradeHistory" (
+  "id" TEXT NOT NULL,
+  "assignmentId" TEXT NOT NULL,
+  "studentId" TEXT NOT NULL,
+  "submissionId" TEXT,
+  "actorId" TEXT,
+  "action" TEXT NOT NULL,
+  "oldRawScore" DOUBLE PRECISION,
+  "newRawScore" DOUBLE PRECISION,
+  "oldFinalScore" DOUBLE PRECISION,
+  "newFinalScore" DOUBLE PRECISION,
+  "oldState" TEXT,
+  "newState" TEXT,
+  "reason" TEXT,
+  "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "GradeHistory_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "GradeHistory_assignment_student_idx" ON "GradeHistory"("assignmentId","studentId","createdAt");
+`);
+
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "NotificationEvent" (
+  "id" TEXT NOT NULL,
+  "recipientId" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "metadata" JSONB NOT NULL DEFAULT '{}'::jsonb,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "NotificationEvent_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "NotificationEvent_recipient_created_idx" ON "NotificationEvent"("recipientId","createdAt");
+`);
 }
 
 async function getAssignmentConfig(assignmentId: string) {
@@ -103,10 +158,13 @@ async function getAssignmentConfig(assignmentId: string) {
       allowedSubmissionTypes: Prisma.JsonValue;
       maxAttempts: number;
       completionRule: string;
+      attemptScoringStrategy: string | null;
+      allowLateSubmissions: boolean | null;
       timerMinutes: number | null;
       dueAt: Date | null;
       maxPoints: Prisma.Decimal;
       courseId: string;
+      courseVisibility: string | null;
       teacherId: string | null;
     }>
   >`
@@ -115,10 +173,13 @@ async function getAssignmentConfig(assignmentId: string) {
       COALESCE(cfg."allowedSubmissionTypes", '["TEXT","FILE"]'::jsonb) AS "allowedSubmissionTypes",
       COALESCE(cfg."maxAttempts", 1) AS "maxAttempts",
       COALESCE(cfg."completionRule", 'SUBMISSION_OR_GRADE') AS "completionRule",
+      COALESCE(cfg."attemptScoringStrategy", 'LATEST') AS "attemptScoringStrategy",
+      COALESCE(cfg."allowLateSubmissions", true) AS "allowLateSubmissions",
       cfg."timerMinutes",
       a."dueAt",
       a."maxPoints",
       a."courseId",
+      c."visibility"::text AS "courseVisibility",
       c."teacherId"
     FROM "Assignment" a
     JOIN "Course" c ON c."id" = a."courseId"
@@ -138,11 +199,14 @@ async function getAssignmentConfig(assignmentId: string) {
     allowedSubmissionTypes: allowedSubmissionTypes.length ? allowedSubmissionTypes : (["TEXT"] as Array<"TEXT" | "FILE">),
     maxAttempts: Math.max(1, Number(row.maxAttempts || 1)),
     completionRule: row.completionRule,
+    attemptScoringStrategy: (row.attemptScoringStrategy === "HIGHEST" ? "HIGHEST" : "LATEST") as AttemptScoringStrategy,
+    allowLateSubmissions: row.allowLateSubmissions !== false,
     timerMinutes:
       row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
     dueAt: row.dueAt,
     maxPoints: Number(row.maxPoints),
     courseId: row.courseId,
+    courseVisibility: row.courseVisibility,
     teacherId: row.teacherId,
   };
 }
@@ -174,6 +238,46 @@ function parseQuizStartedAt(input: unknown) {
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function normalizeLifecycleState(input: string | null | undefined): GradeLifecycleState {
+  if (!input) return "SUBMITTED";
+  if (input === "PUBLISHED") return "GRADE_PUBLISHED";
+  if (input === "GRADED") return "GRADED_DRAFT";
+  if (
+    input === "NOT_SUBMITTED" ||
+    input === "SUBMITTED" ||
+    input === "GRADED_DRAFT" ||
+    input === "GRADE_PUBLISHED" ||
+    input === "GRADE_EDIT_REQUESTED" ||
+    input === "GRADE_EDIT_APPROVED" ||
+    input === "GRADE_EDIT_REJECTED"
+  ) {
+    return input;
+  }
+  return "SUBMITTED";
+}
+
+function normalizeGradeScale(input: Prisma.JsonValue | null) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as Record<string, unknown>;
+      const min = Number(record.min);
+      const max = Number(record.max);
+      const letter = typeof record.letter === "string" ? record.letter.trim() : "";
+      if (!Number.isFinite(min) || !Number.isFinite(max) || !letter) return null;
+      return { min, max, letter };
+    })
+    .filter((item): item is { min: number; max: number; letter: string } => !!item);
+}
+
+function deriveLetterGrade(finalScore: number | null, maxPoints: number, gradeScale: Array<{ min: number; max: number; letter: string }>) {
+  if (finalScore === null || !Number.isFinite(maxPoints) || maxPoints <= 0 || gradeScale.length === 0) return null;
+  const percent = (finalScore / maxPoints) * 100;
+  const band = gradeScale.find((item) => percent >= item.min && percent <= item.max);
+  return band?.letter ?? null;
 }
 
 function tokenize(text: string) {
@@ -355,6 +459,64 @@ async function runPlagiarismCheck(submissionId: string) {
   }
 }
 
+async function resolveFinalScoreForGrade(
+  assignmentId: string,
+  studentId: string,
+  strategy: AttemptScoringStrategy
+) {
+  const scores = await prisma.$queryRaw<Array<{ finalScore: number | null; submittedAt: Date }>>`
+    SELECT "finalScore","submittedAt"
+    FROM "AssignmentSubmission"
+    WHERE "assignmentId" = ${assignmentId} AND "studentId" = ${studentId} AND "finalScore" IS NOT NULL
+    ORDER BY "submittedAt" DESC
+  `;
+  if (!scores.length) return null;
+  if (strategy === "LATEST") return scores[0]?.finalScore ?? null;
+  return scores.reduce<number | null>((acc, item) => {
+    if (item.finalScore === null) return acc;
+    if (acc === null) return item.finalScore;
+    return Math.max(acc, item.finalScore);
+  }, null);
+}
+
+async function logGradeHistory(input: {
+  assignmentId: string;
+  studentId: string;
+  submissionId: string | null;
+  actorId: string | null;
+  action: string;
+  oldRawScore: number | null;
+  newRawScore: number | null;
+  oldFinalScore: number | null;
+  newFinalScore: number | null;
+  oldState: GradeLifecycleState | null;
+  newState: GradeLifecycleState | null;
+  reason?: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  const id = `gh_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+  await prisma.$executeRaw`
+    INSERT INTO "GradeHistory"
+      ("id","assignmentId","studentId","submissionId","actorId","action","oldRawScore","newRawScore","oldFinalScore","newFinalScore","oldState","newState","reason","metadata")
+    VALUES
+      (${id}, ${input.assignmentId}, ${input.studentId}, ${input.submissionId}, ${input.actorId}, ${input.action}, ${input.oldRawScore}, ${input.newRawScore}, ${input.oldFinalScore}, ${input.newFinalScore}, ${input.oldState}, ${input.newState}, ${input.reason ?? null}, ${JSON.stringify(input.metadata ?? {})}::jsonb)
+  `;
+}
+
+async function createNotification(input: {
+  recipientId: string;
+  type: string;
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const id = `ntf_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+  await prisma.$executeRaw`
+    INSERT INTO "NotificationEvent" ("id","recipientId","type","title","message","metadata")
+    VALUES (${id}, ${input.recipientId}, ${input.type}, ${input.title}, ${input.message}, ${JSON.stringify(input.metadata ?? {})}::jsonb)
+  `;
+}
+
 export async function GET(request: NextRequest) {
   try {
     await ensureSubmissionSchema();
@@ -370,7 +532,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
     }
 
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 1 },
+      select: { gradeScale: true },
+    });
+    const gradeScale = normalizeGradeScale(settings?.gradeScale ?? null);
+
     if (user.role === Role.STUDENT) {
+      if (config.courseVisibility !== COURSE_VISIBILITY_PUBLISHED) {
+        return NextResponse.json({ error: "Course is not available for students." }, { status: 403 });
+      }
       const enrolled = await prisma.enrollment.count({
         where: { courseId: config.courseId, studentId: user.id, status: "ACTIVE" },
       });
@@ -399,9 +570,12 @@ export async function GET(request: NextRequest) {
           gradedAt: Date | null;
           publishedAt: Date | null;
           status: string;
+          assignmentMaxPoints: Prisma.Decimal;
         }>
       >`
-        SELECT * FROM "AssignmentSubmission"
+        SELECT s.*, a."maxPoints" AS "assignmentMaxPoints"
+        FROM "AssignmentSubmission" s
+        JOIN "Assignment" a ON a."id" = s."assignmentId"
         WHERE "assignmentId" = ${assignmentId} AND "studentId" = ${user.id}
         ORDER BY "attemptNumber" ASC
       `;
@@ -409,12 +583,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         submissions: submissions.map((item) => ({
           ...item,
+          status: normalizeLifecycleState(item.status),
           submittedAt: item.submittedAt?.toISOString?.() ?? null,
-          gradedAt: item.status === "PUBLISHED" ? item.gradedAt?.toISOString?.() ?? null : null,
-          publishedAt: item.status === "PUBLISHED" ? item.publishedAt?.toISOString?.() ?? null : null,
-          rawScore: item.status === "PUBLISHED" ? item.rawScore : null,
-          finalScore: item.status === "PUBLISHED" ? item.finalScore : null,
-          feedback: item.status === "PUBLISHED" ? item.feedback : null,
+          gradedAt: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status))
+            ? item.gradedAt?.toISOString?.() ?? null
+            : null,
+          publishedAt: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status))
+            ? item.publishedAt?.toISOString?.() ?? null
+            : null,
+          rawScore: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status)) ? item.rawScore : null,
+          finalScore: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status)) ? item.finalScore : null,
+          feedback: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status)) ? item.feedback : null,
+          letterGrade: PUBLISHED_STATES.includes(normalizeLifecycleState(item.status))
+            ? deriveLetterGrade(item.finalScore, Number(item.assignmentMaxPoints), gradeScale)
+            : null,
         })),
       });
     }
@@ -450,6 +632,7 @@ export async function GET(request: NextRequest) {
         plagiarismScore: number | null;
         plagiarismSummary: string | null;
         plagiarismCheckedAt: Date | null;
+        assignmentMaxPoints: Prisma.Decimal;
       }>
     >`
       SELECT
@@ -459,9 +642,11 @@ export async function GET(request: NextRequest) {
         p."status" AS "plagiarismStatus",
         p."similarityScore" AS "plagiarismScore",
         p."summary" AS "plagiarismSummary",
-        p."checkedAt" AS "plagiarismCheckedAt"
+        p."checkedAt" AS "plagiarismCheckedAt",
+        a."maxPoints" AS "assignmentMaxPoints"
       FROM "AssignmentSubmission" s
       JOIN "User" u ON u."id" = s."studentId"
+      JOIN "Assignment" a ON a."id" = s."assignmentId"
       LEFT JOIN "PlagiarismReport" p ON p."submissionId" = s."id"
       WHERE s."assignmentId" = ${assignmentId}
       ORDER BY s."studentId" ASC, s."attemptNumber" ASC
@@ -470,6 +655,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       submissions: submissions.map((item) => ({
         ...item,
+        status: normalizeLifecycleState(item.status),
         submittedAt: item.submittedAt.toISOString(),
         gradedAt: item.gradedAt?.toISOString() ?? null,
         publishedAt: item.publishedAt?.toISOString() ?? null,
@@ -477,6 +663,7 @@ export async function GET(request: NextRequest) {
         plagiarismScore: item.plagiarismScore,
         plagiarismSummary: item.plagiarismSummary,
         plagiarismCheckedAt: item.plagiarismCheckedAt?.toISOString() ?? null,
+        letterGrade: deriveLetterGrade(item.finalScore, Number(item.assignmentMaxPoints), gradeScale),
       })),
     });
   } catch (error) {
@@ -510,6 +697,10 @@ export async function POST(request: NextRequest) {
     const config = await getAssignmentConfig(assignmentId);
     if (!config) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
+    }
+
+    if (config.courseVisibility !== COURSE_VISIBILITY_PUBLISHED) {
+      return NextResponse.json({ error: "Course is not available for students." }, { status: 403 });
     }
 
     const enrolled = await prisma.enrollment.count({
@@ -564,6 +755,12 @@ export async function POST(request: NextRequest) {
         isLate = true;
         lateByMinutes = Math.floor((now.getTime() - config.dueAt.getTime()) / (1000 * 60));
       }
+    }
+    if (isLate && config.allowLateSubmissions === false) {
+      return NextResponse.json(
+        { error: "Late submissions are blocked for this assignment." },
+        { status: 400 }
+      );
     }
 
     const settings = await prisma.systemSettings.findUnique({
@@ -620,8 +817,17 @@ export async function POST(request: NextRequest) {
         INSERT INTO "AssignmentSubmission"
         ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","rawScore","finalScore","quizAnswers","quizAutoScore","quizMaxScore","quizStartedAt","gradedAt","publishedAt","status")
         VALUES
-        (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${null}, ${null}, ${null}, ${null}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${normalizedRaw}, ${finalScore}, ${JSON.stringify(quizAnswers)}::jsonb, ${earned}, ${maxQuizScore}, ${quizStartedAt}, NOW(), NOW(), ${"PUBLISHED"})
+        (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${null}, ${null}, ${null}, ${null}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${normalizedRaw}, ${finalScore}, ${JSON.stringify(quizAnswers)}::jsonb, ${earned}, ${maxQuizScore}, ${quizStartedAt}, NOW(), NOW(), ${"GRADE_PUBLISHED"})
       `;
+
+      const resolvedFinalScore = await resolveFinalScoreForGrade(
+        assignmentId,
+        user.id,
+        config.attemptScoringStrategy
+      );
+      if (resolvedFinalScore === null) {
+        return NextResponse.json({ error: "Unable to resolve final score for grade publication." }, { status: 500 });
+      }
 
       await prisma.grade.upsert({
         where: {
@@ -633,15 +839,38 @@ export async function POST(request: NextRequest) {
         create: {
           assignmentId,
           studentId: user.id,
-          points: new Prisma.Decimal(finalScore),
+          points: new Prisma.Decimal(resolvedFinalScore),
           awardedById: null,
           publishedAt: new Date(),
         },
         update: {
-          points: new Prisma.Decimal(finalScore),
+          points: new Prisma.Decimal(resolvedFinalScore),
           awardedById: null,
           publishedAt: new Date(),
         },
+      });
+
+      await logGradeHistory({
+        assignmentId,
+        studentId: user.id,
+        submissionId: id,
+        actorId: null,
+        action: "QUIZ_AUTO_PUBLISHED",
+        oldRawScore: null,
+        newRawScore: normalizedRaw,
+        oldFinalScore: null,
+        newFinalScore: resolvedFinalScore,
+        oldState: "SUBMITTED",
+        newState: "GRADE_PUBLISHED",
+        metadata: { latePenaltyPct, attemptNumber },
+      });
+
+      await createNotification({
+        recipientId: user.id,
+        type: "GRADE_PUBLISHED",
+        title: "Quiz grade published",
+        message: `Your quiz grade for assignment ${assignmentId} is now published.`,
+        metadata: { assignmentId, submissionId: id, finalScore: resolvedFinalScore },
       });
 
       return NextResponse.json(
@@ -674,8 +903,8 @@ export async function PATCH(request: NextRequest) {
   try {
     await ensureSubmissionSchema();
     const user = await requireAuthenticatedUser();
-    if (!isSuperAdminRole(user.role) && user.role !== Role.TEACHER) {
-      return NextResponse.json({ error: "Only admin/teacher can grade submissions." }, { status: 403 });
+    if (user.role !== Role.TEACHER) {
+      return NextResponse.json({ error: "Only teachers can grade submissions directly." }, { status: 403 });
     }
 
     const body = (await request.json()) as UpdateSubmissionBody;
@@ -693,14 +922,28 @@ export async function PATCH(request: NextRequest) {
         maxPoints: Prisma.Decimal;
         teacherId: string | null;
         rawScore: number | null;
+        finalScore: number | null;
         feedback: string | null;
         status: string;
+        attemptScoringStrategy: string | null;
       }>
     >`
-      SELECT s."id", s."assignmentId", s."studentId", s."latePenaltyPct", s."rawScore", s."feedback", s."status", a."maxPoints", c."teacherId"
+      SELECT
+        s."id",
+        s."assignmentId",
+        s."studentId",
+        s."latePenaltyPct",
+        s."rawScore",
+        s."finalScore",
+        s."feedback",
+        s."status",
+        a."maxPoints",
+        c."teacherId",
+        cfg."attemptScoringStrategy"
       FROM "AssignmentSubmission" s
       JOIN "Assignment" a ON a."id" = s."assignmentId"
       JOIN "Course" c ON c."id" = a."courseId"
+      LEFT JOIN "AssignmentConfig" cfg ON cfg."assignmentId" = a."id"
       WHERE s."id" = ${submissionId}
       LIMIT 1
     `;
@@ -710,8 +953,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Submission not found." }, { status: 404 });
     }
 
-    if (user.role === Role.TEACHER && submission.teacherId !== user.id) {
+    if (submission.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only grade submissions in your assigned courses." }, { status: 403 });
+    }
+    const currentState = normalizeLifecycleState(submission.status);
+    if (PUBLISHED_STATES.includes(currentState)) {
+      return NextResponse.json(
+        { error: "Published grades are locked. Submit a grade edit request for admin approval." },
+        { status: 409 }
+      );
     }
 
     const parsedRawScore = body.rawScore !== undefined ? parseScore(body.rawScore) : null;
@@ -724,14 +974,16 @@ export async function PATCH(request: NextRequest) {
     if (publishRequested && nextRawScore === null) {
       return NextResponse.json({ error: "Cannot publish grade without rawScore." }, { status: 400 });
     }
+    if ((nextRawScore !== null || publishRequested) && !nextFeedback) {
+      return NextResponse.json({ error: "Feedback is required when saving or publishing a grade." }, { status: 400 });
+    }
 
     const maxPoints = Number(submission.maxPoints);
     const cappedRaw = nextRawScore === null ? null : Math.min(maxPoints, nextRawScore);
     const penalty = Number(submission.latePenaltyPct || 0);
     const finalScore = cappedRaw === null ? null : Math.max(0, Math.round(cappedRaw * (1 - penalty / 100) * 100) / 100);
-    const wasPublished = submission.status === "PUBLISHED";
-
-    const status: SubmissionStatus = publishRequested || wasPublished ? "PUBLISHED" : cappedRaw !== null || nextFeedback ? "GRADED" : "SUBMITTED";
+    const nextState: GradeLifecycleState =
+      publishRequested ? "GRADE_PUBLISHED" : cappedRaw !== null || nextFeedback ? "GRADED_DRAFT" : "SUBMITTED";
 
     await prisma.$executeRaw`
       UPDATE "AssignmentSubmission"
@@ -742,12 +994,20 @@ export async function PATCH(request: NextRequest) {
         "gradedById" = ${user.id},
         "gradedAt" = NOW(),
         "publishedAt" = CASE WHEN ${publishRequested} THEN NOW() ELSE "publishedAt" END,
-        "status" = ${status}
+        "status" = ${nextState}
       WHERE "id" = ${submissionId}
     `;
 
     if (finalScore !== null) {
-      const nextPublishedAt = publishRequested || wasPublished ? new Date() : null;
+      const strategy: AttemptScoringStrategy =
+        submission.attemptScoringStrategy === "HIGHEST" ? "HIGHEST" : "LATEST";
+      const resolvedFinalScore = publishRequested
+        ? await resolveFinalScoreForGrade(submission.assignmentId, submission.studentId, strategy)
+        : finalScore;
+      if (resolvedFinalScore === null) {
+        return NextResponse.json({ error: "Unable to resolve final score for grade record." }, { status: 500 });
+      }
+      const nextPublishedAt = publishRequested ? new Date() : null;
       await prisma.grade.upsert({
         where: {
           assignmentId_studentId: {
@@ -758,19 +1018,47 @@ export async function PATCH(request: NextRequest) {
         create: {
           assignmentId: submission.assignmentId,
           studentId: submission.studentId,
-          points: new Prisma.Decimal(finalScore),
+          points: new Prisma.Decimal(resolvedFinalScore),
           awardedById: user.id,
           publishedAt: nextPublishedAt,
         },
         update: {
-          points: new Prisma.Decimal(finalScore),
+          points: new Prisma.Decimal(resolvedFinalScore),
           awardedById: user.id,
           publishedAt: nextPublishedAt,
         },
       });
+
+      await logGradeHistory({
+        assignmentId: submission.assignmentId,
+        studentId: submission.studentId,
+        submissionId,
+        actorId: user.id,
+        action: publishRequested ? "GRADE_PUBLISHED" : "GRADE_DRAFT_SAVED",
+        oldRawScore: submission.rawScore,
+        newRawScore: cappedRaw,
+        oldFinalScore: submission.finalScore,
+        newFinalScore: resolvedFinalScore,
+        oldState: currentState,
+        newState: nextState,
+      });
+
+      if (publishRequested) {
+        await createNotification({
+          recipientId: submission.studentId,
+          type: "GRADE_PUBLISHED",
+          title: "Grade published",
+          message: `Your grade for assignment ${submission.assignmentId} has been published.`,
+          metadata: {
+            assignmentId: submission.assignmentId,
+            submissionId,
+            finalScore: resolvedFinalScore,
+          },
+        });
+      }
     }
 
-    return NextResponse.json({ ok: true, submissionId, status, finalScore });
+    return NextResponse.json({ ok: true, submissionId, status: nextState, finalScore });
   } catch (error) {
     if (error instanceof PermissionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
