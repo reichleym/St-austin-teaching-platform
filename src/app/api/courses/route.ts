@@ -41,6 +41,8 @@ type DeleteBody = {
   courseId?: string;
 };
 
+type EnrollmentRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 function isCourseSchemaCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
   return (
@@ -68,6 +70,26 @@ function getCourseAccessState(input: {
   if (now < input.startDate) return "LOCKED";
   if (now > input.endDate) return "READ_ONLY";
   return "ACTIVE";
+}
+
+async function ensureEnrollmentRequestSchema() {
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "EnrollmentRequest" (
+  "id" TEXT NOT NULL,
+  "courseId" TEXT NOT NULL,
+  "studentId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "reviewedById" TEXT,
+  "reviewedAt" TIMESTAMP(3),
+  CONSTRAINT "EnrollmentRequest_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "EnrollmentRequest_course_student_pending_key"
+  ON "EnrollmentRequest" ("courseId", "studentId", "status");
+CREATE INDEX IF NOT EXISTS "EnrollmentRequest_status_created_idx"
+  ON "EnrollmentRequest" ("status", "createdAt");
+  `);
 }
 
 async function ensureTeacherIfProvided(teacherId: string | null) {
@@ -182,19 +204,25 @@ async function validateStudentIds(studentIds: string[]) {
   return { ok: true as const, ids: normalized };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser();
     const role = user.role;
+    const scope = request.nextUrl.searchParams.get("scope")?.trim() ?? "";
+    const enrolledOnly = scope === "enrolled";
 
     const courseWhere: Prisma.CourseWhereInput = isSuperAdminRole(role)
       ? {}
       : isTeacherRole(role)
         ? { teacherId: user.id }
-        : {
-            visibility: COURSE_VISIBILITY_PUBLISHED,
-            enrollments: { some: { studentId: user.id, status: "ACTIVE" } },
-          };
+        : enrolledOnly
+          ? {
+              visibility: COURSE_VISIBILITY_PUBLISHED,
+              enrollments: { some: { studentId: user.id, status: "ACTIVE" } },
+            }
+          : {
+              visibility: COURSE_VISIBILITY_PUBLISHED,
+            };
 
     const enrollmentWhere: Prisma.EnrollmentWhereInput | undefined = isSuperAdminRole(role)
       ? undefined
@@ -267,7 +295,9 @@ export async function GET() {
         ? {}
         : isTeacherRole(role)
           ? { teacherId: user.id }
-          : { enrollments: { some: { studentId: user.id, status: "ACTIVE" } } };
+          : enrolledOnly
+            ? { enrollments: { some: { studentId: user.id, status: "ACTIVE" } } }
+            : {};
       const legacyCourses = await prisma.course.findMany({
         where: legacyWhere,
         orderBy: [{ createdAt: "desc" }],
@@ -295,6 +325,56 @@ export async function GET() {
         endDate: null,
         visibility: COURSE_VISIBILITY_PUBLISHED,
       }));
+    }
+
+    const requestStatusByCourseId = new Map<string, EnrollmentRequestStatus>();
+    const progressByCourseId = new Map<string, number>();
+
+    if (role === Role.STUDENT && courses.length) {
+      await ensureEnrollmentRequestSchema();
+
+      const courseIds = courses.map((course) => course.id);
+      const requestRows = await prisma.$queryRaw<Array<{ courseId: string; status: string }>>`
+        SELECT DISTINCT ON ("courseId") "courseId", "status"
+        FROM "EnrollmentRequest"
+        WHERE "studentId" = ${user.id} AND "courseId" IN (${Prisma.join(courseIds)})
+        ORDER BY "courseId", "createdAt" DESC
+      `;
+      for (const row of requestRows) {
+        if (row.status === "PENDING" || row.status === "APPROVED" || row.status === "REJECTED") {
+          requestStatusByCourseId.set(row.courseId, row.status);
+        }
+      }
+
+      if (enrolledOnly) {
+        const totalRows = await prisma.$queryRaw<Array<{ courseId: string; count: bigint | number }>>`
+          SELECT m."courseId", COUNT(l."id")::bigint AS count
+          FROM "CourseModule" m
+          JOIN "Lesson" l ON l."moduleId" = m."id"
+          WHERE m."courseId" IN (${Prisma.join(courseIds)}) AND l."visibility" = CAST('VISIBLE' AS "LessonVisibility")
+          GROUP BY m."courseId"
+        `.catch(() => []);
+
+        const completedRows = await prisma.$queryRaw<Array<{ courseId: string; count: bigint | number }>>`
+          SELECT m."courseId", COUNT(lc."id")::bigint AS count
+          FROM "LessonCompletion" lc
+          JOIN "Lesson" l ON l."id" = lc."lessonId"
+          JOIN "CourseModule" m ON m."id" = l."moduleId"
+          WHERE lc."studentId" = ${user.id}
+            AND m."courseId" IN (${Prisma.join(courseIds)})
+            AND l."visibility" = CAST('VISIBLE' AS "LessonVisibility")
+          GROUP BY m."courseId"
+        `.catch(() => []);
+
+        const totalMap = new Map(totalRows.map((row) => [row.courseId, Number(row.count)]));
+        const completedMap = new Map(completedRows.map((row) => [row.courseId, Number(row.count)]));
+
+        for (const courseId of courseIds) {
+          const total = totalMap.get(courseId) ?? 0;
+          const completed = completedMap.get(courseId) ?? 0;
+          progressByCourseId.set(courseId, total > 0 ? Math.round((completed / total) * 100) : 0);
+        }
+      }
     }
 
     return NextResponse.json({
@@ -336,6 +416,8 @@ export async function GET() {
                 }))
             : [],
           myEnrollmentStatus: myEnrollment?.status ?? null,
+          myEnrollmentRequestStatus: requestStatusByCourseId.get(course.id) ?? null,
+          courseProgressPercent: progressByCourseId.get(course.id) ?? null,
         };
       }),
       teachers,

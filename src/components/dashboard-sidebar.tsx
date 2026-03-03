@@ -38,6 +38,14 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
 
       return (
         <div key={item.slug} style={depth > 0 ? { marginLeft: `${depth * 12}px` } : undefined}>
+          {(() => {
+            const title =
+              role === Role.STUDENT && item.slug === "courses"
+                ? "All Courses"
+                : role === Role.STUDENT && item.slug === "learning"
+                  ? "My Learning"
+                  : item.title;
+            return (
           <Link
             href={item.href ?? `/dashboard?module=${item.slug}`}
             className={
@@ -46,8 +54,10 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
                 : `brand-nav-sublink ${active ? "brand-nav-sublink-active !text-[#002f74]" : ""}`
             }
           >
-            {item.title}
+            {title}
           </Link>
+            );
+          })()}
           {hasChildren ? <div className="mt-1 space-y-1">{renderTree(item.slug, depth + 1)}</div> : null}
         </div>
       );

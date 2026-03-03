@@ -882,6 +882,15 @@ export function AssignmentsModule({ role }: Props) {
     return Math.floor(remainingMs / 1000);
   }, [isStudent, nowTick, selectedAssignment, studentQuizStartedAt]);
 
+  const studentAttemptCount = isStudent ? submissions.length : 0;
+  const studentCanSubmit = useMemo(() => {
+    if (!isStudent || !selectedAssignment) return false;
+    if (selectedAssignment.config.assignmentType === "QUIZ") {
+      return studentAttemptCount < selectedAssignment.config.maxAttempts;
+    }
+    return studentAttemptCount === 0;
+  }, [isStudent, selectedAssignment, studentAttemptCount]);
+
   return (
     <section className="grid min-w-0 gap-4">
       {isSuperAdmin ? (
@@ -1065,6 +1074,14 @@ export function AssignmentsModule({ role }: Props) {
 
           {isStudent ? (
             <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit}>
+              {submissionsLoading ? <p className="brand-muted text-sm">Checking your submission status...</p> : null}
+              {!submissionsLoading && !studentCanSubmit ? (
+                <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
+                  {selectedAssignment.config.assignmentType === "QUIZ"
+                    ? "You have reached the maximum quiz attempts."
+                    : "You already submitted this assignment. Resubmission is not allowed."}
+                </p>
+              ) : null}
               {selectedAssignment.config.assignmentType === "QUIZ" ? (
                 <>
                   {quizRemainingSeconds !== null ? (
@@ -1108,12 +1125,14 @@ export function AssignmentsModule({ role }: Props) {
               {selectedAssignment.config.assignmentType !== "QUIZ" && selectedAssignment.config.allowedSubmissionTypes.includes("FILE") ? (
                 <input type="file" className="brand-input" onChange={(event) => setStudentFile(event.currentTarget.files?.[0] ?? null)} />
               ) : null}
-              <button
-                className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
-                disabled={studentPending || (selectedAssignment.config.assignmentType === "QUIZ" && quizRemainingSeconds === 0)}
-              >
-                {studentPending ? "Submitting..." : "Submit Attempt"}
-              </button>
+              {studentCanSubmit ? (
+                <button
+                  className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
+                  disabled={studentPending || submissionsLoading || (selectedAssignment.config.assignmentType === "QUIZ" && quizRemainingSeconds === 0)}
+                >
+                  {studentPending ? "Submitting..." : "Submit Attempt"}
+                </button>
+              ) : null}
             </form>
           ) : null}
 

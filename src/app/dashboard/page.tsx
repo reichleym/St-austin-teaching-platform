@@ -489,13 +489,17 @@ export default async function DashboardPage({ searchParams }: Props) {
   let moduleKpiValue: string | number = 0;
   let moduleKpiHint = "live count";
 
-  const coursesCount = await prisma.course.count({
+  const enrolledCoursesCount = await prisma.course.count({
     where: isSuperAdmin
       ? {}
       : session.user.role === Role.TEACHER
         ? { teacherId: session.user.id }
         : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
   });
+  const availableCoursesCount =
+    session.user.role === Role.STUDENT
+      ? await prisma.course.count({ where: { visibility: "PUBLISHED" } })
+      : enrolledCoursesCount;
   const assignmentCount = await prisma.assignment.count({
     where:
       session.user.role === Role.SUPER_ADMIN
@@ -520,22 +524,38 @@ export default async function DashboardPage({ searchParams }: Props) {
             AND s."status" IN ('SUBMITTED','GRADED_DRAFT')
         `.then((rows) => Number(rows[0]?.count ?? 0)).catch(() => 0)
       : 0;
+  const pendingEnrollmentRequestCount = isSuperAdmin
+    ? await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT to_regclass('public."EnrollmentRequest"') IS NOT NULL AS "exists"
+      `
+        .then(async (rows) => {
+          if (!rows[0]?.exists) return 0;
+          const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+            SELECT COUNT(*)::bigint AS count
+            FROM "EnrollmentRequest"
+            WHERE "status" = 'PENDING'
+          `;
+          return Number(countRows[0]?.count ?? 0);
+        })
+        .catch(() => 0)
+    : 0;
 
   const overviewMetrics =
     session.user.role === Role.SUPER_ADMIN
       ? [
           { label: "Announcements", value: announcementCount, delta: "available for your role", href: "/dashboard?module=announcements" },
-          { label: "Courses", value: coursesCount, delta: "institution total", href: "/dashboard?module=courses" },
+          { label: "Courses", value: enrolledCoursesCount, delta: "institution total", href: "/dashboard?module=courses" },
           { label: "Grade Edit Requests", value: pendingGradeEditCount, delta: "pending review", href: "/dashboard?module=assessment" },
+          { label: "Enrollment Requests", value: pendingEnrollmentRequestCount, delta: "pending approval", href: "/dashboard?module=courses" },
         ]
       : session.user.role === Role.TEACHER
         ? [
-            { label: "Assigned Courses", value: coursesCount, delta: "currently assigned", href: "/dashboard?module=courses" },
+            { label: "Assigned Courses", value: enrolledCoursesCount, delta: "currently assigned", href: "/dashboard?module=courses" },
             { label: "Submissions Pending", value: pendingSubmissionCount, delta: "awaiting grading", href: "/dashboard?module=assessment" },
             { label: "Assignments", value: assignmentCount, delta: "in your courses", href: "/dashboard?module=assessment" },
           ]
         : [
-            { label: "Enrolled Courses", value: coursesCount, delta: "active enrollments", href: "/dashboard?module=courses" },
+            { label: "Enrolled Courses", value: enrolledCoursesCount, delta: "active enrollments", href: "/dashboard?module=learning" },
             { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
             { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
           ];
@@ -545,8 +565,12 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiValue = announcementCount;
     moduleKpiHint = "available for your role";
   } else if (selected.slug === "courses") {
-    moduleKpiLabel = session.user.role === Role.STUDENT ? "Enrolled Courses" : "Courses";
-    moduleKpiValue = coursesCount;
+    moduleKpiLabel = session.user.role === Role.STUDENT ? "Available Courses" : "Courses";
+    moduleKpiValue = session.user.role === Role.STUDENT ? availableCoursesCount : enrolledCoursesCount;
+    moduleKpiHint = "in this module";
+  } else if (selected.slug === "learning") {
+    moduleKpiLabel = "My Learning";
+    moduleKpiValue = enrolledCoursesCount;
     moduleKpiHint = "in this module";
   } else if (selected.slug === "assessment") {
     moduleKpiLabel = "Assignments";
@@ -562,6 +586,13 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiHint = "total records";
   }
 
+  const selectedTitle =
+    session.user.role === Role.STUDENT && selected.slug === "courses"
+      ? "All Courses"
+      : session.user.role === Role.STUDENT && selected.slug === "learning"
+        ? "My Learning"
+        : selected.title;
+
   return (
     <main className="min-h-screen lg:flex">
       <DashboardSidebar role={session.user.role} selectedSlug={selected.slug} />
@@ -576,7 +607,7 @@ export default async function DashboardPage({ searchParams }: Props) {
                 <span className="brand-accent-dot" />
                 Active Module
               </span>
-              <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{selected.title}</h2>
+              <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{selectedTitle}</h2>
             </div>
             <div className="brand-accent-card min-w-[170px] px-5 py-4 text-right">
               <p className="text-xs uppercase tracking-[0.16em] text-[#3f6fae]">{moduleKpiLabel}</p>
@@ -613,7 +644,9 @@ export default async function DashboardPage({ searchParams }: Props) {
         ) : selected.slug === "announcements-feed" ? (
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
         ) : selected.slug === "courses" ? (
-          <CoursesModule role={session.user.role} />
+          <CoursesModule role={session.user.role} viewMode="all" />
+        ) : selected.slug === "learning" ? (
+          <CoursesModule role={session.user.role} viewMode={session.user.role === Role.STUDENT ? "enrolled" : "all"} />
         ) : selected.slug === "assessment" ? (
           <AssignmentsModule role={session.user.role} />
         ) : selected.slug === "view-teachers" ? (
