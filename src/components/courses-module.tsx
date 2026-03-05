@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmModal } from "@/components/confirm-modal";
 import { CourseStructurePanel } from "@/components/course-structure-panel";
 
 type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
@@ -138,6 +139,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [editPending, setEditPending] = useState(false);
 
   const [deletePendingCourseId, setDeletePendingCourseId] = useState("");
+  const [confirmDeleteCourse, setConfirmDeleteCourse] = useState<{ id: string; label: string } | null>(null);
 
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
@@ -315,13 +317,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   };
 
   const onDeleteCourse = async (courseId: string) => {
-    const selected = courses.find((item) => item.id === courseId);
-    const label = selected ? `${selected.code} - ${selected.title}` : "this course";
-
-    if (!window.confirm(`Delete ${label}? This removes related assignments, discussions, and enrollments.`)) {
-      return;
-    }
-
     setDeletePendingCourseId(courseId);
     setError("");
 
@@ -573,7 +568,12 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => void onDeleteCourse(course.id)}
+                              onClick={() =>
+                                setConfirmDeleteCourse({
+                                  id: course.id,
+                                  label: `${course.code} - ${course.title}`,
+                                })
+                              }
                               disabled={deletePendingCourseId === course.id}
                               className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
                             >
@@ -821,6 +821,25 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{role}</p>
         </article>
       </div>
+
+      <ConfirmModal
+        open={!!confirmDeleteCourse}
+        title="Delete Course"
+        message={
+          confirmDeleteCourse
+            ? `Delete ${confirmDeleteCourse.label}? This removes related assignments, discussions, and enrollments.`
+            : ""
+        }
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setConfirmDeleteCourse(null)}
+        onConfirm={() => {
+          const target = confirmDeleteCourse;
+          setConfirmDeleteCourse(null);
+          if (!target) return;
+          void onDeleteCourse(target.id);
+        }}
+      />
     </section>
   );
 }

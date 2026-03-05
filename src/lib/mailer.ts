@@ -21,6 +21,13 @@ type SendTestEmailInput = {
   requestedByEmail: string | null;
 };
 
+type SendPasswordResetEmailInput = {
+  to: string;
+  name: string | null;
+  resetUrl: string;
+  resetExpires: Date;
+};
+
 function getMailerConfig() {
   const service = (process.env.SMTP_SERVICE ?? "").toLowerCase();
   const isGmail = service === "gmail";
@@ -150,6 +157,35 @@ export async function sendTestEmail(input: SendTestEmailInput) {
       <p>This is a test email from <strong>St. Austin</strong>.</p>
       <p><strong>Requested by:</strong> ${requestedBy}</p>
       <p><strong>Sent at (UTC):</strong> ${sentAt}</p>
+    `,
+  });
+}
+
+export async function sendPasswordResetEmail(input: SendPasswordResetEmailInput) {
+  const { config, transporter } = createTransporter();
+  const recipientName = input.name?.trim() || "there";
+  const expiresText = input.resetExpires.toUTCString();
+
+  await transporter.sendMail({
+    from: config.from,
+    to: input.to,
+    subject: "Reset your St. Austin password",
+    text: [
+      `Hi ${recipientName},`,
+      "",
+      "A password reset was requested for your account.",
+      "Use this link to set a new password:",
+      input.resetUrl,
+      "",
+      `This link expires on ${expiresText}.`,
+      "If you did not request this, you can ignore this email.",
+    ].join("\n"),
+    html: `
+      <p>Hi ${recipientName},</p>
+      <p>A password reset was requested for your account.</p>
+      <p><a href="${input.resetUrl}">Reset password</a></p>
+      <p>This link expires on ${expiresText}.</p>
+      <p>If you did not request this, you can ignore this email.</p>
     `,
   });
 }

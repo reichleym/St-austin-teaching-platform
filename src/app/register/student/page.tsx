@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
+import { PasswordField } from "@/components/password-field";
 
 export default function StudentRegistrationPage() {
   type LocationOption = {
@@ -231,11 +232,15 @@ export default function StudentRegistrationPage() {
               </div>
             </div>
 
-            <label className="grid gap-1.5">
-              <span className="brand-label">Password</span>
-              <input className="brand-input" type="password" name="password" minLength={8} required />
-              <span className="brand-helper">Use at least 8 characters.</span>
-            </label>
+            <PasswordField
+              label="Password"
+              name="password"
+              minLength={8}
+              required
+              wrapperClassName="grid gap-1.5"
+              inputClassName="brand-input pr-11"
+            />
+            <span className="brand-helper -mt-3">Use at least 8 characters.</span>
 
             <div className="rounded-xl border border-[#bcd8fb] bg-white/75 p-3">
               <p className="brand-helper">

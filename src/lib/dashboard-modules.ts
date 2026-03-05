@@ -73,16 +73,18 @@ export const dashboardModules: DashboardModule[] = [
     roles: [Role.SUPER_ADMIN],
   },
   {
-    slug: "academic-oversight",
-    title: "Academic Control",
-    description: "Cross-course monitoring, governance, and approvals.",
-    roles: [Role.SUPER_ADMIN],
-  },
-  {
     slug: "system-settings",
     title: "Policies & Settings",
     description: "Grade scales, penalties, and signup policy controls.",
     roles: [Role.SUPER_ADMIN],
+    href: "/dashboard?module=admin-profile",
+  },
+  {
+    slug: "admin-profile",
+    title: "Admin Profile",
+    description: "Manage your Super Admin profile information.",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "system-settings",
   },
   {
     slug: "invitations",
