@@ -13,6 +13,7 @@ import { AnnouncementsFeed } from "@/components/announcements-feed";
 import { CoursesModule } from "@/components/courses-module";
 import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
+import { AdminProfileSettings } from "@/components/admin-profile-settings";
 
 type Props = {
   searchParams: Promise<{ module?: string }>;
@@ -622,6 +623,10 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiLabel = "Students";
     moduleKpiValue = studentList.length;
     moduleKpiHint = "total records";
+  } else if (selected.slug === "system-settings" || selected.slug === "admin-profile") {
+    moduleKpiLabel = "Settings";
+    moduleKpiValue = "Admin";
+    moduleKpiHint = "profile and platform controls";
   }
 
   const selectedTitle =
@@ -724,6 +729,16 @@ export default async function DashboardPage({ searchParams }: Props) {
               emptyText="No students found yet."
               users={serializedStudentList}
             />
+          </section>
+        ) : selected.slug === "admin-profile" ? (
+          <AdminProfileSettings />
+        ) : selected.slug === "system-settings" ? (
+          <section className="grid gap-4">
+            <article className="brand-card p-5">
+              <p className="brand-section-title">Policies & Settings</p>
+              <p className="brand-muted mt-2 text-sm">Manage admin profile and platform-level policies.</p>
+            </article>
+            <AdminProfileSettings />
           </section>
         ) : (
           <>

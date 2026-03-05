@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
+import { PasswordField } from "@/components/password-field";
 
 type Props = {
   callbackUrl: string;
@@ -155,16 +156,17 @@ export default function LoginClient({ callbackUrl }: Props) {
             />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-sm font-medium text-[#0f3a74]">Password</span>
-            <input
-              className="brand-input"
-              type="password"
-              name="password"
-              required
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            name="password"
+            required
+            autoComplete="current-password"
+          />
+          <div className="-mt-2 text-right">
+            <Link href="/forgot-password" className="text-xs font-semibold text-[#1f518f] underline">
+              Forgot Password?
+            </Link>
+          </div>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {pendingVerificationEmail ? (

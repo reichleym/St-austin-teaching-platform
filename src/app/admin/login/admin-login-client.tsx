@@ -4,6 +4,7 @@ import Image from "next/image";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { PasswordField } from "@/components/password-field";
 
 type LoginFailureCode =
   | "MISSING_CREDENTIALS"
@@ -102,16 +103,12 @@ export default function AdminLoginClient() {
             />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-sm font-medium text-[#0f3a74]">Password</span>
-            <input
-              className="brand-input"
-              type="password"
-              name="password"
-              required
-              autoComplete="current-password"
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            name="password"
+            required
+            autoComplete="current-password"
+          />
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -109,6 +110,13 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
   const [pendingLessonId, setPendingLessonId] = useState("");
   const [moduleStudentsById, setModuleStudentsById] = useState<Record<string, ModuleStudent[]>>({});
   const [pendingAssignmentKey, setPendingAssignmentKey] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<
+    | null
+    | {
+        type: "module" | "lesson";
+        id: string;
+      }
+  >(null);
 
   useEffect(() => {
     if (!selectedCourseId && courses.length) {
@@ -527,7 +535,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                     type="button"
                     className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
                     disabled={pendingModuleId === module.id}
-                    onClick={() => void deleteModule(module.id)}
+                    onClick={() => setConfirmDialog({ type: "module", id: module.id })}
                   >
                     Delete
                   </button>
@@ -623,7 +631,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                           type="button"
                           className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
                           disabled={pendingLessonId === lesson.id}
-                          onClick={() => void deleteLesson(lesson.id)}
+                          onClick={() => setConfirmDialog({ type: "lesson", id: lesson.id })}
                         >
                           Delete
                         </button>
@@ -861,6 +869,28 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
 
         {!isLoading && !modules.length ? <p className="brand-muted text-sm">No modules created for this course yet.</p> : null}
       </div>
+      <ConfirmModal
+        open={!!confirmDialog}
+        title={confirmDialog?.type === "module" ? "Delete Module" : "Delete Lesson"}
+        message={
+          confirmDialog?.type === "module"
+            ? "Delete this module? This will remove all lessons and related progress in this module."
+            : "Delete this lesson? This action cannot be undone."
+        }
+        confirmLabel="Delete"
+        destructive
+        onCancel={() => setConfirmDialog(null)}
+        onConfirm={() => {
+          const dialog = confirmDialog;
+          setConfirmDialog(null);
+          if (!dialog) return;
+          if (dialog.type === "module") {
+            void deleteModule(dialog.id);
+            return;
+          }
+          void deleteLesson(dialog.id);
+        }}
+      />
     </section>
   );
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { PasswordField } from "@/components/password-field";
 
 type Props = {
   token: string;
@@ -72,16 +73,14 @@ export default function AcceptInviteClient({ token }: Props) {
             <input className="rounded-md border border-neutral-300 px-3 py-2" type="text" name="name" required />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-sm font-medium">Password</span>
-            <input
-              className="rounded-md border border-neutral-300 px-3 py-2"
-              type="password"
-              name="password"
-              minLength={8}
-              required
-            />
-          </label>
+          <PasswordField
+            label="Password"
+            name="password"
+            minLength={8}
+            required
+            wrapperClassName="grid gap-1"
+            inputClassName="rounded-md border border-neutral-300 px-3 py-2 pr-11"
+          />
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
