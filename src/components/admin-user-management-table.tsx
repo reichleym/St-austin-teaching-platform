@@ -311,16 +311,20 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
 
   const isStudentFullEdit = fullEditUser?.role === "STUDENT";
   const isTeacherFullEdit = fullEditUser?.role === "TEACHER";
+  const isTeacherView = title.toLowerCase().includes("teacher");
+  const entityLabel = isTeacherView ? "Teachers" : "Students";
+  const totalLabel = `Total ${entityLabel}`;
+  const activeLabel = `Active ${entityLabel}`;
 
   return (
     <section className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-2">
         <article className="brand-card p-5">
-          <p className="brand-section-title">Total</p>
+          <p className="brand-section-title">{totalLabel}</p>
           <p className="mt-2 text-3xl font-black text-[#0b3e81]">{rows.length}</p>
         </article>
         <article className="brand-card p-5">
-          <p className="brand-section-title">Active</p>
+          <p className="brand-section-title">{activeLabel}</p>
           <p className="mt-2 text-3xl font-black text-[#0b3e81]">{activeCount}</p>
         </article>
       </div>

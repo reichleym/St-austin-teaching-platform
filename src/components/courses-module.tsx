@@ -157,11 +157,11 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       const raw = await response.text();
       const result = raw
         ? (JSON.parse(raw) as {
-            courses?: CourseItem[];
-            teachers?: PersonOption[];
-            students?: PersonOption[];
-            error?: string;
-          })
+          courses?: CourseItem[];
+          teachers?: PersonOption[];
+          students?: PersonOption[];
+          error?: string;
+        })
         : {};
 
       if (!response.ok) {
@@ -399,6 +399,20 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
   return (
     <section className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <article className="brand-card p-5">
+          <p className="brand-section-title">Courses</p>
+          <p className="mt-2 text-3xl font-black text-[#0b3e81]">{courses.length}</p>
+        </article>
+        <article className="brand-card p-5">
+          <p className="brand-section-title">Total Enrollments</p>
+          <p className="mt-2 text-3xl font-black text-[#0b3e81]">{totalEnrollments}</p>
+        </article>
+        <article className="brand-card p-5">
+          <p className="brand-section-title">Role</p>
+          <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{role}</p>
+        </article>
+      </div>
       {canManage ? (
         <section className="brand-card p-5">
           <p className="brand-section-title">Course Enrollment Requests</p>
@@ -495,140 +509,140 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
         {!isLoading && filteredCourses.length ? (
           <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                <th className="px-3 py-2 font-semibold">Code</th>
-                <th className="px-3 py-2 font-semibold">Title</th>
-                <th className="px-3 py-2 font-semibold">Duration</th>
-                <th className="px-3 py-2 font-semibold">Teacher</th>
-                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
-                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrolled Students</th> : null}
-                {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
-                {isStudent && viewMode === "enrolled" ? <th className="px-3 py-2 font-semibold">Progress</th> : null}
-                <th className="px-3 py-2 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCourses.map((course) => (
-                <Fragment key={course.id}>
-                  <tr className="border-b border-[#e7f0fc] text-[#0d3f80]">
-                    <td className="px-3 py-2 font-semibold">{course.code}</td>
-                    <td className="px-3 py-2">
-                      <p>{course.title}</p>
-                      {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
-                    </td>
-                    <td className="px-3 py-2">
-                      {formatDurationYmd(course.startDate, course.endDate)}
-                    </td>
-                    <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
-                    {!studentSimpleView ? <td className="px-3 py-2">{course.visibility}</td> : null}
-                    {!studentSimpleView ? (
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
+                  <th className="px-3 py-2 font-semibold">Code</th>
+                  <th className="px-3 py-2 font-semibold">Title</th>
+                  <th className="px-3 py-2 font-semibold">Duration</th>
+                  <th className="px-3 py-2 font-semibold">Teacher</th>
+                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
+                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrolled Students</th> : null}
+                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
+                  {isStudent && viewMode === "enrolled" ? <th className="px-3 py-2 font-semibold">Progress</th> : null}
+                  <th className="px-3 py-2 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCourses.map((course) => (
+                  <Fragment key={course.id}>
+                    <tr className="border-b border-[#e7f0fc] text-[#0d3f80]">
+                      <td className="px-3 py-2 font-semibold">{course.code}</td>
                       <td className="px-3 py-2">
-                        {course.enrolledStudents.length ? (
-                          <div className="max-w-[280px] space-y-1">
-                            {course.enrolledStudents.slice(0, 5).map((student) => (
-                              <p key={student.id} className="truncate text-xs text-[#2f5d96]">
-                                {(student.name || "Unnamed Student") + " - " + student.email}
-                              </p>
-                            ))}
-                            {course.enrolledStudents.length > 5 ? (
-                              <p className="text-xs text-[#3f70ae]">+{course.enrolledStudents.length - 5} more</p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
+                        <p>{course.title}</p>
+                        {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                       </td>
-                    ) : null}
-                    {!studentSimpleView ? <td className="px-3 py-2">{course.enrollmentCount}</td> : null}
-                    {isStudent && viewMode === "enrolled" ? (
-                      <td className="px-3 py-2">{course.courseProgressPercent ?? 0}%</td>
-                    ) : null}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                          onClick={() => setExpandedCourseId((prev) => (prev === course.id ? "" : course.id))}
-                        >
-                          {expandedCourseId === course.id ? "Hide Modules" : "Modules"}
-                        </button>
-                        {canManage ? (
-                          <>
-                            <button
-                              type="button"
-                              className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                              onClick={() => {
-                                setEditCourseId(course.id);
-                                setShowCreate(false);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setConfirmDeleteCourse({
-                                  id: course.id,
-                                  label: `${course.code} - ${course.title}`,
-                                })
-                              }
-                              disabled={deletePendingCourseId === course.id}
-                              className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
-                            >
-                              {deletePendingCourseId === course.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </>
-                        ) : null}
-                        {isStudent && viewMode === "all" ? (
+                      <td className="px-3 py-2">
+                        {formatDurationYmd(course.startDate, course.endDate)}
+                      </td>
+                      <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
+                      {!studentSimpleView ? <td className="px-3 py-2">{course.visibility}</td> : null}
+                      {!studentSimpleView ? (
+                        <td className="px-3 py-2">
+                          {course.enrolledStudents.length ? (
+                            <div className="max-w-[280px] space-y-1">
+                              {course.enrolledStudents.slice(0, 5).map((student) => (
+                                <p key={student.id} className="truncate text-xs text-[#2f5d96]">
+                                  {(student.name || "Unnamed Student") + " - " + student.email}
+                                </p>
+                              ))}
+                              {course.enrolledStudents.length > 5 ? (
+                                <p className="text-xs text-[#3f70ae]">+{course.enrolledStudents.length - 5} more</p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      ) : null}
+                      {!studentSimpleView ? <td className="px-3 py-2">{course.enrollmentCount}</td> : null}
+                      {isStudent && viewMode === "enrolled" ? (
+                        <td className="px-3 py-2">{course.courseProgressPercent ?? 0}%</td>
+                      ) : null}
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
-                            disabled={
-                              enrollPendingCourseId === course.id ||
-                              course.myEnrollmentStatus === "ACTIVE" ||
-                              course.myEnrollmentRequestStatus === "PENDING"
-                            }
-                            onClick={() => void onRequestEnrollment(course.id)}
+                            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                            onClick={() => setExpandedCourseId((prev) => (prev === course.id ? "" : course.id))}
                           >
-                            {course.myEnrollmentStatus === "ACTIVE"
-                              ? "Enrolled"
-                              : course.myEnrollmentRequestStatus === "PENDING"
-                                ? "Request Pending"
-                                : enrollPendingCourseId === course.id
-                                  ? "Requesting..."
-                                  : "Enroll Now"}
+                            {expandedCourseId === course.id ? "Hide Modules" : "Modules"}
                           </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedCourseId === course.id ? (
-                    <tr className="border-b border-[#e7f0fc]">
-                      <td
-                        className="px-3 py-3"
-                        colSpan={
-                          studentSimpleView
-                            ? viewMode === "enrolled"
-                              ? 6
-                              : 5
-                            : 8
-                        }
-                      >
-                        <CourseStructurePanel
-                          role={role}
-                          courses={[{ id: course.id, code: course.code, title: course.title }]}
-                          initialCourseId={course.id}
-                          showCourseSelector={false}
-                        />
+                          {canManage ? (
+                            <>
+                              <button
+                                type="button"
+                                className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                                onClick={() => {
+                                  setEditCourseId(course.id);
+                                  setShowCreate(false);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setConfirmDeleteCourse({
+                                    id: course.id,
+                                    label: `${course.code} - ${course.title}`,
+                                  })
+                                }
+                                disabled={deletePendingCourseId === course.id}
+                                className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
+                              >
+                                {deletePendingCourseId === course.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </>
+                          ) : null}
+                          {isStudent && viewMode === "all" ? (
+                            <button
+                              type="button"
+                              className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
+                              disabled={
+                                enrollPendingCourseId === course.id ||
+                                course.myEnrollmentStatus === "ACTIVE" ||
+                                course.myEnrollmentRequestStatus === "PENDING"
+                              }
+                              onClick={() => void onRequestEnrollment(course.id)}
+                            >
+                              {course.myEnrollmentStatus === "ACTIVE"
+                                ? "Enrolled"
+                                : course.myEnrollmentRequestStatus === "PENDING"
+                                  ? "Request Pending"
+                                  : enrollPendingCourseId === course.id
+                                    ? "Requesting..."
+                                    : "Enroll Now"}
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
-                  ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                    {expandedCourseId === course.id ? (
+                      <tr className="border-b border-[#e7f0fc]">
+                        <td
+                          className="px-3 py-3"
+                          colSpan={
+                            studentSimpleView
+                              ? viewMode === "enrolled"
+                                ? 6
+                                : 5
+                              : 8
+                          }
+                        >
+                          <CourseStructurePanel
+                            role={role}
+                            courses={[{ id: course.id, code: course.code, title: course.title }]}
+                            initialCourseId={course.id}
+                            showCourseSelector={false}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : null}
 
@@ -645,86 +659,86 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
       {canManage && showCreate ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
-        <section className="brand-card w-full max-w-5xl p-5">
-          <p className="brand-section-title">Create Course</p>
-          <form className="mt-3 grid gap-4" onSubmit={onCreateCourse}>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Course Title</span>
-              <input className="brand-input" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} maxLength={120} required />
-            </label>
-            <div className="grid gap-4 md:grid-cols-3">
+          <section className="brand-card w-full max-w-5xl p-5">
+            <p className="brand-section-title">Create Course</p>
+            <form className="mt-3 grid gap-4" onSubmit={onCreateCourse}>
               <label className="grid gap-1.5">
-                <span className="brand-label">Start Date</span>
-                <input className="brand-input" type="date" value={createStartDate} onChange={(event) => setCreateStartDate(event.currentTarget.value)} required />
+                <span className="brand-label">Course Title</span>
+                <input className="brand-input" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} maxLength={120} required />
               </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">End Date</span>
-                <input className="brand-input" type="date" value={createEndDate} min={createStartDate || undefined} onChange={(event) => setCreateEndDate(event.currentTarget.value)} required />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Visibility</span>
-                <select className="brand-input" value={createVisibility} onChange={(event) => setCreateVisibility(event.currentTarget.value as "DRAFT" | "PUBLISHED")}> 
-                  <option value="DRAFT">DRAFT</option>
-                  <option value="PUBLISHED">PUBLISHED</option>
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Start Date</span>
+                  <input className="brand-input" type="date" value={createStartDate} onChange={(event) => setCreateStartDate(event.currentTarget.value)} required />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">End Date</span>
+                  <input className="brand-input" type="date" value={createEndDate} min={createStartDate || undefined} onChange={(event) => setCreateEndDate(event.currentTarget.value)} required />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Visibility</span>
+                  <select className="brand-input" value={createVisibility} onChange={(event) => setCreateVisibility(event.currentTarget.value as "DRAFT" | "PUBLISHED")}>
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="PUBLISHED">PUBLISHED</option>
+                  </select>
+                </label>
+              </div>
+              <label className="grid gap-1.5 md:max-w-sm">
+                <span className="brand-label">Assign Teacher</span>
+                <select className="brand-input" value={createTeacherId} onChange={(event) => setCreateTeacherId(event.currentTarget.value)}>
+                  <option value="">No teacher assigned</option>
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      <PersonLabel person={teacher} />
+                    </option>
+                  ))}
                 </select>
               </label>
-            </div>
-            <label className="grid gap-1.5 md:max-w-sm">
-              <span className="brand-label">Assign Teacher</span>
-              <select className="brand-input" value={createTeacherId} onChange={(event) => setCreateTeacherId(event.currentTarget.value)}>
-                <option value="">No teacher assigned</option>
-                {teachers.map((teacher) => (
-                  <option key={teacher.id} value={teacher.id}>
-                    <PersonLabel person={teacher} />
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Description (optional)</span>
-              <textarea className="brand-input min-h-[90px]" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={2000} />
-            </label>
-            <div className="grid gap-1.5">
-              <span className="brand-label">Enroll Students During Creation</span>
-              <input
-                className="brand-input"
-                placeholder="Search by name, phone, or email"
-                value={createStudentSearch}
-                onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
-              />
-              <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
-                {filteredCreateStudents.length ? (
-                  filteredCreateStudents.map((student) => (
-                    <label key={student.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
-                      <input
-                        type="checkbox"
-                        checked={createStudentIds.includes(student.id)}
-                        onChange={() => toggleCreateStudent(student.id)}
-                      />
-                      <span>{(student.name || "Unnamed Student") + " - " + (student.phone ? `${student.phone} - ` : "") + student.email}</span>
-                    </label>
-                  ))
-                ) : (
-                  <p className="text-sm text-[#3f70ae]">
-                    {students.length ? "No students match the search." : "No active students found."}
-                  </p>
-                )}
+              <label className="grid gap-1.5">
+                <span className="brand-label">Description (optional)</span>
+                <textarea className="brand-input min-h-[90px]" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={2000} />
+              </label>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Enroll Students During Creation</span>
+                <input
+                  className="brand-input"
+                  placeholder="Search by name, phone, or email"
+                  value={createStudentSearch}
+                  onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
+                />
+                <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
+                  {filteredCreateStudents.length ? (
+                    filteredCreateStudents.map((student) => (
+                      <label key={student.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
+                        <input
+                          type="checkbox"
+                          checked={createStudentIds.includes(student.id)}
+                          onChange={() => toggleCreateStudent(student.id)}
+                        />
+                        <span>{(student.name || "Unnamed Student") + " - " + (student.phone ? `${student.phone} - ` : "") + student.email}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[#3f70ae]">
+                      {students.length ? "No students match the search." : "No active students found."}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={createPending}>
-                {createPending ? "Creating..." : "Create Course"}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
-                onClick={() => setShowCreate(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </section>
+              <div className="flex items-center gap-2">
+                <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={createPending}>
+                  {createPending ? "Creating..." : "Create Course"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
+                  onClick={() => setShowCreate(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
         </div>
       ) : null}
 
@@ -807,20 +821,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
         </section>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <article className="brand-card p-5">
-          <p className="brand-section-title">Courses</p>
-          <p className="mt-2 text-3xl font-black text-[#0b3e81]">{courses.length}</p>
-        </article>
-        <article className="brand-card p-5">
-          <p className="brand-section-title">Total Enrollments</p>
-          <p className="mt-2 text-3xl font-black text-[#0b3e81]">{totalEnrollments}</p>
-        </article>
-        <article className="brand-card p-5">
-          <p className="brand-section-title">Role</p>
-          <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{role}</p>
-        </article>
-      </div>
+
 
       <ConfirmModal
         open={!!confirmDeleteCourse}
