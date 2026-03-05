@@ -47,17 +47,10 @@ export const dashboardModules: DashboardModule[] = [
     roles: [Role.SUPER_ADMIN, Role.TEACHER, Role.STUDENT],
   },
   {
-    slug: "admin-controls",
-    title: "Super Admin",
-    description: "Institution governance and platform controls.",
-    roles: [Role.SUPER_ADMIN],
-  },
-  {
     slug: "user-access",
     title: "User & Access",
     description: "User lifecycle, invites, and access policy controls.",
     roles: [Role.SUPER_ADMIN],
-    parentSlug: "admin-controls",
   },
   {
     slug: "view-teachers",
@@ -78,21 +71,18 @@ export const dashboardModules: DashboardModule[] = [
     title: "Announcements",
     description: "Global announcements lifecycle and visibility controls.",
     roles: [Role.SUPER_ADMIN],
-    parentSlug: "admin-controls",
   },
   {
     slug: "academic-oversight",
-    title: "Academic Oversight",
-    description: "Read-only cross-course monitoring and approvals.",
+    title: "Academic Control",
+    description: "Cross-course monitoring, governance, and approvals.",
     roles: [Role.SUPER_ADMIN],
-    parentSlug: "admin-controls",
   },
   {
     slug: "system-settings",
-    title: "System Settings",
+    title: "Policies & Settings",
     description: "Grade scales, penalties, and signup policy controls.",
     roles: [Role.SUPER_ADMIN],
-    parentSlug: "admin-controls",
   },
   {
     slug: "invitations",
@@ -100,6 +90,6 @@ export const dashboardModules: DashboardModule[] = [
     description: "Invite teachers and students.",
     roles: [Role.SUPER_ADMIN],
     href: "/dashboard/admin/invitations",
-    parentSlug: "admin-controls",
+    parentSlug: "user-access",
   },
 ];

@@ -12,6 +12,7 @@ import { AdminAnnouncementsManager } from "@/components/admin-announcements-mana
 import { AnnouncementsFeed } from "@/components/announcements-feed";
 import { CoursesModule } from "@/components/courses-module";
 import { AssignmentsModule } from "@/components/assignments-module";
+import { EngagementModule } from "@/components/engagement-module";
 
 type Props = {
   searchParams: Promise<{ module?: string }>;
@@ -524,6 +525,39 @@ export default async function DashboardPage({ searchParams }: Props) {
             AND s."status" IN ('SUBMITTED','GRADED_DRAFT')
         `.then((rows) => Number(rows[0]?.count ?? 0)).catch(() => 0)
       : 0;
+  const engagementDiscussionCount = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public."EngagementDiscussion"') IS NOT NULL AS "exists"
+    `
+    .then(async (rows) => {
+      if (!rows[0]?.exists) return 0;
+      if (session.user.role === Role.SUPER_ADMIN) {
+        const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "EngagementDiscussion"
+        `;
+        return Number(countRows[0]?.count ?? 0);
+      }
+      if (session.user.role === Role.TEACHER) {
+        const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "EngagementDiscussion" d
+          JOIN "Course" c ON c."id" = d."courseId"
+          WHERE c."teacherId" = ${session.user.id}
+        `;
+        return Number(countRows[0]?.count ?? 0);
+      }
+      const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "EngagementDiscussion" d
+        JOIN "Course" c ON c."id" = d."courseId"
+        JOIN "Enrollment" e ON e."courseId" = c."id"
+        WHERE e."studentId" = ${session.user.id}
+          AND e."status" = CAST('ACTIVE' AS "EnrollmentStatus")
+          AND c."visibility" = CAST('PUBLISHED' AS "CourseVisibility")
+      `;
+      return Number(countRows[0]?.count ?? 0);
+    })
+    .catch(() => 0);
   const pendingEnrollmentRequestCount = isSuperAdmin
     ? await prisma.$queryRaw<Array<{ exists: boolean }>>`
         SELECT to_regclass('public."EnrollmentRequest"') IS NOT NULL AS "exists"
@@ -575,6 +609,10 @@ export default async function DashboardPage({ searchParams }: Props) {
   } else if (selected.slug === "assessment") {
     moduleKpiLabel = "Assignments";
     moduleKpiValue = assignmentCount;
+    moduleKpiHint = "in this module";
+  } else if (selected.slug === "engagement") {
+    moduleKpiLabel = "Discussions";
+    moduleKpiValue = engagementDiscussionCount;
     moduleKpiHint = "in this module";
   } else if (selected.slug === "view-teachers") {
     moduleKpiLabel = "Teachers";
@@ -649,6 +687,8 @@ export default async function DashboardPage({ searchParams }: Props) {
           <CoursesModule role={session.user.role} viewMode={session.user.role === Role.STUDENT ? "enrolled" : "all"} />
         ) : selected.slug === "assessment" ? (
           <AssignmentsModule role={session.user.role} />
+        ) : selected.slug === "engagement" ? (
+          <EngagementModule role={session.user.role} />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
