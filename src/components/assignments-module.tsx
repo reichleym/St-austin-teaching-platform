@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -212,6 +213,7 @@ export function AssignmentsModule({ role }: Props) {
   const [editLessonId, setEditLessonId] = useState("");
   const [editPending, setEditPending] = useState(false);
   const [deletePendingId, setDeletePendingId] = useState("");
+  const [confirmDeleteAssignmentId, setConfirmDeleteAssignmentId] = useState("");
 
   const [studentTextResponse, setStudentTextResponse] = useState("");
   const [studentFile, setStudentFile] = useState<File | null>(null);
@@ -223,6 +225,8 @@ export function AssignmentsModule({ role }: Props) {
   const [gradeRawScoreBySubmission, setGradeRawScoreBySubmission] = useState<Record<string, string>>({});
   const [gradeFeedbackBySubmission, setGradeFeedbackBySubmission] = useState<Record<string, string>>({});
   const [gradePendingId, setGradePendingId] = useState("");
+  const [invalidatePendingId, setInvalidatePendingId] = useState("");
+  const [confirmInvalidateSubmissionId, setConfirmInvalidateSubmissionId] = useState("");
   const [structureByCourseId, setStructureByCourseId] = useState<Record<string, ModuleOption[]>>({});
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [quizQuestionsLoading, setQuizQuestionsLoading] = useState(false);
@@ -613,7 +617,6 @@ export function AssignmentsModule({ role }: Props) {
   };
 
   const onDelete = async (assignmentId: string) => {
-    if (!window.confirm("Delete this assignment?")) return;
     setDeletePendingId(assignmentId);
     setError("");
     try {
@@ -633,6 +636,36 @@ export function AssignmentsModule({ role }: Props) {
       setError("Unable to delete assignment.");
     } finally {
       setDeletePendingId("");
+    }
+  };
+
+  const onInvalidateAttempt = async (submissionId: string) => {
+    setInvalidatePendingId(submissionId);
+    setError("");
+    try {
+      const response = await fetch("/api/assignments/submissions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId,
+          action: "INVALIDATE_ATTEMPT",
+          reason: "Attempt invalidated by teacher for controlled resubmission.",
+        }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to invalidate attempt.");
+        return;
+      }
+      if (selectedAssignmentId) {
+        await loadSubmissions(selectedAssignmentId);
+      }
+      await load();
+    } catch {
+      setError("Unable to invalidate attempt.");
+    } finally {
+      setInvalidatePendingId("");
     }
   };
 
@@ -1041,7 +1074,7 @@ export function AssignmentsModule({ role }: Props) {
                             disabled={deletePendingId === item.id}
                             onClick={(event) => {
                               event.stopPropagation();
-                              void onDelete(item.id);
+                              setConfirmDeleteAssignmentId(item.id);
                             }}
                           >
                             {deletePendingId === item.id ? "Deleting..." : "Delete"}
@@ -1246,6 +1279,11 @@ export function AssignmentsModule({ role }: Props) {
                   <p className="mt-1 text-xs text-[#3a689f]">
                     Submitted: {formatDate(submission.submittedAt)} | Late: {submission.isLate ? `${formatMinutes(submission.lateByMinutes)} (${submission.latePenaltyPct}%)` : "No"}
                   </p>
+                  {submission.status === "ATTEMPT_CANCELLED" ? (
+                    <p className="mt-1 text-xs font-semibold text-[#9b1c1c]">
+                      This attempt was invalidated for controlled resubmission.
+                    </p>
+                  ) : null}
                   {submission.finalScore !== null ? (
                     <p className="mt-1 text-xs text-[#3a689f]">
                       Final Score: {submission.finalScore}
@@ -1266,7 +1304,7 @@ export function AssignmentsModule({ role }: Props) {
                     </a>
                   ) : null}
 
-                  {canManage && !isPublishedOrLockedState(submission.status) ? (
+                  {canManage && submission.status !== "ATTEMPT_CANCELLED" && !isPublishedOrLockedState(submission.status) ? (
                     <div className="mt-3 grid gap-2">
                       <input
                         className="brand-input"
@@ -1290,6 +1328,14 @@ export function AssignmentsModule({ role }: Props) {
                         }}
                       />
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
+                          disabled={invalidatePendingId === submission.id}
+                          onClick={() => setConfirmInvalidateSubmissionId(submission.id)}
+                        >
+                          {invalidatePendingId === submission.id ? "Updating..." : "Invalidate Attempt"}
+                        </button>
                         <button
                           type="button"
                           className="btn-brand-secondary px-3 py-1.5 text-xs font-semibold"
@@ -1614,6 +1660,36 @@ export function AssignmentsModule({ role }: Props) {
         </section>
         </div>
       ) : null}
+
+      <ConfirmModal
+        open={!!confirmDeleteAssignmentId}
+        title="Delete Assignment"
+        message="Delete this assignment and related submissions?"
+        confirmLabel="Delete"
+        onCancel={() => setConfirmDeleteAssignmentId("")}
+        onConfirm={() => {
+          const assignmentId = confirmDeleteAssignmentId;
+          setConfirmDeleteAssignmentId("");
+          if (assignmentId) {
+            void onDelete(assignmentId);
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={!!confirmInvalidateSubmissionId}
+        title="Invalidate Attempt"
+        message="This will cancel the selected attempt and allow student resubmission if attempt limit allows."
+        confirmLabel="Invalidate"
+        onCancel={() => setConfirmInvalidateSubmissionId("")}
+        onConfirm={() => {
+          const submissionId = confirmInvalidateSubmissionId;
+          setConfirmInvalidateSubmissionId("");
+          if (submissionId) {
+            void onInvalidateAttempt(submissionId);
+          }
+        }}
+      />
     </section>
   );
 }

@@ -14,6 +14,7 @@ import { CoursesModule } from "@/components/courses-module";
 import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
+import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
 
 type Props = {
   searchParams: Promise<{ module?: string }>;
@@ -594,6 +595,60 @@ export default async function DashboardPage({ searchParams }: Props) {
             { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
             { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
           ];
+  const overviewFocus =
+    session.user.role === Role.SUPER_ADMIN
+      ? [
+          {
+            title: `Review ${pendingGradeEditCount} Grade Edit Request${pendingGradeEditCount === 1 ? "" : "s"}`,
+            detail: "Published grade changes require admin approval and full audit logging.",
+            priority: (pendingGradeEditCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+          },
+          {
+            title: `Resolve ${pendingEnrollmentRequestCount} Enrollment Request${pendingEnrollmentRequestCount === 1 ? "" : "s"}`,
+            detail: "Pending course enrollment approvals impact learner access.",
+            priority: (pendingEnrollmentRequestCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+          },
+          {
+            title: `${enrolledCoursesCount} Active Course${enrolledCoursesCount === 1 ? "" : "s"} in Governance`,
+            detail: "Monitor assignment, discussion, and policy alignment across courses.",
+            priority: "Medium" as "High" | "Medium" | "Low",
+          },
+        ]
+      : session.user.role === Role.TEACHER
+        ? [
+            {
+              title: `${pendingSubmissionCount} Submission${pendingSubmissionCount === 1 ? "" : "s"} Awaiting Grading`,
+              detail: "Prioritize grading queue to keep learner feedback turnaround on track.",
+              priority: (pendingSubmissionCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+            },
+            {
+              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Course Scope`,
+              detail: "Review due dates and attempt settings for upcoming assessment windows.",
+              priority: "Medium" as "High" | "Medium" | "Low",
+            },
+            {
+              title: `${engagementDiscussionCount} Discussion Topic${engagementDiscussionCount === 1 ? "" : "s"} Active`,
+              detail: "Track missing discussion participation and follow up with students.",
+              priority: "Medium" as "High" | "Medium" | "Low",
+            },
+          ]
+        : [
+            {
+              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} Pending`,
+              detail: "Focus on due assignments and maintain timely submissions.",
+              priority: (assignmentCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+            },
+            {
+              title: `${enrolledCoursesCount} Enrolled Course${enrolledCoursesCount === 1 ? "" : "s"}`,
+              detail: "Open modules in your enrolled courses to maintain progress.",
+              priority: "Medium" as "High" | "Medium" | "Low",
+            },
+            {
+              title: `${announcementCount} Announcement${announcementCount === 1 ? "" : "s"} Available`,
+              detail: "Review updates from faculty and administration.",
+              priority: "Low" as "High" | "Medium" | "Low",
+            },
+          ];
 
   if (selected.slug === "announcements" || selected.slug === "announcements-feed" || selected.slug === "overview") {
     moduleKpiLabel = "Announcements";
@@ -623,7 +678,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiLabel = "Students";
     moduleKpiValue = studentList.length;
     moduleKpiHint = "total records";
-  } else if (selected.slug === "system-settings" || selected.slug === "admin-profile") {
+  } else if (selected.slug === "system-settings" || selected.slug === "admin-profile" || selected.slug === "academic-policies") {
     moduleKpiLabel = "Settings";
     moduleKpiValue = "Admin";
     moduleKpiHint = "profile and platform controls";
@@ -662,7 +717,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
         {selected.slug === "overview" ? (
           <section className="grid gap-4">
-            <RoleOverview role={session.user.role} name={session.user.name} overview={{ metrics: overviewMetrics }} />
+            <RoleOverview role={session.user.role} name={session.user.name} overview={{ metrics: overviewMetrics, focus: overviewFocus }} />
             <section className="brand-card p-5">
               <p className="brand-section-title">Announcements</p>
               <div className="mt-3 space-y-2">
@@ -732,13 +787,24 @@ export default async function DashboardPage({ searchParams }: Props) {
           </section>
         ) : selected.slug === "admin-profile" ? (
           <AdminProfileSettings />
+        ) : selected.slug === "academic-policies" ? (
+          <AcademicPoliciesSettings />
         ) : selected.slug === "system-settings" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
               <p className="brand-section-title">Policies & Settings</p>
-              <p className="brand-muted mt-2 text-sm">Manage admin profile and platform-level policies.</p>
+              <p className="brand-muted mt-2 text-sm">Use submenu: Admin Profile or Academic Policies.</p>
             </article>
-            <AdminProfileSettings />
+            <div className="grid gap-3 md:grid-cols-2">
+              <Link href="/dashboard?module=admin-profile" className="brand-card p-5 no-underline">
+                <p className="brand-section-title">Admin Profile</p>
+                <p className="brand-muted mt-2 text-sm">Update account details and password.</p>
+              </Link>
+              <Link href="/dashboard?module=academic-policies" className="brand-card p-5 no-underline">
+                <p className="brand-section-title">Academic Policies</p>
+                <p className="brand-muted mt-2 text-sm">Configure grade scale and late penalty rules.</p>
+              </Link>
+            </div>
           </section>
         ) : (
           <>

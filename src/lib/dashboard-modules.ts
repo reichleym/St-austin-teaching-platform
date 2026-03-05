@@ -75,14 +75,20 @@ export const dashboardModules: DashboardModule[] = [
   {
     slug: "system-settings",
     title: "Policies & Settings",
-    description: "Grade scales, penalties, and signup policy controls.",
+    description: "Platform governance and administrator configuration.",
     roles: [Role.SUPER_ADMIN],
-    href: "/dashboard?module=admin-profile",
   },
   {
     slug: "admin-profile",
     title: "Admin Profile",
     description: "Manage your Super Admin profile information.",
+    roles: [Role.SUPER_ADMIN],
+    parentSlug: "system-settings",
+  },
+  {
+    slug: "academic-policies",
+    title: "Academic Policies",
+    description: "Manage grade scale and late submission penalty rules.",
     roles: [Role.SUPER_ADMIN],
     parentSlug: "system-settings",
   },

@@ -110,7 +110,9 @@ export function AdminProfileSettings() {
         <p className="brand-section-title">Admin Profile Settings</p>
         <p className="brand-muted mt-2 text-sm">Update your profile details used across the admin panel.</p>
         {profile ? <p className="mt-1 text-xs text-[#3a689f]">Account: {profile.email}</p> : null}
-        {profile ? <p className="mt-1 text-xs text-[#3a689f]">Last updated: {new Date(profile.updatedAt).toLocaleString()}</p> : null}
+        {profile ? (
+          <p className="mt-1 text-xs text-[#3a689f]">Last updated: {new Date(profile.updatedAt).toLocaleString()}</p>
+        ) : null}
       </article>
 
       <article className="brand-card p-5">
@@ -120,12 +122,38 @@ export function AdminProfileSettings() {
 
         {!isLoading ? (
           <form className="grid gap-3" onSubmit={onSubmit}>
-            <input className="brand-input" placeholder="Full name" value={name} onChange={(event) => setName(event.currentTarget.value)} required />
-            <input className="brand-input" placeholder="Phone number" value={phone} onChange={(event) => setPhone(event.currentTarget.value)} />
-            <input className="brand-input" placeholder="Department" value={department} onChange={(event) => setDepartment(event.currentTarget.value)} />
+            <input
+              className="brand-input"
+              placeholder="Full name"
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+              required
+            />
+            <input
+              className="brand-input"
+              placeholder="Phone number"
+              value={phone}
+              onChange={(event) => setPhone(event.currentTarget.value)}
+            />
+            <input
+              className="brand-input"
+              placeholder="Department"
+              value={department}
+              onChange={(event) => setDepartment(event.currentTarget.value)}
+            />
             <div className="grid gap-3 md:grid-cols-2">
-              <input className="brand-input" placeholder="Country" value={country} onChange={(event) => setCountry(event.currentTarget.value)} />
-              <input className="brand-input" placeholder="State" value={state} onChange={(event) => setState(event.currentTarget.value)} />
+              <input
+                className="brand-input"
+                placeholder="Country"
+                value={country}
+                onChange={(event) => setCountry(event.currentTarget.value)}
+              />
+              <input
+                className="brand-input"
+                placeholder="State"
+                value={state}
+                onChange={(event) => setState(event.currentTarget.value)}
+              />
             </div>
             <p className="brand-label mt-1">Change Password</p>
             <div className="grid gap-3 md:grid-cols-2">

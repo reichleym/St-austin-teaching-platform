@@ -30,6 +30,8 @@ type UpdateSubmissionBody = {
   rawScore?: number | string;
   feedback?: string | null;
   publish?: boolean;
+  action?: "GRADE" | "INVALIDATE_ATTEMPT";
+  reason?: string | null;
 };
 
 type PlagiarismStatus = "PENDING" | "COMPLETED" | "FAILED";
@@ -41,6 +43,7 @@ const PUBLISHED_STATES: GradeLifecycleState[] = [
   "GRADE_EDIT_APPROVED",
   "GRADE_EDIT_REJECTED",
 ];
+const ATTEMPT_CANCELLED = "ATTEMPT_CANCELLED";
 
 export const runtime = "nodejs";
 
@@ -467,7 +470,10 @@ async function resolveFinalScoreForGrade(
   const scores = await prisma.$queryRaw<Array<{ finalScore: number | null; submittedAt: Date }>>`
     SELECT "finalScore","submittedAt"
     FROM "AssignmentSubmission"
-    WHERE "assignmentId" = ${assignmentId} AND "studentId" = ${studentId} AND "finalScore" IS NOT NULL
+    WHERE "assignmentId" = ${assignmentId}
+      AND "studentId" = ${studentId}
+      AND "finalScore" IS NOT NULL
+      AND "status" <> ${ATTEMPT_CANCELLED}
     ORDER BY "submittedAt" DESC
   `;
   if (!scores.length) return null;
@@ -740,7 +746,9 @@ export async function POST(request: NextRequest) {
     const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
       SELECT COUNT(*)::bigint AS count
       FROM "AssignmentSubmission"
-      WHERE "assignmentId" = ${assignmentId} AND "studentId" = ${user.id}
+      WHERE "assignmentId" = ${assignmentId}
+        AND "studentId" = ${user.id}
+        AND "status" <> ${ATTEMPT_CANCELLED}
     `;
     const attemptCount = Number(countRows[0]?.count ?? 0);
 
@@ -911,11 +919,14 @@ export async function PATCH(request: NextRequest) {
   try {
     await ensureSubmissionSchema();
     const user = await requireAuthenticatedUser();
-    if (user.role !== Role.TEACHER) {
-      return NextResponse.json({ error: "Only teachers can grade submissions directly." }, { status: 403 });
+    const isTeacher = user.role === Role.TEACHER;
+    const isSuperAdmin = isSuperAdminRole(user.role);
+    if (!isTeacher && !isSuperAdmin) {
+      return NextResponse.json({ error: "Only teacher or super admin can update submissions." }, { status: 403 });
     }
 
     const body = (await request.json()) as UpdateSubmissionBody;
+    const action = body.action ?? "GRADE";
     const submissionId = body.submissionId?.trim() ?? "";
     if (!submissionId) {
       return NextResponse.json({ error: "submissionId is required." }, { status: 400 });
@@ -961,10 +972,51 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Submission not found." }, { status: 404 });
     }
 
-    if (submission.teacherId !== user.id) {
-      return NextResponse.json({ error: "You can only grade submissions in your assigned courses." }, { status: 403 });
+    if (!isSuperAdmin && submission.teacherId !== user.id) {
+      return NextResponse.json({ error: "You can only update submissions in your assigned courses." }, { status: 403 });
     }
     const currentState = normalizeLifecycleState(submission.status);
+
+    if (action === "INVALIDATE_ATTEMPT") {
+      if (PUBLISHED_STATES.includes(currentState)) {
+        return NextResponse.json({ error: "Published/locked attempts cannot be invalidated." }, { status: 409 });
+      }
+
+      await prisma.$executeRaw`
+        UPDATE "AssignmentSubmission"
+        SET
+          "status" = ${ATTEMPT_CANCELLED},
+          "rawScore" = NULL,
+          "finalScore" = NULL,
+          "feedback" = NULL,
+          "gradedById" = ${user.id},
+          "gradedAt" = NOW(),
+          "publishedAt" = NULL
+        WHERE "id" = ${submissionId}
+      `;
+
+      await logGradeHistory({
+        assignmentId: submission.assignmentId,
+        studentId: submission.studentId,
+        submissionId,
+        actorId: user.id,
+        action: "ATTEMPT_INVALIDATED",
+        oldRawScore: submission.rawScore,
+        newRawScore: null,
+        oldFinalScore: submission.finalScore,
+        newFinalScore: null,
+        oldState: currentState,
+        newState: null,
+        reason: body.reason?.trim() || "Attempt invalidated for resubmission.",
+      });
+
+      return NextResponse.json({ ok: true, submissionId, status: ATTEMPT_CANCELLED });
+    }
+
+    if (!isTeacher) {
+      return NextResponse.json({ error: "Only teachers can grade submissions directly." }, { status: 403 });
+    }
+
     if (PUBLISHED_STATES.includes(currentState)) {
       return NextResponse.json(
         { error: "Published grades are locked. Submit a grade edit request for admin approval." },

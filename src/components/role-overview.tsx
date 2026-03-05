@@ -21,6 +21,8 @@ type FocusItem = {
 
 type DynamicOverview = {
   metrics: Metric[];
+  focus?: FocusItem[];
+  timeline?: string[];
 };
 
 function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
@@ -57,6 +59,8 @@ function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
         "14:00 Grade edit approvals and policy checks",
         "16:30 Global announcement and compliance checkpoint",
       ],
+      ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
+      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
     };
   }
 
@@ -93,6 +97,8 @@ function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
         "13:00 Office hours and parent queries",
         "15:30 Assessment moderation",
       ],
+      ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
+      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
     };
   }
 
@@ -128,6 +134,8 @@ function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
       "13:30 English Literature",
       "16:00 Guided study session",
     ],
+    ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
+    ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
   };
 }
 
