@@ -22,13 +22,20 @@ export default async function AdminInvitationsPage({ searchParams }: Props) {
     redirect("/dashboard");
   }
 
-  const initialRole = params.role === "STUDENT" ? "STUDENT" : "TEACHER";
+  const initialRole =
+    params.role === "SUPER_ADMIN" || params.role === "ADMIN"
+      ? "SUPER_ADMIN"
+      : params.role === "STUDENT"
+        ? "STUDENT"
+        : params.role === "DEPARTMENT_HEAD"
+          ? "DEPARTMENT_HEAD"
+          : "TEACHER";
 
   return (
     <main className="min-h-screen lg:flex">
-      <DashboardSidebar role={session.user.role} selectedSlug="invitations" />
+      <DashboardSidebar role={String(session.user.role ?? "")} selectedSlug="invitations" />
       <div className="flex-1 p-6 lg:p-8">
-        <DashboardTopbar name={session.user.name} email={session.user.email} role={session.user.role} />
+        <DashboardTopbar name={session.user.name} email={session.user.email} role={String(session.user.role ?? "")} />
 
         <section className="brand-glass brand-animate p-6">
           <InvitationsClient initialRole={initialRole} />

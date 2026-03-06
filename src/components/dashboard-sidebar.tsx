@@ -3,17 +3,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { Role } from "@prisma/client";
 import { dashboardModules } from "@/lib/dashboard-modules";
 
 type DashboardSidebarProps = {
-  role: Role;
+  role: string;
   selectedSlug: string;
 };
 
 export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const availableModules = dashboardModules.filter((item) => item.roles.includes(role));
+  const roleKey = String(role);
+  const moduleRoleKey = roleKey === "ADMIN" ? "SUPER_ADMIN" : roleKey;
+  const availableModules = dashboardModules.filter((item) => item.roles.includes(moduleRoleKey));
   const rootKey = "__root__";
   const modulesByParent = new Map<string, typeof availableModules>();
 
@@ -40,9 +41,9 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
         <div key={item.slug} style={depth > 0 ? { marginLeft: `${depth * 12}px` } : undefined}>
           {(() => {
             const title =
-              role === Role.STUDENT && item.slug === "courses"
+              roleKey === "STUDENT" && item.slug === "courses"
                 ? "All Courses"
-                : role === Role.STUDENT && item.slug === "learning"
+                : roleKey === "STUDENT" && item.slug === "learning"
                   ? "My Learning"
                   : item.title;
             return (

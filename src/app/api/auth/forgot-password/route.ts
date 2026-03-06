@@ -48,7 +48,8 @@ export async function POST(request: NextRequest) {
       LIMIT 1
     `;
     const user = users[0];
-    const allowedRole = user?.role === Role.TEACHER || user?.role === Role.STUDENT;
+    const allowedRole =
+      user?.role === Role.TEACHER || user?.role === Role.STUDENT || user?.role === Role.DEPARTMENT_HEAD;
     const active = user?.status === "ACTIVE";
 
     if (!user || !allowedRole || !active) {

@@ -1,15 +1,21 @@
-import { Role } from "@prisma/client";
 import { LogoutButton } from "@/components/logout-button";
 
 type DashboardTopbarProps = {
   name?: string | null;
   email?: string | null;
-  role: Role;
+  role: string;
 };
 
 export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
   const displayName = name?.trim() || email?.split("@")[0] || "User";
   const initials = displayName.slice(0, 2).toUpperCase();
+  const roleKey = String(role);
+  const roleLabel =
+    roleKey === "SUPER_ADMIN"
+      ? "SUPER ADMIN"
+      : roleKey === "DEPARTMENT_HEAD"
+        ? "DEPARTMENT HEAD"
+        : roleKey;
 
   return (
     <header className="mb-6 flex items-center justify-between gap-4">
@@ -32,7 +38,7 @@ export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
               <p className="truncate text-sm font-semibold text-[#083672]">{displayName}</p>
               <p className="truncate text-xs text-[#2e5f9e]">{email}</p>
               <div className="mt-1 flex items-center gap-2">
-                <span className="brand-chip brand-chip-accent">{role}</span>
+                <span className="brand-chip brand-chip-accent">{roleLabel}</span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#2d66a6]">
                   <span className="h-2 w-2 rounded-full bg-[#2db36b]" />
                   Online

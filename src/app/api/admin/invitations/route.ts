@@ -6,11 +6,20 @@ import { sendInvitationEmail } from "@/lib/mailer";
 import { requireSuperAdminUser, PermissionError } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
-type InvitableRole = "TEACHER" | "STUDENT";
+type InvitableRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "DEPARTMENT_HEAD";
 
 function parseInvitableRole(value: unknown): InvitableRole | null {
-  if (value === Role.TEACHER) return Role.TEACHER;
-  if (value === Role.STUDENT) return Role.STUDENT;
+  if (typeof value === "string") {
+    const normalized = value.trim().toUpperCase().replace(/\s+/g, "_");
+    if (normalized === "ADMIN" || normalized === "SUPER_ADMIN") return "SUPER_ADMIN";
+    if (normalized === "TEACHER") return "TEACHER";
+    if (normalized === "STUDENT") return "STUDENT";
+    if (normalized === "DEPARTMENT_HEAD") return "DEPARTMENT_HEAD";
+  }
+  if (value === Role.SUPER_ADMIN) return "SUPER_ADMIN";
+  if (value === Role.TEACHER) return "TEACHER";
+  if (value === Role.STUDENT) return "STUDENT";
+  if (value === Role.DEPARTMENT_HEAD) return "DEPARTMENT_HEAD";
   return null;
 }
 
@@ -34,6 +43,112 @@ function isInvitationPhoneCompatibilityError(error: unknown) {
   );
 }
 
+async function ensureInvitationRoleConstraint() {
+  await prisma.$executeRawUnsafe(`
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_role_check') THEN
+    ALTER TABLE "Invitation" DROP CONSTRAINT "Invitation_role_check";
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN NULL;
+END $$;
+
+ALTER TABLE "Invitation"
+  ADD CONSTRAINT "Invitation_role_check"
+  CHECK ("role" IN ('SUPER_ADMIN','TEACHER','DEPARTMENT_HEAD','STUDENT'));
+  `);
+}
+
+async function ensureRoleEnum() {
+  await prisma.$executeRawUnsafe(`
+DO $$ BEGIN
+  ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DEPARTMENT_HEAD';
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;
+  `);
+}
+
+function makeId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+}
+
+async function deleteExistingInvitationRaw(email: string, role: InvitableRole) {
+  await prisma.$executeRaw`
+    DELETE FROM "Invitation"
+    WHERE "email" = ${email}
+      AND "role" = CAST(${role} AS "Role")
+      AND "acceptedAt" IS NULL
+  `;
+}
+
+async function createInvitationRaw(params: {
+  email: string;
+  role: InvitableRole;
+  token: string;
+  expiresAt: Date;
+  createdById: string;
+  fullName?: string | null;
+  phone?: string | null;
+  department?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  country?: string | null;
+  state?: string | null;
+}) {
+  const id = makeId("inv");
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; email: string; role: string; token: string; expiresAt: Date }>
+    >`
+      INSERT INTO "Invitation"
+        ("id","email","name","phone","department","guardianName","guardianPhone","country","state","role","token","expiresAt","acceptedAt","createdById","createdAt","updatedAt")
+      VALUES
+        (
+          ${id},
+          ${params.email},
+          ${params.fullName ?? null},
+          ${params.phone ?? null},
+          ${params.department ?? null},
+          ${params.guardianName ?? null},
+          ${params.guardianPhone ?? null},
+          ${params.country ?? null},
+          ${params.state ?? null},
+          CAST(${params.role} AS "Role"),
+          ${params.token},
+          ${params.expiresAt},
+          NULL,
+          ${params.createdById},
+          NOW(),
+          NOW()
+        )
+      RETURNING "id","email","role"::text AS "role","token","expiresAt"
+    `;
+    return rows[0];
+  } catch {
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; email: string; role: string; token: string; expiresAt: Date }>
+    >`
+      INSERT INTO "Invitation"
+        ("id","email","role","token","expiresAt","acceptedAt","createdById","createdAt","updatedAt")
+      VALUES
+        (
+          ${id},
+          ${params.email},
+          CAST(${params.role} AS "Role"),
+          ${params.token},
+          ${params.expiresAt},
+          NULL,
+          ${params.createdById},
+          NOW(),
+          NOW()
+        )
+      RETURNING "id","email","role"::text AS "role","token","expiresAt"
+    `;
+    return rows[0];
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const superAdmin = await requireSuperAdminUser();
@@ -51,7 +166,7 @@ export async function POST(request: NextRequest) {
     };
 
     const email = body.email?.toLowerCase().trim();
-    const role = parseInvitableRole(body.role);
+    const role = parseInvitableRole(body.role) ?? parseInvitableRole(body.role?.toString());
     const fullName = `${body.firstName?.trim() ?? ""} ${body.lastName?.trim() ?? ""}`.trim();
     const phone = body.phone?.trim() ?? "";
     const department = body.department?.trim() ?? "";
@@ -61,14 +176,22 @@ export async function POST(request: NextRequest) {
     const state = body.state?.trim() ?? "";
 
     if (!email || !role) {
-      return NextResponse.json({ error: "Valid email and role (TEACHER/STUDENT) are required." }, { status: 400 });
+      console.error("Invitation payload invalid", {
+        email,
+        rawRole: body.role,
+        normalizedRole: role,
+      });
+      return NextResponse.json(
+        { error: "Valid email and role (SUPER_ADMIN/TEACHER/STUDENT/DEPARTMENT_HEAD) are required." },
+        { status: 400 }
+      );
     }
 
-    if (role === Role.TEACHER) {
-      if (!fullName || !phone || !department || !country || !state) {
+    if (role === "SUPER_ADMIN") {
+      if (!fullName || !phone || !country || !state) {
         return NextResponse.json(
           {
-            error: "For teacher invites, first name, last name, phone, department, country, and state are required.",
+            error: "For admin invites, first name, last name, phone, country, and state are required.",
           },
           { status: 400 }
         );
@@ -78,7 +201,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (role === Role.STUDENT) {
+    if (role === "TEACHER") {
+      if (!fullName || !phone || !department || !country || !state) {
+        return NextResponse.json(
+          {
+            error:
+              "For teacher invites, first name, last name, phone, department, country, and state are required.",
+          },
+          { status: 400 }
+        );
+      }
+      if (!(await validateCountryState(country, state))) {
+        return NextResponse.json({ error: "Invalid country/state selection." }, { status: 400 });
+      }
+    }
+
+    if (role === "DEPARTMENT_HEAD") {
+      if (!fullName || !phone || !country || !state) {
+        return NextResponse.json(
+          {
+            error: "For department head invites, first name, last name, phone, country, and state are required.",
+          },
+          { status: 400 }
+        );
+      }
+      if (!(await validateCountryState(country, state))) {
+        return NextResponse.json({ error: "Invalid country/state selection." }, { status: 400 });
+      }
+    }
+
+    if (role === "STUDENT") {
       if (!fullName || !phone || !department || !guardianName || !guardianPhone || !country || !state) {
         return NextResponse.json(
           {
@@ -102,11 +254,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot create invitation for Super Admin." }, { status: 400 });
     }
 
+    await ensureRoleEnum();
+    await ensureInvitationRoleConstraint();
     const token = generateInviteToken();
     const expiresAt = getInviteExpiry();
     let invitation;
-    try {
-      invitation = await prisma.$transaction(async (tx) => {
+    if (role === "DEPARTMENT_HEAD") {
+      await deleteExistingInvitationRaw(email, role);
+      invitation = await createInvitationRaw({
+        email,
+        role,
+        token,
+        expiresAt,
+        createdById: superAdmin.id,
+        fullName: fullName || null,
+        phone: phone || null,
+        department: null,
+        guardianName: null,
+        guardianPhone: null,
+        country: country || null,
+        state: state || null,
+      });
+      await prisma.adminActionLog.create({
+        data: {
+          action: AdminActionType.INVITE_TEACHER,
+          actorId: superAdmin.id,
+          targetUserId: existing?.id,
+          entityType: "Invitation",
+          entityId: invitation.id,
+          metadata: {
+            email,
+            role,
+            fullName: fullName || null,
+            phone: phone || null,
+            country: country || null,
+            state: state || null,
+          },
+        },
+      });
+    } else {
+      try {
+        invitation = await prisma.$transaction(async (tx) => {
         await tx.invitation.deleteMany({
           where: {
             email,
@@ -134,7 +322,7 @@ export async function POST(request: NextRequest) {
 
         await tx.adminActionLog.create({
           data: {
-            action: role === Role.TEACHER ? AdminActionType.INVITE_TEACHER : AdminActionType.INVITE_STUDENT,
+            action: role === "STUDENT" ? AdminActionType.INVITE_STUDENT : AdminActionType.INVITE_TEACHER,
             actorId: superAdmin.id,
             targetUserId: existing?.id,
             entityType: "Invitation",
@@ -145,69 +333,70 @@ export async function POST(request: NextRequest) {
               fullName: fullName || null,
               phone: phone || null,
               department: department || null,
-              guardianName: role === Role.STUDENT ? guardianName || null : null,
-              guardianPhone: role === Role.STUDENT ? guardianPhone || null : null,
+              guardianName: role === "STUDENT" ? guardianName || null : null,
+              guardianPhone: role === "STUDENT" ? guardianPhone || null : null,
               country: country || null,
               state: state || null,
             },
           },
         });
 
-        return created;
-      });
-    } catch (error) {
-      if (!isInvitationPhoneCompatibilityError(error)) {
-        throw error;
-      }
-
-      invitation = await prisma.$transaction(async (tx) => {
-        await tx.invitation.deleteMany({
-          where: {
-            email,
-            role,
-            acceptedAt: null,
-          },
+          return created;
         });
+      } catch (error) {
+        if (!isInvitationPhoneCompatibilityError(error)) {
+          throw error;
+        }
 
-        const created = await tx.invitation.create({
-          data: {
-            email,
-            role,
-            token,
-            expiresAt,
-            createdById: superAdmin.id,
-          },
-        });
-
-        await tx.adminActionLog.create({
-          data: {
-            action: role === Role.TEACHER ? AdminActionType.INVITE_TEACHER : AdminActionType.INVITE_STUDENT,
-            actorId: superAdmin.id,
-            targetUserId: existing?.id,
-            entityType: "Invitation",
-            entityId: created.id,
-            metadata: {
+        invitation = await prisma.$transaction(async (tx) => {
+          await tx.invitation.deleteMany({
+            where: {
               email,
               role,
-              fullName: fullName || null,
-              phone: phone || null,
-              department: department || null,
-              guardianName: role === Role.STUDENT ? guardianName || null : null,
-              guardianPhone: role === Role.STUDENT ? guardianPhone || null : null,
-              country: country || null,
-              state: state || null,
+              acceptedAt: null,
             },
-          },
+          });
+
+          const created = await tx.invitation.create({
+            data: {
+              email,
+              role,
+              token,
+              expiresAt,
+              createdById: superAdmin.id,
+            },
+          });
+
+          await tx.adminActionLog.create({
+            data: {
+              action: role === "STUDENT" ? AdminActionType.INVITE_STUDENT : AdminActionType.INVITE_TEACHER,
+              actorId: superAdmin.id,
+              targetUserId: existing?.id,
+              entityType: "Invitation",
+              entityId: created.id,
+              metadata: {
+                email,
+                role,
+                fullName: fullName || null,
+                phone: phone || null,
+                department: department || null,
+                guardianName: role === "STUDENT" ? guardianName || null : null,
+                guardianPhone: role === "STUDENT" ? guardianPhone || null : null,
+                country: country || null,
+                state: state || null,
+              },
+            },
+          });
+
+          return created;
         });
 
-        return created;
-      });
-
-      // Do this outside the transaction because a failed statement aborts the tx.
-      try {
-        await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === Role.STUDENT ? guardianName || null : null}, "guardianPhone" = ${role === Role.STUDENT ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null} WHERE "id" = ${invitation.id}`;
-      } catch {
-        // Ignore if DB column is not available yet.
+        // Do this outside the transaction because a failed statement aborts the tx.
+        try {
+          await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === "STUDENT" ? guardianName || null : null}, "guardianPhone" = ${role === "STUDENT" ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null} WHERE "id" = ${invitation.id}`;
+        } catch {
+          // Ignore if DB column is not available yet.
+        }
       }
     }
 

@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 type SendInvitationEmailInput = {
   to: string;
   name: string | null;
-  role: "TEACHER" | "STUDENT";
+  role: "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "DEPARTMENT_HEAD";
   inviteUrl: string;
   inviteExpires: Date;
   details?: Array<{ label: string; value: string }>;
@@ -71,7 +71,14 @@ function createTransporter() {
 export async function sendInvitationEmail(input: SendInvitationEmailInput) {
   const { config, transporter } = createTransporter();
 
-  const roleLabel = input.role === "TEACHER" ? "Teacher" : "Student";
+  const roleLabel =
+    input.role === "SUPER_ADMIN"
+      ? "Admin"
+      : input.role === "TEACHER"
+        ? "Teacher"
+        : input.role === "DEPARTMENT_HEAD"
+          ? "Department Head"
+          : "Student";
   const recipientName = input.name?.trim() || "there";
   const expiresText = input.inviteExpires.toUTCString();
   const details = input.details?.filter((item) => item.value.trim().length > 0) ?? [];
