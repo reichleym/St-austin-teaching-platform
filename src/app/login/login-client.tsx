@@ -35,7 +35,8 @@ export default function LoginClient({ callbackUrl }: Props) {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
   const [isResendPending, setIsResendPending] = useState(false);
   const [isPending, setIsPending] = useState(false);
-  const [activeLoginAs, setActiveLoginAs] = useState<"STUDENT" | "TEACHER" | null>(null);
+  const [activeLoginAs, setActiveLoginAs] = useState<"STUDENT" | "TEACHER" | "DEPARTMENT_HEAD" | null>(null);
+  const [selectedLoginAs, setSelectedLoginAs] = useState<"STUDENT" | "TEACHER" | "DEPARTMENT_HEAD">("STUDENT");
   const studentSignupCutoff = getStudentSelfSignupCutoffLabel();
   const studentSelfSignupAllowed = isStudentSelfSignupAllowed();
 
@@ -53,9 +54,18 @@ export default function LoginClient({ callbackUrl }: Props) {
     const password = formData.get("password");
     const nativeSubmitEvent = event.nativeEvent as SubmitEvent;
     const submitter = nativeSubmitEvent.submitter as HTMLButtonElement | null;
-    const loginAs = submitter?.value === "TEACHER" ? "TEACHER" : "STUDENT";
+    const submitterValue = submitter?.getAttribute("data-role") || submitter?.value;
+    const loginAs =
+      submitterValue === "DEPARTMENT_HEAD"
+        ? "DEPARTMENT_HEAD"
+        : submitterValue === "TEACHER"
+          ? "TEACHER"
+          : submitterValue === "STUDENT"
+            ? "STUDENT"
+            : selectedLoginAs;
     setActiveLoginAs(loginAs);
-    const defaultRoleCallbackUrl = loginAs === "TEACHER" ? "/dashboard/teacher" : "/dashboard/student";
+    const defaultRoleCallbackUrl =
+      loginAs === "DEPARTMENT_HEAD" ? "/dashboard/department-head" : loginAs === "TEACHER" ? "/dashboard/teacher" : "/dashboard/student";
     const targetCallbackUrl = callbackUrl === "/dashboard" ? defaultRoleCallbackUrl : callbackUrl;
 
     const precheck = await fetch("/api/auth/login-check", {
@@ -137,8 +147,8 @@ export default function LoginClient({ callbackUrl }: Props) {
           <span className="brand-accent-dot" />
           Access Portal
         </span>
-        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">Teacher & Student Login</h1>
-        <p className="brand-muted mt-2 text-sm">Sign in as Teacher or Student.</p>
+        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">Teacher, Department Head & Student Login</h1>
+        <p className="brand-muted mt-2 text-sm">Sign in as Teacher, Department Head, or Student.</p>
         <p className="mt-1 text-xs text-[#3768ac]">Super Admin login is available at /admin/login.</p>
         <p className="brand-muted mt-1 text-xs">
           Teachers are invite-only. Student self-signup is open until {studentSignupCutoff}.
@@ -184,24 +194,60 @@ export default function LoginClient({ callbackUrl }: Props) {
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <button
-              className="btn-brand-secondary px-4 py-2 disabled:opacity-60"
+              className="btn-brand-secondary w-full px-4 py-3 text-center text-sm font-semibold leading-tight disabled:opacity-60"
               disabled={isPending && activeLoginAs === "STUDENT"}
               type="submit"
               name="loginAs"
               value="STUDENT"
+              data-role="STUDENT"
+              onClick={() => setSelectedLoginAs("STUDENT")}
             >
-              {isPending && activeLoginAs === "STUDENT" ? "Signing in..." : "Sign in as Student"}
+              {isPending && activeLoginAs === "STUDENT" ? (
+                "Signing in..."
+              ) : (
+                <>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
+                  <span className="block text-sm font-semibold">Student</span>
+                </>
+              )}
             </button>
             <button
-              className="btn-brand-primary px-4 py-2 disabled:opacity-60"
+              className="btn-brand-secondary w-full px-4 py-3 text-center text-sm font-semibold leading-tight disabled:opacity-60"
+              disabled={isPending && activeLoginAs === "DEPARTMENT_HEAD"}
+              type="submit"
+              name="loginAs"
+              value="DEPARTMENT_HEAD"
+              data-role="DEPARTMENT_HEAD"
+              onClick={() => setSelectedLoginAs("DEPARTMENT_HEAD")}
+            >
+              {isPending && activeLoginAs === "DEPARTMENT_HEAD" ? (
+                "Signing in..."
+              ) : (
+                <>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
+                  <span className="block text-sm font-semibold">Department Head</span>
+                </>
+              )}
+            </button>
+            <button
+              className="btn-brand-primary w-full px-4 py-3 text-center text-sm font-semibold leading-tight disabled:opacity-60"
               disabled={isPending && activeLoginAs === "TEACHER"}
               type="submit"
               name="loginAs"
               value="TEACHER"
+              data-role="TEACHER"
+              onClick={() => setSelectedLoginAs("TEACHER")}
             >
-              {isPending && activeLoginAs === "TEACHER" ? "Signing in..." : "Sign in as Teacher"}
+              {isPending && activeLoginAs === "TEACHER" ? (
+                "Signing in..."
+              ) : (
+                <>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
+                  <span className="block text-sm font-semibold">Teacher</span>
+                </>
+              )}
             </button>
           </div>
         </form>

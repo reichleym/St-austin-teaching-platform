@@ -18,7 +18,6 @@ export function AdminProfileSettings() {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [department, setDepartment] = useState("");
   const [country, setCountry] = useState("");
   const [state, setState] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -45,7 +44,6 @@ export function AdminProfileSettings() {
         setProfile(result.profile);
         setName(result.profile.name ?? "");
         setPhone(result.profile.phone ?? "");
-        setDepartment(result.profile.department ?? "");
         setCountry(result.profile.country ?? "");
         setState(result.profile.state ?? "");
       } catch {
@@ -80,7 +78,6 @@ export function AdminProfileSettings() {
         body: JSON.stringify({
           name,
           phone,
-          department,
           country,
           state,
           currentPassword: currentPassword || undefined,
@@ -134,12 +131,6 @@ export function AdminProfileSettings() {
               placeholder="Phone number"
               value={phone}
               onChange={(event) => setPhone(event.currentTarget.value)}
-            />
-            <input
-              className="brand-input"
-              placeholder="Department"
-              value={department}
-              onChange={(event) => setDepartment(event.currentTarget.value)}
             />
             <div className="grid gap-3 md:grid-cols-2">
               <input

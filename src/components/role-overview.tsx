@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Role } from "@prisma/client";
+type RoleKey = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN" | string;
 
 type RoleOverviewProps = {
-  role: Role;
+  role: RoleKey;
   name?: string | null;
 };
 
@@ -25,8 +25,8 @@ type DynamicOverview = {
   timeline?: string[];
 };
 
-function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
-  if (role === Role.SUPER_ADMIN) {
+function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
+  if (roleKey === "SUPER_ADMIN" || roleKey === "ADMIN") {
     return {
       heading: "Institution Operations",
       summary: "Governance, staffing, onboarding, and platform reliability across all schools and terms.",
@@ -64,7 +64,45 @@ function getOverviewModel(role: Role, dynamicOverview?: DynamicOverview) {
     };
   }
 
-  if (role === Role.TEACHER) {
+  if (roleKey === "DEPARTMENT_HEAD") {
+    return {
+      heading: "Department Oversight Hub",
+      summary: "Monitor assigned courses, instructor progress, engagement signals, and academic follow-through.",
+      metrics:
+        dynamicOverview?.metrics ?? [
+          { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard?module=courses" },
+          { label: "Engagement Flags", value: 0, delta: "students missing participation", href: "/dashboard?module=engagement" },
+          { label: "Assessments", value: 0, delta: "active in assigned courses", href: "/dashboard?module=assessment" },
+        ],
+      focus: [
+        {
+          title: "Instructor delivery checkpoints",
+          detail: "Review weekly module releases and lesson completion for assigned courses.",
+          priority: "High",
+        },
+        {
+          title: "Engagement follow-ups",
+          detail: "Contact instructors with students flagged for low participation.",
+          priority: "Medium",
+        },
+        {
+          title: "Assessment pacing",
+          detail: "Verify grading cadence matches academic calendar.",
+          priority: "Low",
+        },
+      ] as FocusItem[],
+      timeline: [
+        "09:30 Course progress check",
+        "11:00 Engagement alerts review",
+        "14:00 Instructor feedback round",
+        "16:30 Department summary notes",
+      ],
+      ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
+      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
+    };
+  }
+
+  if (roleKey === "TEACHER") {
     return {
       heading: "Teaching Command Center",
       summary: "Course delivery, grading throughput, engagement signals, and learner support workflow.",
@@ -151,9 +189,17 @@ function PriorityBadge({ priority }: { priority: FocusItem["priority"] }) {
 }
 
 export function RoleOverview({ role, name, overview }: RoleOverviewProps & { overview?: DynamicOverview }) {
-  const model = getOverviewModel(role, overview);
+  const roleKey = String(role);
+  const model = getOverviewModel(roleKey, overview);
   const displayName =
-    name?.trim() || (role === Role.SUPER_ADMIN ? "Administrator" : role === Role.TEACHER ? "Faculty" : "Student");
+    name?.trim() ||
+    (roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
+      ? "Administrator"
+      : roleKey === "DEPARTMENT_HEAD"
+        ? "Department Head"
+        : roleKey === "TEACHER"
+          ? "Faculty"
+          : "Student");
 
   return (
     <section className="grid gap-4">

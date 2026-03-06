@@ -24,6 +24,7 @@ type CreateBody = {
   visibility?: CourseVisibilityValue;
   teacherId?: string | null;
   studentIds?: string[];
+  departmentHeadIds?: string[];
 };
 
 type UpdateBody = {
@@ -35,6 +36,7 @@ type UpdateBody = {
   visibility?: CourseVisibilityValue;
   teacherId?: string | null;
   studentIds?: string[];
+  departmentHeadIds?: string[];
 };
 
 type DeleteBody = {
@@ -110,6 +112,23 @@ CREATE TABLE IF NOT EXISTS "EngagementDiscussion" (
   CONSTRAINT "EngagementDiscussion_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX IF NOT EXISTS "EngagementDiscussion_course_created_idx" ON "EngagementDiscussion"("courseId","createdAt");
+  `);
+}
+
+async function ensureDepartmentHeadCourseSchema() {
+  await prisma.$executeRawUnsafe(`
+CREATE TABLE IF NOT EXISTS "DepartmentHeadCourseAssignment" (
+  "id" TEXT NOT NULL,
+  "courseId" TEXT NOT NULL,
+  "departmentHeadId" TEXT NOT NULL,
+  "assignedById" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "DepartmentHeadCourseAssignment_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "DepartmentHeadCourseAssignment_course_head_key"
+  ON "DepartmentHeadCourseAssignment"("courseId","departmentHeadId");
+CREATE INDEX IF NOT EXISTS "DepartmentHeadCourseAssignment_head_idx"
+  ON "DepartmentHeadCourseAssignment"("departmentHeadId","createdAt");
   `);
 }
 
@@ -225,15 +244,51 @@ async function validateStudentIds(studentIds: string[]) {
   return { ok: true as const, ids: normalized };
 }
 
+async function validateDepartmentHeadIds(departmentHeadIds: string[]) {
+  const normalized = Array.from(new Set(departmentHeadIds.map((item) => item.trim()).filter(Boolean)));
+  if (!normalized.length) {
+    return { ok: true as const, ids: [] as string[] };
+  }
+
+  const matched = await prisma.user.findMany({
+    where: { id: { in: normalized }, role: Role.DEPARTMENT_HEAD, status: UserStatus.ACTIVE },
+    select: { id: true },
+  });
+
+  if (matched.length !== normalized.length) {
+    return { ok: false as const, status: 400, error: "One or more selected department heads are invalid or inactive." };
+  }
+
+  return { ok: true as const, ids: normalized };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser();
     const role = user.role;
     const scope = request.nextUrl.searchParams.get("scope")?.trim() ?? "";
     const enrolledOnly = scope === "enrolled";
+    const isDepartmentHead = role === Role.DEPARTMENT_HEAD;
+
+    if (isSuperAdminRole(role) || isDepartmentHead) {
+      await ensureDepartmentHeadCourseSchema();
+    }
+
+    const departmentHeadAssignedCourseIds =
+      isDepartmentHead
+        ? await prisma.$queryRaw<Array<{ courseId: string }>>`
+            SELECT "courseId"
+            FROM "DepartmentHeadCourseAssignment"
+            WHERE "departmentHeadId" = ${user.id}
+          `
+            .then((rows) => rows.map((row) => row.courseId))
+            .catch(() => [])
+        : [];
 
     const courseWhere: Prisma.CourseWhereInput = isSuperAdminRole(role)
       ? {}
+      : isDepartmentHead
+        ? { id: { in: departmentHeadAssignedCourseIds.length ? departmentHeadAssignedCourseIds : ["__none__"] } }
       : isTeacherRole(role)
         ? { teacherId: user.id }
         : enrolledOnly
@@ -247,6 +302,8 @@ export async function GET(request: NextRequest) {
 
     const enrollmentWhere: Prisma.EnrollmentWhereInput | undefined = isSuperAdminRole(role)
       ? undefined
+      : isDepartmentHead
+        ? { status: "ACTIVE" }
       : isTeacherRole(role)
         ? { status: "ACTIVE" }
         : { studentId: user.id };
@@ -262,6 +319,13 @@ export async function GET(request: NextRequest) {
     const students = isSuperAdminRole(role)
       ? await prisma.user.findMany({
           where: { role: Role.STUDENT, status: UserStatus.ACTIVE },
+          orderBy: [{ name: "asc" }, { email: "asc" }],
+          select: { id: true, name: true, email: true, phone: true },
+        })
+      : [];
+    const departmentHeads = isSuperAdminRole(role)
+      ? await prisma.user.findMany({
+          where: { role: Role.DEPARTMENT_HEAD, status: UserStatus.ACTIVE },
           orderBy: [{ name: "asc" }, { email: "asc" }],
           select: { id: true, name: true, email: true, phone: true },
         })
@@ -314,6 +378,8 @@ export async function GET(request: NextRequest) {
       }
       const legacyWhere: Prisma.CourseWhereInput = isSuperAdminRole(role)
         ? {}
+        : isDepartmentHead
+          ? { id: { in: departmentHeadAssignedCourseIds.length ? departmentHeadAssignedCourseIds : ["__none__"] } }
         : isTeacherRole(role)
           ? { teacherId: user.id }
           : enrolledOnly
@@ -350,6 +416,25 @@ export async function GET(request: NextRequest) {
 
     const requestStatusByCourseId = new Map<string, EnrollmentRequestStatus>();
     const progressByCourseId = new Map<string, number>();
+    const departmentHeadsByCourseId = new Map<string, Array<{ id: string; name: string | null; email: string }>>();
+
+    if (courses.length && (isSuperAdminRole(role) || isDepartmentHead)) {
+      const courseIds = courses.map((course) => course.id);
+      const rows = await prisma.$queryRaw<
+        Array<{ courseId: string; departmentHeadId: string; name: string | null; email: string }>
+      >`
+        SELECT a."courseId", a."departmentHeadId", u."name", u."email"
+        FROM "DepartmentHeadCourseAssignment" a
+        JOIN "User" u ON u."id" = a."departmentHeadId"
+        WHERE a."courseId" IN (${Prisma.join(courseIds)})
+      `.catch(() => []);
+
+      for (const row of rows) {
+        const group = departmentHeadsByCourseId.get(row.courseId) ?? [];
+        group.push({ id: row.departmentHeadId, name: row.name, email: row.email });
+        departmentHeadsByCourseId.set(row.courseId, group);
+      }
+    }
 
     if (role === Role.STUDENT && courses.length) {
       await ensureEnrollmentRequestSchema();
@@ -436,6 +521,7 @@ export async function GET(request: NextRequest) {
                   status: item.status,
                 }))
             : [],
+          departmentHeads: departmentHeadsByCourseId.get(course.id) ?? [],
           myEnrollmentStatus: myEnrollment?.status ?? null,
           myEnrollmentRequestStatus: requestStatusByCourseId.get(course.id) ?? null,
           courseProgressPercent: progressByCourseId.get(course.id) ?? null,
@@ -443,6 +529,7 @@ export async function GET(request: NextRequest) {
       }),
       teachers,
       students,
+      departmentHeads,
     });
   } catch (error) {
     if (error instanceof PermissionError) {
@@ -485,6 +572,7 @@ export async function POST(request: NextRequest) {
 
     const teacherId = typeof body.teacherId === "string" && body.teacherId.trim() ? body.teacherId.trim() : null;
     const studentIds = Array.isArray(body.studentIds) ? body.studentIds : [];
+    const departmentHeadIds = Array.isArray(body.departmentHeadIds) ? body.departmentHeadIds : [];
     const teacherValidation = await ensureTeacherIfProvided(teacherId);
     if (teacherValidation && !teacherValidation.ok) {
       return NextResponse.json({ error: teacherValidation.error }, { status: teacherValidation.status });
@@ -493,6 +581,11 @@ export async function POST(request: NextRequest) {
     if (!studentsValidation.ok) {
       return NextResponse.json({ error: studentsValidation.error }, { status: studentsValidation.status });
     }
+    const departmentHeadsValidation = await validateDepartmentHeadIds(departmentHeadIds);
+    if (!departmentHeadsValidation.ok) {
+      return NextResponse.json({ error: departmentHeadsValidation.error }, { status: departmentHeadsValidation.status });
+    }
+    await ensureDepartmentHeadCourseSchema();
 
     if (teacherId) {
       const overlap = await hasTimelineOverlap({ teacherId, startDate, endDate });
@@ -535,6 +628,17 @@ export async function POST(request: NextRequest) {
           })),
           skipDuplicates: true,
         });
+      }
+
+      if (departmentHeadsValidation.ids.length) {
+        for (const departmentHeadId of departmentHeadsValidation.ids) {
+          const assignmentId = `dhc_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+          await tx.$executeRaw`
+            INSERT INTO "DepartmentHeadCourseAssignment" ("id","courseId","departmentHeadId","assignedById","createdAt")
+            VALUES (${assignmentId}, ${course.id}, ${departmentHeadId}, ${user.id}, NOW())
+            ON CONFLICT ("courseId","departmentHeadId") DO NOTHING
+          `;
+        }
       }
 
       return course;
@@ -724,6 +828,7 @@ export async function PATCH(request: NextRequest) {
 
     let nextTeacherId = existing.teacherId;
     const studentIds = Array.isArray(body.studentIds) ? body.studentIds : undefined;
+    const departmentHeadIds = Array.isArray(body.departmentHeadIds) ? body.departmentHeadIds : undefined;
 
     if (body.teacherId !== undefined) {
       if (body.teacherId === null || body.teacherId === "") {
@@ -768,7 +873,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (!Object.keys(data).length) {
-      if (!Array.isArray(studentIds)) {
+      if (!Array.isArray(studentIds) && !Array.isArray(departmentHeadIds)) {
         return NextResponse.json({ error: "At least one field is required to update." }, { status: 400 });
       }
     }
@@ -777,6 +882,12 @@ export async function PATCH(request: NextRequest) {
     if (studentsValidation && !studentsValidation.ok) {
       return NextResponse.json({ error: studentsValidation.error }, { status: studentsValidation.status });
     }
+    const departmentHeadsValidation =
+      departmentHeadIds === undefined ? null : await validateDepartmentHeadIds(departmentHeadIds);
+    if (departmentHeadsValidation && !departmentHeadsValidation.ok) {
+      return NextResponse.json({ error: departmentHeadsValidation.error }, { status: departmentHeadsValidation.status });
+    }
+    await ensureDepartmentHeadCourseSchema();
 
     const updated = await prisma.$transaction(async (tx) => {
       if (studentsValidation) {
@@ -791,6 +902,18 @@ export async function PATCH(request: NextRequest) {
             create: { courseId, studentId, status: "ACTIVE" },
             update: { status: "ACTIVE" },
           });
+        }
+      }
+
+      if (departmentHeadsValidation) {
+        await tx.$executeRaw`DELETE FROM "DepartmentHeadCourseAssignment" WHERE "courseId" = ${courseId}`;
+        for (const departmentHeadId of departmentHeadsValidation.ids) {
+          const assignmentId = `dhc_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+          await tx.$executeRaw`
+            INSERT INTO "DepartmentHeadCourseAssignment" ("id","courseId","departmentHeadId","assignedById","createdAt")
+            VALUES (${assignmentId}, ${courseId}, ${departmentHeadId}, ${user.id}, NOW())
+            ON CONFLICT ("courseId","departmentHeadId") DO NOTHING
+          `;
         }
       }
 
@@ -926,6 +1049,8 @@ export async function DELETE(request: NextRequest) {
       prisma.enrollment.count({ where: { courseId } }),
     ]);
 
+    await ensureDepartmentHeadCourseSchema();
+    await prisma.$executeRaw`DELETE FROM "DepartmentHeadCourseAssignment" WHERE "courseId" = ${courseId}`;
     await prisma.course.delete({ where: { id: courseId } });
 
     return NextResponse.json({

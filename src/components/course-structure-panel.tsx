@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 
-type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
+type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseOption = {
   id: string;

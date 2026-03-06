@@ -22,7 +22,22 @@ function readMetadataString(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function makeId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
+}
+
+async function ensureRoleEnum() {
+  await prisma.$executeRawUnsafe(`
+DO $$ BEGIN
+  ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DEPARTMENT_HEAD';
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;
+  `);
+}
+
 export async function POST(request: Request) {
+  await ensureRoleEnum();
   const body = (await request.json()) as {
     token?: string;
     password?: string;
@@ -52,7 +67,7 @@ export async function POST(request: Request) {
         guardianPhone: string | null;
         country: string | null;
         state: string | null;
-        role: Role;
+        role: Role | string;
         expiresAt: Date;
         acceptedAt: Date | null;
       }
@@ -77,25 +92,50 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    if (!isInvitationProfileCompatibilityError(error)) {
+    const message = error instanceof Error ? error.message : "";
+    const roleEnumMismatch =
+      message.includes("Value 'DEPARTMENT_HEAD' not found in enum") ||
+      message.includes("Invalid enum value") ||
+      (error && (error as { code?: string }).code === "P2023");
+
+    if (!isInvitationProfileCompatibilityError(error) && !roleEnumMismatch) {
       throw error;
     }
-    const legacyInvite = await prisma.invitation.findUnique({
-      where: { token },
-      select: { id: true, email: true, role: true, expiresAt: true, acceptedAt: true },
-    });
-    invite = legacyInvite
-      ? {
-          ...legacyInvite,
-          name: null,
-          phone: null,
-          department: null,
-          guardianName: null,
-          guardianPhone: null,
-          country: null,
-          state: null,
-        }
-      : null;
+
+    const legacyRows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        email: string;
+        name: string | null;
+        phone: string | null;
+        department: string | null;
+        guardianName: string | null;
+        guardianPhone: string | null;
+        country: string | null;
+        state: string | null;
+        role: string;
+        expiresAt: Date;
+        acceptedAt: Date | null;
+      }>
+    >`
+      SELECT
+        "id",
+        "email",
+        "name",
+        "phone",
+        "department",
+        "guardianName",
+        "guardianPhone",
+        "country",
+        "state",
+        "role"::text AS "role",
+        "expiresAt",
+        "acceptedAt"
+      FROM "Invitation"
+      WHERE "token" = ${token}
+      LIMIT 1
+    `;
+    invite = legacyRows[0] ?? null;
   }
 
   if (!invite) {
@@ -110,7 +150,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invitation has expired." }, { status: 410 });
   }
 
-  if (invite.role !== Role.TEACHER && invite.role !== Role.STUDENT) {
+  const inviteRoleText = String(invite.role);
+  if (
+    inviteRoleText !== "SUPER_ADMIN" &&
+    inviteRoleText !== "TEACHER" &&
+    inviteRoleText !== "STUDENT" &&
+    inviteRoleText !== "DEPARTMENT_HEAD"
+  ) {
     return NextResponse.json({ error: "Invitation is invalid." }, { status: 400 });
   }
 
@@ -139,51 +185,105 @@ export async function POST(request: Request) {
     select: { id: true, role: true },
   });
 
+  const roleEnumMissing = Role.DEPARTMENT_HEAD === undefined;
+
   await prisma.$transaction(async (tx) => {
     if (existingUser?.role === Role.SUPER_ADMIN) {
       throw new Error("Cannot apply invitation to Super Admin account.");
     }
 
     if (existingUser) {
-      await tx.user.update({
-        where: { id: existingUser.id },
-        data: {
-          name: resolvedName,
-          passwordHash,
-          role: invite.role,
-          status: UserStatus.ACTIVE,
-          phone: invitedPhone || null,
-          department: invitedDepartment || null,
-          guardianName: invitedGuardianName || null,
-          guardianPhone: invitedGuardianPhone || null,
-          country: invitedCountry || null,
-          state: invitedState || null,
-        },
-        select: { id: true },
-      });
+      if (inviteRoleText === "DEPARTMENT_HEAD" && roleEnumMissing) {
+        await tx.$executeRaw`
+          UPDATE "User"
+          SET
+            "name" = ${resolvedName},
+            "passwordHash" = ${passwordHash},
+            "role" = CAST(${inviteRoleText} AS "Role"),
+            "status" = CAST('ACTIVE' AS "UserStatus"),
+            "phone" = ${invitedPhone || null},
+            "department" = ${invitedDepartment || null},
+            "guardianName" = ${invitedGuardianName || null},
+            "guardianPhone" = ${invitedGuardianPhone || null},
+            "country" = ${invitedCountry || null},
+            "state" = ${invitedState || null},
+            "updatedAt" = NOW()
+          WHERE "id" = ${existingUser.id}
+        `;
+      } else {
+        await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name: resolvedName,
+            passwordHash,
+            role: invite.role as Role,
+            status: UserStatus.ACTIVE,
+            phone: invitedPhone || null,
+            department: invitedDepartment || null,
+            guardianName: invitedGuardianName || null,
+            guardianPhone: invitedGuardianPhone || null,
+            country: invitedCountry || null,
+            state: invitedState || null,
+          },
+          select: { id: true },
+        });
+      }
     } else {
-      await tx.user.create({
-        data: {
-          email: invite.email,
-          name: resolvedName,
-          passwordHash,
-          role: invite.role,
-          status: UserStatus.ACTIVE,
-          phone: invitedPhone || null,
-          department: invitedDepartment || null,
-          guardianName: invitedGuardianName || null,
-          guardianPhone: invitedGuardianPhone || null,
-          country: invitedCountry || null,
-          state: invitedState || null,
-        },
-        select: { id: true },
-      });
+      if (inviteRoleText === "DEPARTMENT_HEAD" && roleEnumMissing) {
+        const userId = makeId("usr");
+        await tx.$executeRaw`
+          INSERT INTO "User"
+            ("id","email","name","passwordHash","role","status","phone","department","guardianName","guardianPhone","country","state","createdAt","updatedAt")
+          VALUES
+            (
+              ${userId},
+              ${invite.email},
+              ${resolvedName},
+              ${passwordHash},
+              CAST(${inviteRoleText} AS "Role"),
+              CAST('ACTIVE' AS "UserStatus"),
+              ${invitedPhone || null},
+              ${invitedDepartment || null},
+              ${invitedGuardianName || null},
+              ${invitedGuardianPhone || null},
+              ${invitedCountry || null},
+              ${invitedState || null},
+              NOW(),
+              NOW()
+            )
+        `;
+      } else {
+        await tx.user.create({
+          data: {
+            email: invite.email,
+            name: resolvedName,
+            passwordHash,
+            role: invite.role as Role,
+            status: UserStatus.ACTIVE,
+            phone: invitedPhone || null,
+            department: invitedDepartment || null,
+            guardianName: invitedGuardianName || null,
+            guardianPhone: invitedGuardianPhone || null,
+            country: invitedCountry || null,
+            state: invitedState || null,
+          },
+          select: { id: true },
+        });
+      }
     }
 
-    await tx.invitation.update({
-      where: { id: invite.id },
-      data: { acceptedAt: new Date() },
-    });
+    if (inviteRoleText === "DEPARTMENT_HEAD" && roleEnumMissing) {
+      await tx.$executeRaw`
+        UPDATE "Invitation"
+        SET "acceptedAt" = NOW(), "updatedAt" = NOW()
+        WHERE "id" = ${invite.id}
+      `;
+    } else {
+      await tx.invitation.update({
+        where: { id: invite.id },
+        data: { acceptedAt: new Date() },
+      });
+    }
   });
 
   return NextResponse.json({ ok: true });

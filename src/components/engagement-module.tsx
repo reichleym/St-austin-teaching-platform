@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
+type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseOption = {
   id: string;

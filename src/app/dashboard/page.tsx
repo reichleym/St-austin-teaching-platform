@@ -7,6 +7,7 @@ import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { dashboardModules } from "@/lib/dashboard-modules";
 import { RoleOverview } from "@/components/role-overview";
 import { prisma } from "@/lib/prisma";
+import { isSuperAdminRole } from "@/lib/permissions";
 import { AdminUserManagementTable } from "@/components/admin-user-management-table";
 import { AdminAnnouncementsManager } from "@/components/admin-announcements-manager";
 import { AnnouncementsFeed } from "@/components/announcements-feed";
@@ -62,14 +63,22 @@ export default async function DashboardPage({ searchParams }: Props) {
     redirect("/login");
   }
 
+  const roleKey = String(session.user.role ?? "");
+  const moduleRoleKey = roleKey === "ADMIN" ? "SUPER_ADMIN" : roleKey;
+  const roleLabel =
+    roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
+      ? "SUPER ADMIN"
+      : roleKey === "DEPARTMENT_HEAD"
+        ? "DEPARTMENT HEAD"
+        : roleKey;
   const params = await searchParams;
-  const availableModules = dashboardModules.filter((item) => item.roles.includes(session.user.role));
+  const availableModules = dashboardModules.filter((item) => item.roles.includes(moduleRoleKey));
   const selected =
     availableModules.find((item) => item.slug === params.module) ?? availableModules[0] ?? dashboardModules[0];
-  const isSuperAdmin = session.user.role === Role.SUPER_ADMIN;
+  const isSuperAdmin = isSuperAdminRole(roleKey);
   const announcementModuleSlug = isSuperAdmin ? "announcements" : "announcements-feed";
   const roleAnnouncementAudience: AnnouncementAudienceValue[] =
-    session.user.role === Role.TEACHER ? ["BOTH", "TEACHER_ONLY"] : session.user.role === Role.STUDENT ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
+    roleKey === "TEACHER" ? ["BOTH", "TEACHER_ONLY"] : roleKey === "STUDENT" ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
 
   let announcementCount = 0;
   try {
@@ -279,6 +288,135 @@ export default async function DashboardPage({ searchParams }: Props) {
           ...student,
           createdAt: student.createdAt.toISOString(),
         }))
+      : [];
+
+  let departmentHeadList: Array<{
+    id: string;
+    name: string | null;
+    email: string;
+    status: "ACTIVE" | "DISABLED";
+    phone: string | null;
+    guardianName: string | null;
+    guardianPhone: string | null;
+    country: string | null;
+    state: string | null;
+    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+    createdAt: Date;
+  }> = [];
+
+  if (selected.slug === "view-department-heads" && isSuperAdmin) {
+    try {
+      if (Role.DEPARTMENT_HEAD === undefined) {
+        const rawHeads = await prisma.$queryRaw<
+          Array<{
+            id: string;
+            name: string | null;
+            email: string;
+            status: "ACTIVE" | "DISABLED";
+            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+            phone: string | null;
+            guardianName: string | null;
+            guardianPhone: string | null;
+            country: string | null;
+            state: string | null;
+            createdAt: Date;
+          }>
+        >`SELECT "id","name","email","status"::text AS "status","role"::text AS "role","phone","guardianName","guardianPhone","country","state","createdAt" FROM "User" WHERE "role" = 'DEPARTMENT_HEAD' ORDER BY "createdAt" DESC`;
+        departmentHeadList = rawHeads;
+      } else {
+        departmentHeadList = await prisma.user.findMany({
+          where: { role: Role.DEPARTMENT_HEAD },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            status: true,
+            phone: true,
+            guardianName: true,
+            guardianPhone: true,
+            country: true,
+            state: true,
+            role: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Value 'DEPARTMENT_HEAD' not found in enum 'Role'")) {
+        const rawHeads = await prisma.$queryRaw<
+          Array<{
+            id: string;
+            name: string | null;
+            email: string;
+            status: "ACTIVE" | "DISABLED";
+            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+            phone: string | null;
+            guardianName: string | null;
+            guardianPhone: string | null;
+            country: string | null;
+            state: string | null;
+            createdAt: Date;
+          }>
+        >`SELECT "id","name","email","status"::text AS "status","role"::text AS "role","phone","guardianName","guardianPhone","country","state","createdAt" FROM "User" WHERE "role" = 'DEPARTMENT_HEAD' ORDER BY "createdAt" DESC`;
+        departmentHeadList = rawHeads;
+      } else {
+        if (!isUserCountryStateCompatibilityError(error)) throw error;
+        try {
+          const rawHeads = await prisma.$queryRaw<
+            Array<{
+              id: string;
+              name: string | null;
+              email: string;
+              status: "ACTIVE" | "DISABLED";
+              role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+              phone: string | null;
+              guardianName: string | null;
+              guardianPhone: string | null;
+              country: string | null;
+              state: string | null;
+              createdAt: Date;
+            }>
+          >`SELECT "id","name","email","status"::text AS "status","role"::text AS "role","phone","guardianName","guardianPhone","country","state","createdAt" FROM "User" WHERE "role" = 'DEPARTMENT_HEAD' ORDER BY "createdAt" DESC`;
+          departmentHeadList = rawHeads;
+        } catch {
+          if (Role.DEPARTMENT_HEAD === undefined) {
+            departmentHeadList = [];
+          } else {
+            const fallbackHeads = await prisma.user.findMany({
+              where: { role: Role.DEPARTMENT_HEAD },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                status: true,
+                role: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: "desc" },
+            });
+            departmentHeadList = fallbackHeads.map((item) => ({
+              ...item,
+              phone: null,
+              guardianName: null,
+              guardianPhone: null,
+              country: null,
+              state: null,
+            }));
+          }
+        }
+      }
+    }
+  }
+
+  const serializedDepartmentHeadList =
+    selected.slug === "view-department-heads"
+      ? departmentHeadList
+          .filter((head) => head.role === "DEPARTMENT_HEAD")
+          .map((head) => ({
+            ...head,
+            createdAt: head.createdAt.toISOString(),
+          }))
       : [];
 
   let adminAnnouncements: Array<{
@@ -492,32 +630,48 @@ export default async function DashboardPage({ searchParams }: Props) {
   let moduleKpiValue: string | number = 0;
   let moduleKpiHint = "live count";
 
+  const departmentHeadCourseIds =
+    roleKey === "DEPARTMENT_HEAD"
+      ? await prisma
+          .$queryRaw<Array<{ courseId: string }>>`
+            SELECT "courseId"
+            FROM "DepartmentHeadCourseAssignment"
+            WHERE "departmentHeadId" = ${session.user.id}
+          `
+          .then((rows) => rows.map((row) => row.courseId))
+          .catch(() => [])
+      : [];
+
   const enrolledCoursesCount = await prisma.course.count({
     where: isSuperAdmin
       ? {}
-      : session.user.role === Role.TEACHER
+      : roleKey === "TEACHER"
         ? { teacherId: session.user.id }
-        : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
+        : roleKey === "DEPARTMENT_HEAD"
+          ? { id: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
+          : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
   });
   const availableCoursesCount =
-    session.user.role === Role.STUDENT
+    roleKey === "STUDENT"
       ? await prisma.course.count({ where: { visibility: "PUBLISHED" } })
       : enrolledCoursesCount;
   const assignmentCount = await prisma.assignment.count({
     where:
-      session.user.role === Role.SUPER_ADMIN
+      roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
         ? {}
-        : session.user.role === Role.TEACHER
+        : roleKey === "TEACHER"
           ? { course: { teacherId: session.user.id } }
-          : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
+          : roleKey === "DEPARTMENT_HEAD"
+            ? { courseId: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
+            : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
   });
   const pendingGradeEditCount = isSuperAdmin
     ? await prisma.gradeEditRequest.count({ where: { status: "PENDING" } })
-    : session.user.role === Role.TEACHER
+    : roleKey === "TEACHER"
       ? await prisma.gradeEditRequest.count({ where: { requestedById: session.user.id, status: "PENDING" } })
       : 0;
   const pendingSubmissionCount =
-    session.user.role === Role.TEACHER
+    roleKey === "TEACHER"
       ? await prisma.$queryRaw<Array<{ count: bigint | number }>>`
           SELECT COUNT(*)::bigint AS count
           FROM "AssignmentSubmission" s
@@ -532,20 +686,31 @@ export default async function DashboardPage({ searchParams }: Props) {
     `
     .then(async (rows) => {
       if (!rows[0]?.exists) return 0;
-      if (session.user.role === Role.SUPER_ADMIN) {
+      if (isSuperAdmin) {
         const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
           SELECT COUNT(*)::bigint AS count
           FROM "EngagementDiscussion"
         `;
         return Number(countRows[0]?.count ?? 0);
       }
-      if (session.user.role === Role.TEACHER) {
+      if (roleKey === "TEACHER") {
         const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
           SELECT COUNT(*)::bigint AS count
           FROM "EngagementDiscussion" d
           JOIN "Course" c ON c."id" = d."courseId"
           WHERE c."teacherId" = ${session.user.id}
         `;
+        return Number(countRows[0]?.count ?? 0);
+      }
+      if (roleKey === "DEPARTMENT_HEAD") {
+        const countRows = await prisma
+          .$queryRaw<Array<{ count: bigint | number }>>`
+            SELECT COUNT(*)::bigint AS count
+            FROM "EngagementDiscussion" d
+            JOIN "DepartmentHeadCourseAssignment" a ON a."courseId" = d."courseId"
+            WHERE a."departmentHeadId" = ${session.user.id}
+          `
+          .catch(() => [{ count: 0 }]);
         return Number(countRows[0]?.count ?? 0);
       }
       const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
@@ -577,26 +742,32 @@ export default async function DashboardPage({ searchParams }: Props) {
     : 0;
 
   const overviewMetrics =
-    session.user.role === Role.SUPER_ADMIN
+    roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? [
           { label: "Announcements", value: announcementCount, delta: "available for your role", href: "/dashboard?module=announcements" },
           { label: "Courses", value: enrolledCoursesCount, delta: "institution total", href: "/dashboard?module=courses" },
           { label: "Grade Edit Requests", value: pendingGradeEditCount, delta: "pending review", href: "/dashboard?module=assessment" },
           { label: "Enrollment Requests", value: pendingEnrollmentRequestCount, delta: "pending approval", href: "/dashboard?module=courses" },
         ]
-      : session.user.role === Role.TEACHER
+      : roleKey === "DEPARTMENT_HEAD"
         ? [
-            { label: "Assigned Courses", value: enrolledCoursesCount, delta: "currently assigned", href: "/dashboard?module=courses" },
-            { label: "Submissions Pending", value: pendingSubmissionCount, delta: "awaiting grading", href: "/dashboard?module=assessment" },
-            { label: "Assignments", value: assignmentCount, delta: "in your courses", href: "/dashboard?module=assessment" },
+            { label: "Courses Overseen", value: enrolledCoursesCount, delta: "assigned coverage", href: "/dashboard?module=courses" },
+            { label: "Engagement", value: engagementDiscussionCount, delta: "active discussions", href: "/dashboard?module=engagement" },
+            { label: "Assignments", value: assignmentCount, delta: "in assigned courses", href: "/dashboard?module=assessment" },
           ]
-        : [
-            { label: "Enrolled Courses", value: enrolledCoursesCount, delta: "active enrollments", href: "/dashboard?module=learning" },
-            { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
-            { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
-          ];
+        : roleKey === "TEACHER"
+          ? [
+              { label: "Assigned Courses", value: enrolledCoursesCount, delta: "currently assigned", href: "/dashboard?module=courses" },
+              { label: "Submissions Pending", value: pendingSubmissionCount, delta: "awaiting grading", href: "/dashboard?module=assessment" },
+              { label: "Assignments", value: assignmentCount, delta: "in your courses", href: "/dashboard?module=assessment" },
+            ]
+          : [
+              { label: "Enrolled Courses", value: enrolledCoursesCount, delta: "active enrollments", href: "/dashboard?module=learning" },
+              { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
+              { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
+            ];
   const overviewFocus =
-    session.user.role === Role.SUPER_ADMIN
+    roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? [
           {
             title: `Review ${pendingGradeEditCount} Grade Edit Request${pendingGradeEditCount === 1 ? "" : "s"}`,
@@ -614,49 +785,67 @@ export default async function DashboardPage({ searchParams }: Props) {
             priority: "Medium" as "High" | "Medium" | "Low",
           },
         ]
-      : session.user.role === Role.TEACHER
+      : roleKey === "DEPARTMENT_HEAD"
         ? [
             {
-              title: `${pendingSubmissionCount} Submission${pendingSubmissionCount === 1 ? "" : "s"} Awaiting Grading`,
-              detail: "Prioritize grading queue to keep learner feedback turnaround on track.",
-              priority: (pendingSubmissionCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+              title: `${enrolledCoursesCount} Course${enrolledCoursesCount === 1 ? "" : "s"} Under Oversight`,
+              detail: "Review instructor timelines and weekly module release cadence.",
+              priority: enrolledCoursesCount > 0 ? "High" : "Low",
             },
             {
-              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Course Scope`,
-              detail: "Review due dates and attempt settings for upcoming assessment windows.",
-              priority: "Medium" as "High" | "Medium" | "Low",
+              title: `${engagementDiscussionCount} Discussion${engagementDiscussionCount === 1 ? "" : "s"} Active`,
+              detail: "Ensure participation requirements are being met.",
+              priority: engagementDiscussionCount > 0 ? "Medium" : "Low",
             },
             {
-              title: `${engagementDiscussionCount} Discussion Topic${engagementDiscussionCount === 1 ? "" : "s"} Active`,
-              detail: "Track missing discussion participation and follow up with students.",
-              priority: "Medium" as "High" | "Medium" | "Low",
+              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Progress`,
+              detail: "Confirm grading pace and late policy adherence.",
+              priority: "Low",
             },
           ]
-        : [
-            {
-              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} Pending`,
-              detail: "Focus on due assignments and maintain timely submissions.",
-              priority: (assignmentCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
-            },
-            {
-              title: `${enrolledCoursesCount} Enrolled Course${enrolledCoursesCount === 1 ? "" : "s"}`,
-              detail: "Open modules in your enrolled courses to maintain progress.",
-              priority: "Medium" as "High" | "Medium" | "Low",
-            },
-            {
-              title: `${announcementCount} Announcement${announcementCount === 1 ? "" : "s"} Available`,
-              detail: "Review updates from faculty and administration.",
-              priority: "Low" as "High" | "Medium" | "Low",
-            },
-          ];
+        : roleKey === "TEACHER"
+          ? [
+              {
+                title: `${pendingSubmissionCount} Submission${pendingSubmissionCount === 1 ? "" : "s"} Awaiting Grading`,
+                detail: "Prioritize grading queue to keep learner feedback turnaround on track.",
+                priority: (pendingSubmissionCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+              },
+              {
+                title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Course Scope`,
+                detail: "Review due dates and attempt settings for upcoming assessment windows.",
+                priority: "Medium" as "High" | "Medium" | "Low",
+              },
+              {
+                title: `${engagementDiscussionCount} Discussion Topic${engagementDiscussionCount === 1 ? "" : "s"} Active`,
+                detail: "Track missing discussion participation and follow up with students.",
+                priority: "Medium" as "High" | "Medium" | "Low",
+              },
+            ]
+          : [
+              {
+                title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} Pending`,
+                detail: "Focus on due assignments and maintain timely submissions.",
+                priority: (assignmentCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
+              },
+              {
+                title: `${enrolledCoursesCount} Enrolled Course${enrolledCoursesCount === 1 ? "" : "s"}`,
+                detail: "Open modules in your enrolled courses to maintain progress.",
+                priority: "Medium" as "High" | "Medium" | "Low",
+              },
+              {
+                title: `${announcementCount} Announcement${announcementCount === 1 ? "" : "s"} Available`,
+                detail: "Review updates from faculty and administration.",
+                priority: "Low" as "High" | "Medium" | "Low",
+              },
+            ];
 
   if (selected.slug === "announcements" || selected.slug === "announcements-feed" || selected.slug === "overview") {
     moduleKpiLabel = "Announcements";
     moduleKpiValue = announcementCount;
     moduleKpiHint = "available for your role";
   } else if (selected.slug === "courses") {
-    moduleKpiLabel = session.user.role === Role.STUDENT ? "Available Courses" : "Courses";
-    moduleKpiValue = session.user.role === Role.STUDENT ? availableCoursesCount : enrolledCoursesCount;
+    moduleKpiLabel = roleKey === "STUDENT" ? "Available Courses" : "Courses";
+    moduleKpiValue = roleKey === "STUDENT" ? availableCoursesCount : enrolledCoursesCount;
     moduleKpiHint = "in this module";
   } else if (selected.slug === "learning") {
     moduleKpiLabel = "My Learning";
@@ -678,6 +867,10 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiLabel = "Students";
     moduleKpiValue = studentList.length;
     moduleKpiHint = "total records";
+  } else if (selected.slug === "view-department-heads") {
+    moduleKpiLabel = "Department Heads";
+    moduleKpiValue = departmentHeadList.length;
+    moduleKpiHint = "total records";
   } else if (selected.slug === "system-settings" || selected.slug === "admin-profile" || selected.slug === "academic-policies") {
     moduleKpiLabel = "Settings";
     moduleKpiValue = "Admin";
@@ -685,18 +878,18 @@ export default async function DashboardPage({ searchParams }: Props) {
   }
 
   const selectedTitle =
-    session.user.role === Role.STUDENT && selected.slug === "courses"
+    roleKey === "STUDENT" && selected.slug === "courses"
       ? "All Courses"
-      : session.user.role === Role.STUDENT && selected.slug === "learning"
+      : roleKey === "STUDENT" && selected.slug === "learning"
         ? "My Learning"
         : selected.title;
 
   return (
     <main className="min-h-screen lg:flex">
-      <DashboardSidebar role={session.user.role} selectedSlug={selected.slug} />
+      <DashboardSidebar role={roleKey} selectedSlug={selected.slug} />
 
       <div className="flex-1 space-y-6 p-6 lg:p-8">
-        <DashboardTopbar name={session.user.name} email={session.user.email} role={session.user.role} />
+        <DashboardTopbar name={session.user.name} email={session.user.email} role={roleKey} />
 
         <section className="brand-glass brand-animate overflow-hidden p-6 lg:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -717,7 +910,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
         {selected.slug === "overview" ? (
           <section className="grid gap-4">
-            <RoleOverview role={session.user.role} name={session.user.name} overview={{ metrics: overviewMetrics, focus: overviewFocus }} />
+            <RoleOverview role={roleKey} name={session.user.name} overview={{ metrics: overviewMetrics, focus: overviewFocus }} />
             <section className="brand-card p-5">
               <p className="brand-section-title">Announcements</p>
               <div className="mt-3 space-y-2">
@@ -742,13 +935,13 @@ export default async function DashboardPage({ searchParams }: Props) {
         ) : selected.slug === "announcements-feed" ? (
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
         ) : selected.slug === "courses" ? (
-          <CoursesModule role={session.user.role} viewMode="all" />
+          <CoursesModule role={roleKey} viewMode="all" />
         ) : selected.slug === "learning" ? (
-          <CoursesModule role={session.user.role} viewMode={session.user.role === Role.STUDENT ? "enrolled" : "all"} />
+          <CoursesModule role={roleKey} viewMode={roleKey === "STUDENT" ? "enrolled" : "all"} />
         ) : selected.slug === "assessment" ? (
-          <AssignmentsModule role={session.user.role} />
+          <AssignmentsModule role={roleKey} />
         ) : selected.slug === "engagement" ? (
-          <EngagementModule role={session.user.role} />
+          <EngagementModule role={roleKey} />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
@@ -785,6 +978,24 @@ export default async function DashboardPage({ searchParams }: Props) {
               users={serializedStudentList}
             />
           </section>
+        ) : selected.slug === "view-department-heads" ? (
+          <section className="grid gap-4">
+            <article className="brand-card p-5">
+              <p className="brand-section-title">Add Department Head</p>
+              <Link
+                href="/dashboard/admin/invitations?role=DEPARTMENT_HEAD"
+                className="btn-brand-primary mt-2 inline-flex px-4 py-2 text-sm font-semibold no-underline"
+              >
+                Send Invite
+              </Link>
+            </article>
+            <AdminUserManagementTable
+              key="department-heads-table"
+              title="Department Heads"
+              emptyText="No department heads found yet."
+              users={serializedDepartmentHeadList}
+            />
+          </section>
         ) : selected.slug === "admin-profile" ? (
           <AdminProfileSettings />
         ) : selected.slug === "academic-policies" ? (
@@ -811,7 +1022,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <article className="brand-card p-5">
                 <p className="brand-section-title">Workspace</p>
-                <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{session.user.role}</p>
+                <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{roleLabel}</p>
                 <p className="brand-muted mt-1 text-sm">Your tools are filtered to match your access level.</p>
               </article>
               <article className="brand-card p-5">
