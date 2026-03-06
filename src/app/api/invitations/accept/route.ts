@@ -12,7 +12,8 @@ function isInvitationProfileCompatibilityError(error: unknown) {
     error.message.includes("Unknown field `guardianName`") ||
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `country`") ||
-    error.message.includes("Unknown field `state`")
+    error.message.includes("Unknown field `state`") ||
+    error.message.includes("Unknown field `studentId`")
   );
 }
 
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
         guardianPhone: string | null;
         country: string | null;
         state: string | null;
+        studentId: string | null;
         role: Role | string;
         expiresAt: Date;
         acceptedAt: Date | null;
@@ -86,6 +88,7 @@ export async function POST(request: Request) {
         guardianPhone: true,
         country: true,
         state: true,
+        studentId: true,
         role: true,
         expiresAt: true,
         acceptedAt: true,
@@ -102,40 +105,79 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    const legacyRows = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        email: string;
-        name: string | null;
-        phone: string | null;
-        department: string | null;
-        guardianName: string | null;
-        guardianPhone: string | null;
-        country: string | null;
-        state: string | null;
-        role: string;
-        expiresAt: Date;
-        acceptedAt: Date | null;
-      }>
-    >`
-      SELECT
-        "id",
-        "email",
-        "name",
-        "phone",
-        "department",
-        "guardianName",
-        "guardianPhone",
-        "country",
-        "state",
-        "role"::text AS "role",
-        "expiresAt",
-        "acceptedAt"
-      FROM "Invitation"
-      WHERE "token" = ${token}
-      LIMIT 1
-    `;
-    invite = legacyRows[0] ?? null;
+    try {
+      const legacyRows = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          email: string;
+          name: string | null;
+          phone: string | null;
+          department: string | null;
+          guardianName: string | null;
+          guardianPhone: string | null;
+          country: string | null;
+          state: string | null;
+          studentId: string | null;
+          role: string;
+          expiresAt: Date;
+          acceptedAt: Date | null;
+        }>
+      >`
+        SELECT
+          "id",
+          "email",
+          "name",
+          "phone",
+          "department",
+          "guardianName",
+          "guardianPhone",
+          "country",
+          "state",
+          "studentId",
+          "role"::text AS "role",
+          "expiresAt",
+          "acceptedAt"
+        FROM "Invitation"
+        WHERE "token" = ${token}
+        LIMIT 1
+      `;
+      invite = legacyRows[0] ? { ...legacyRows[0], studentId: legacyRows[0].studentId ?? null } : null;
+    } catch {
+      const legacyRows = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          email: string;
+          name: string | null;
+          phone: string | null;
+          department: string | null;
+          guardianName: string | null;
+          guardianPhone: string | null;
+          country: string | null;
+          state: string | null;
+          role: string;
+          expiresAt: Date;
+          acceptedAt: Date | null;
+        }>
+      >`
+        SELECT
+          "id",
+          "email",
+          "name",
+          "phone",
+          "department",
+          "guardianName",
+          "guardianPhone",
+          "country",
+          "state",
+          "role"::text AS "role",
+          "expiresAt",
+          "acceptedAt"
+        FROM "Invitation"
+        WHERE "token" = ${token}
+        LIMIT 1
+      `;
+      invite = legacyRows[0] ? { ...legacyRows[0], studentId: null } : null;
+    }
   }
 
   if (!invite) {
@@ -177,6 +219,7 @@ export async function POST(request: Request) {
   const invitedGuardianPhone = invite.guardianPhone ?? readMetadataString(metadata?.guardianPhone);
   const invitedCountry = invite.country ?? readMetadataString(metadata?.country);
   const invitedState = invite.state ?? readMetadataString(metadata?.state);
+  const invitedStudentId = invite.studentId ?? readMetadataString(metadata?.studentId);
 
   const passwordHash = await bcrypt.hash(password, 10);
   const resolvedName = name || invitedName || null;
@@ -285,6 +328,18 @@ export async function POST(request: Request) {
       });
     }
   });
+
+  if (inviteRoleText === "STUDENT" && invitedStudentId) {
+    try {
+      await prisma.$executeRaw`
+        UPDATE "User"
+        SET "studentId" = ${invitedStudentId}, "updatedAt" = NOW()
+        WHERE "email" = ${invite.email}
+      `;
+    } catch {
+      // Ignore if DB column is not available yet.
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

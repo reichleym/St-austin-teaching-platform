@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -26,6 +28,7 @@ type AssignmentConfig = {
   allowLateSubmissions: boolean;
   attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
+  openAt: string | null;
   moduleId: string | null;
   lessonId: string | null;
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -117,18 +120,26 @@ type Props = {
   role: AppRole;
 };
 
-const toDateInput = (value: string | null) => {
+const toDateTimeInput = (value: string | null) => {
   if (!value) return "";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
 };
 
 const formatDate = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 };
 
 const formatMinutes = (minutes: number) => {
@@ -174,6 +185,7 @@ export function AssignmentsModule({ role }: Props) {
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createDueAt, setCreateDueAt] = useState("");
+  const [createOpenAt, setCreateOpenAt] = useState("");
   const [createMaxPoints, setCreateMaxPoints] = useState("100");
   const [createType, setCreateType] = useState<"HOMEWORK" | "QUIZ" | "EXAM">("HOMEWORK");
   const [createAllowedText, setCreateAllowedText] = useState(true);
@@ -200,6 +212,7 @@ export function AssignmentsModule({ role }: Props) {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDueAt, setEditDueAt] = useState("");
+  const [editOpenAt, setEditOpenAt] = useState("");
   const [editMaxPoints, setEditMaxPoints] = useState("100");
   const [editType, setEditType] = useState<"HOMEWORK" | "QUIZ" | "EXAM">("HOMEWORK");
   const [editAllowedText, setEditAllowedText] = useState(true);
@@ -413,20 +426,29 @@ export function AssignmentsModule({ role }: Props) {
   }, [loadSubmissions, selectedAssignmentId]);
 
   useEffect(() => {
-    if (!selectedAssignmentId || selectedAssignment?.config.assignmentType !== "QUIZ") {
+    if (
+      !selectedAssignmentId ||
+      (selectedAssignment?.config.assignmentType !== "QUIZ" && selectedAssignment?.config.assignmentType !== "EXAM")
+    ) {
       setQuizQuestions([]);
       setStudentQuizAnswers({});
       setStudentQuizStartedAt(null);
       return;
     }
-    void loadQuizQuestions(selectedAssignmentId);
+    if (selectedAssignment?.config.assignmentType === "QUIZ") {
+      void loadQuizQuestions(selectedAssignmentId);
+    }
     if (isStudent && !studentQuizStartedAt) {
       setStudentQuizStartedAt(new Date().toISOString());
     }
   }, [isStudent, loadQuizQuestions, selectedAssignment?.config.assignmentType, selectedAssignmentId, studentQuizStartedAt]);
 
   useEffect(() => {
-    if (!isStudent || selectedAssignment?.config.assignmentType !== "QUIZ" || !selectedAssignment.config.timerMinutes) {
+    if (
+      !isStudent ||
+      (selectedAssignment?.config.assignmentType !== "QUIZ" && selectedAssignment?.config.assignmentType !== "EXAM") ||
+      !selectedAssignment.config.timerMinutes
+    ) {
       return;
     }
     const timer = window.setInterval(() => {
@@ -441,7 +463,8 @@ export function AssignmentsModule({ role }: Props) {
     if (!selected) return;
     setEditTitle(selected.title);
     setEditDescription(selected.description ?? "");
-    setEditDueAt(toDateInput(selected.dueAt));
+    setEditDueAt(toDateTimeInput(selected.dueAt));
+    setEditOpenAt(toDateTimeInput(selected.config.openAt));
     setEditMaxPoints(String(selected.maxPoints));
     setEditType(selected.config.assignmentType);
     setEditAllowedText(selected.config.allowedSubmissionTypes.includes("TEXT"));
@@ -507,13 +530,14 @@ export function AssignmentsModule({ role }: Props) {
           title: createTitle,
           description: createDescription,
           dueAt: createDueAt || null,
+          openAt: createOpenAt || null,
           maxPoints: createMaxPoints,
           assignmentType: createType,
           allowedSubmissionTypes: buildAllowedTypes(createAllowedText, createAllowedFile),
           maxAttempts: Number(createAttempts),
           allowLateSubmissions: createAllowLateSubmissions,
           attemptScoringStrategy: createAttemptScoringStrategy,
-          timerMinutes: createType === "QUIZ" ? Number(createTimerMinutes || 0) || null : null,
+          timerMinutes: createType === "QUIZ" || createType === "EXAM" ? Number(createTimerMinutes || 0) || null : null,
           rubricSteps: createRubric.split("\n").map((item) => item.trim()).filter(Boolean),
           autoGrade: createType === "QUIZ",
           moduleId: createModuleId || null,
@@ -553,6 +577,7 @@ export function AssignmentsModule({ role }: Props) {
       setCreateTitle("");
       setCreateDescription("");
       setCreateDueAt("");
+      setCreateOpenAt("");
       setCreateMaxPoints("100");
       setCreateType("HOMEWORK");
       setCreateAttempts("1");
@@ -588,13 +613,14 @@ export function AssignmentsModule({ role }: Props) {
           title: editTitle,
           description: editDescription,
           dueAt: editDueAt || null,
+          openAt: editOpenAt || null,
           maxPoints: editMaxPoints,
           assignmentType: editType,
           allowedSubmissionTypes: buildAllowedTypes(editAllowedText, editAllowedFile),
           maxAttempts: Number(editAttempts),
           allowLateSubmissions: editAllowLateSubmissions,
           attemptScoringStrategy: editAttemptScoringStrategy,
-          timerMinutes: editType === "QUIZ" ? Number(editTimerMinutes || 0) || null : null,
+          timerMinutes: editType === "QUIZ" || editType === "EXAM" ? Number(editTimerMinutes || 0) || null : null,
           rubricSteps: editRubric.split("\n").map((item) => item.trim()).filter(Boolean),
           autoGrade: editType === "QUIZ",
           moduleId: editModuleId || null,
@@ -772,7 +798,10 @@ export function AssignmentsModule({ role }: Props) {
           fileUrl,
           fileName,
           mimeType,
-          quizStartedAt: selectedAssignment.config.assignmentType === "QUIZ" ? studentQuizStartedAt : null,
+          quizStartedAt:
+            selectedAssignment.config.assignmentType === "QUIZ" || selectedAssignment.config.assignmentType === "EXAM"
+              ? studentQuizStartedAt
+              : null,
           quizAnswers:
             selectedAssignment.config.assignmentType === "QUIZ"
               ? Object.entries(studentQuizAnswers).map(([questionId, selectedOptionIndex]) => ({
@@ -902,7 +931,7 @@ export function AssignmentsModule({ role }: Props) {
   const quizRemainingSeconds = useMemo(() => {
     if (
       !isStudent ||
-      selectedAssignment?.config.assignmentType !== "QUIZ" ||
+      (selectedAssignment?.config.assignmentType !== "QUIZ" && selectedAssignment?.config.assignmentType !== "EXAM") ||
       !selectedAssignment.config.timerMinutes ||
       !studentQuizStartedAt
     ) {
@@ -918,18 +947,18 @@ export function AssignmentsModule({ role }: Props) {
   const studentAttemptCount = isStudent ? submissions.length : 0;
   const studentCanSubmit = useMemo(() => {
     if (!isStudent || !selectedAssignment) return false;
-    if (selectedAssignment.config.assignmentType === "QUIZ") {
-      return studentAttemptCount < selectedAssignment.config.maxAttempts;
-    }
-    return studentAttemptCount === 0;
+    return studentAttemptCount < selectedAssignment.config.maxAttempts;
   }, [isStudent, selectedAssignment, studentAttemptCount]);
 
   return (
     <section className="grid min-w-0 gap-4">
+      <LoadingOverlay
+        active={loading || gradeEditRequestsLoading || submissionsLoading || quizQuestionsLoading}
+        label="Loading assignments..."
+      />
       {isSuperAdmin ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Pending Grade Edit Requests</p>
-          {gradeEditRequestsLoading ? <p className="brand-muted mt-3 text-sm">Loading requests...</p> : null}
           {!gradeEditRequestsLoading && gradeEditRequests.length === 0 ? (
             <p className="brand-muted mt-3 text-sm">No pending requests.</p>
           ) : null}
@@ -1013,9 +1042,7 @@ export function AssignmentsModule({ role }: Props) {
             ) : null}
           </div>
         </div>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-        {loading ? <p className="brand-muted mt-3 text-sm">Loading assignments...</p> : null}
-
+        <ToastMessage type="error" message={error} />
         {!loading && filteredAssignments.length ? (
           <div className="mt-3 w-full max-w-full overflow-x-auto">
           <table className="w-full min-w-[780px] text-left text-sm lg:min-w-full">
@@ -1099,30 +1126,25 @@ export function AssignmentsModule({ role }: Props) {
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
           <p className="brand-muted mt-2 break-words text-sm">
-            Submission Types: {selectedAssignment.config.allowedSubmissionTypes.join(", ")} | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
-            {selectedAssignment.config.assignmentType === "QUIZ" && selectedAssignment.config.timerMinutes
-              ? ` | Timer: ${selectedAssignment.config.timerMinutes} min`
-              : ""}
+            Open: {formatDate(selectedAssignment.config.openAt)} | Due: {formatDate(selectedAssignment.dueAt)} | Submission Types:{" "}
+            {selectedAssignment.config.allowedSubmissionTypes.join(", ")} | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
+            {selectedAssignment.config.timerMinutes ? ` | Timer: ${selectedAssignment.config.timerMinutes} min` : ""}
           </p>
 
           {isStudent ? (
             <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit}>
-              {submissionsLoading ? <p className="brand-muted text-sm">Checking your submission status...</p> : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
-                  {selectedAssignment.config.assignmentType === "QUIZ"
-                    ? "You have reached the maximum quiz attempts."
-                    : "You already submitted this assignment. Resubmission is not allowed."}
+                  You have reached the maximum attempts for this assignment.
+                </p>
+              ) : null}
+              {quizRemainingSeconds !== null ? (
+                <p className="text-sm font-semibold text-[#1f518f]">
+                  Time Remaining: {Math.floor(quizRemainingSeconds / 60)}m {quizRemainingSeconds % 60}s
                 </p>
               ) : null}
               {selectedAssignment.config.assignmentType === "QUIZ" ? (
                 <>
-                  {quizRemainingSeconds !== null ? (
-                    <p className="text-sm font-semibold text-[#1f518f]">
-                      Time Remaining: {Math.floor(quizRemainingSeconds / 60)}m {quizRemainingSeconds % 60}s
-                    </p>
-                  ) : null}
-                  {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading quiz questions...</p> : null}
                   {quizQuestions.map((question, index) => (
                     <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                       <p className="text-sm font-semibold text-[#0d3f80]">
@@ -1161,7 +1183,12 @@ export function AssignmentsModule({ role }: Props) {
               {studentCanSubmit ? (
                 <button
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
-                  disabled={studentPending || submissionsLoading || (selectedAssignment.config.assignmentType === "QUIZ" && quizRemainingSeconds === 0)}
+                  disabled={
+                    studentPending ||
+                    submissionsLoading ||
+                    ((selectedAssignment.config.assignmentType === "QUIZ" || selectedAssignment.config.assignmentType === "EXAM") &&
+                      quizRemainingSeconds === 0)
+                  }
                 >
                   {studentPending ? "Submitting..." : "Submit Attempt"}
                 </button>
@@ -1201,7 +1228,6 @@ export function AssignmentsModule({ role }: Props) {
               </form>
 
               <div className="mt-3 grid gap-2">
-                {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
                 {!quizQuestionsLoading && quizQuestions.length === 0 ? <p className="brand-muted text-sm">No quiz questions yet.</p> : null}
                 {quizQuestions.map((question, index) => (
                   <div key={question.id} className="rounded-md border border-[#e7f0fc] p-2">
@@ -1226,7 +1252,6 @@ export function AssignmentsModule({ role }: Props) {
           {(canManage || isStudent || isAdminReadOnly) ? (
             <div className="mt-4 space-y-2">
               <p className="brand-label">Submissions</p>
-              {submissionsLoading ? <p className="brand-muted text-sm">Loading submissions...</p> : null}
               {!submissionsLoading && submissions.length === 0 ? <p className="brand-muted text-sm">No submissions yet.</p> : null}
               {isAdminReadOnly && submissions.length ? (
                 <div className="w-full overflow-x-auto">
@@ -1427,8 +1452,19 @@ export function AssignmentsModule({ role }: Props) {
             <input className="brand-input" placeholder="Assignment title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
             <textarea className="brand-input min-h-[84px]" placeholder="Instructions" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} />
             <textarea className="brand-input min-h-[84px]" placeholder="Rubric steps (one per line)" value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
-            <div className="grid gap-3 md:grid-cols-3">
-              <input className="brand-input" type="date" value={createDueAt} onChange={(event) => setCreateDueAt(event.currentTarget.value)} />
+            <div className="grid gap-3 md:grid-cols-4">
+              <input
+                className="brand-input"
+                type="datetime-local"
+                value={createOpenAt}
+                onChange={(event) => setCreateOpenAt(event.currentTarget.value)}
+              />
+              <input
+                className="brand-input"
+                type="datetime-local"
+                value={createDueAt}
+                onChange={(event) => setCreateDueAt(event.currentTarget.value)}
+              />
               <input className="brand-input" type="number" min="1" step="0.01" value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
               <input className="brand-input" type="number" min="1" step="1" value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
             </div>
@@ -1457,69 +1493,71 @@ export function AssignmentsModule({ role }: Props) {
               <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
               <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
             </div>
-            {createType === "QUIZ" ? (
+            {createType === "QUIZ" || createType === "EXAM" ? (
               <div className="grid gap-3">
                 <input
                   className="brand-input"
                   type="number"
                   min="1"
                   step="1"
-                  placeholder="Quiz timer (minutes)"
+                  placeholder="Timer (minutes)"
                   value={createTimerMinutes}
                   onChange={(event) => setCreateTimerMinutes(event.currentTarget.value)}
                 />
-                <div className="rounded-md border border-[#dbe9fb] p-3">
-                  <p className="brand-label">Quiz MCQ Builder</p>
-                  <div className="mt-2 grid gap-2">
-                    <input
-                      className="brand-input"
-                      placeholder="Question prompt"
-                      value={createQuestionPrompt}
-                      onChange={(event) => setCreateQuestionPrompt(event.currentTarget.value)}
-                    />
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <input className="brand-input" placeholder="Option A" value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option B" value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option C (optional)" value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option D (optional)" value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <select className="brand-input" value={createQuestionCorrectIndex} onChange={(event) => setCreateQuestionCorrectIndex(event.currentTarget.value)}>
-                        <option value="0">Correct: Option A</option>
-                        <option value="1">Correct: Option B</option>
-                        <option value="2">Correct: Option C</option>
-                        <option value="3">Correct: Option D</option>
-                      </select>
-                      <input className="brand-input" type="number" min="0.5" step="0.5" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
-                    </div>
-                    <button type="button" className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" onClick={addDraftQuestion}>
-                      Add To Quiz Draft
-                    </button>
-                  </div>
-
-                  <div className="mt-3 grid gap-2">
-                    {createDraftQuestions.length === 0 ? <p className="brand-muted text-sm">No draft questions added yet.</p> : null}
-                    {createDraftQuestions.map((question, index) => (
-                      <div key={`${question.prompt}_${index}`} className="rounded-md border border-[#e7f0fc] p-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-[#0d3f80]">
-                            Q{index + 1}. {question.prompt}
-                          </p>
-                          <button
-                            type="button"
-                            className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
-                            onClick={() =>
-                              setCreateDraftQuestions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
+                {createType === "QUIZ" ? (
+                  <div className="rounded-md border border-[#dbe9fb] p-3">
+                    <p className="brand-label">Quiz MCQ Builder</p>
+                    <div className="mt-2 grid gap-2">
+                      <input
+                        className="brand-input"
+                        placeholder="Question prompt"
+                        value={createQuestionPrompt}
+                        onChange={(event) => setCreateQuestionPrompt(event.currentTarget.value)}
+                      />
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <input className="brand-input" placeholder="Option A" value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
+                        <input className="brand-input" placeholder="Option B" value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
+                        <input className="brand-input" placeholder="Option C (optional)" value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
+                        <input className="brand-input" placeholder="Option D (optional)" value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
                       </div>
-                    ))}
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <select className="brand-input" value={createQuestionCorrectIndex} onChange={(event) => setCreateQuestionCorrectIndex(event.currentTarget.value)}>
+                          <option value="0">Correct: Option A</option>
+                          <option value="1">Correct: Option B</option>
+                          <option value="2">Correct: Option C</option>
+                          <option value="3">Correct: Option D</option>
+                        </select>
+                        <input className="brand-input" type="number" min="0.5" step="0.5" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
+                      </div>
+                      <button type="button" className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" onClick={addDraftQuestion}>
+                        Add To Quiz Draft
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-2">
+                      {createDraftQuestions.length === 0 ? <p className="brand-muted text-sm">No draft questions added yet.</p> : null}
+                      {createDraftQuestions.map((question, index) => (
+                        <div key={`${question.prompt}_${index}`} className="rounded-md border border-[#e7f0fc] p-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-[#0d3f80]">
+                              Q{index + 1}. {question.prompt}
+                            </p>
+                            <button
+                              type="button"
+                              className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
+                              onClick={() =>
+                                setCreateDraftQuestions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                              }
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             ) : null}
             <div className="grid gap-3 md:grid-cols-2">
@@ -1576,8 +1614,19 @@ export function AssignmentsModule({ role }: Props) {
             <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
             <textarea className="brand-input min-h-[84px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
             <textarea className="brand-input min-h-[84px]" value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
-            <div className="grid gap-3 md:grid-cols-3">
-              <input className="brand-input" type="date" value={editDueAt} onChange={(event) => setEditDueAt(event.currentTarget.value)} />
+            <div className="grid gap-3 md:grid-cols-4">
+              <input
+                className="brand-input"
+                type="datetime-local"
+                value={editOpenAt}
+                onChange={(event) => setEditOpenAt(event.currentTarget.value)}
+              />
+              <input
+                className="brand-input"
+                type="datetime-local"
+                value={editDueAt}
+                onChange={(event) => setEditDueAt(event.currentTarget.value)}
+              />
               <input className="brand-input" type="number" min="1" step="0.01" value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
               <input className="brand-input" type="number" min="1" step="1" value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
             </div>
@@ -1606,13 +1655,13 @@ export function AssignmentsModule({ role }: Props) {
               <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
               <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
             </div>
-            {editType === "QUIZ" ? (
+            {editType === "QUIZ" || editType === "EXAM" ? (
               <input
                 className="brand-input"
                 type="number"
                 min="1"
                 step="1"
-                placeholder="Quiz timer (minutes)"
+                placeholder="Timer (minutes)"
                 value={editTimerMinutes}
                 onChange={(event) => setEditTimerMinutes(event.currentTarget.value)}
               />

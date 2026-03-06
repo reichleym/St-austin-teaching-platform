@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -24,6 +26,8 @@ type DiscussionItem = {
   openAt: string | null;
   closeAt: string | null;
   allowLate: boolean;
+  isGraded: boolean;
+  maxPoints: number | null;
   isLocked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +51,7 @@ type Indicator = {
   hasInitialPost: boolean;
   replyCount: number;
   status: "COMPLETED" | "PARTIAL" | "NOT_PARTICIPATED";
+  score: number | null;
 };
 
 type PostItem = {
@@ -75,6 +80,8 @@ type SelectedDiscussion = {
   openAt: string | null;
   closeAt: string | null;
   allowLate: boolean;
+  isGraded: boolean;
+  maxPoints: number | null;
   isLocked: boolean;
   posts: PostItem[];
   indicators: Indicator[];
@@ -108,7 +115,14 @@ const formatDateTime = (value: string | null) => {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString();
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 };
 
 const getPostingBlockReason = (
@@ -155,6 +169,8 @@ export function EngagementModule({ role }: Props) {
   const [createOpenAt, setCreateOpenAt] = useState("");
   const [createCloseAt, setCreateCloseAt] = useState("");
   const [createAllowLate, setCreateAllowLate] = useState(true);
+  const [createIsGraded, setCreateIsGraded] = useState(false);
+  const [createMaxPoints, setCreateMaxPoints] = useState("");
 
   const [postContent, setPostContent] = useState("");
   const [replyToPostId, setReplyToPostId] = useState("");
@@ -211,6 +227,8 @@ export function EngagementModule({ role }: Props) {
           openAt: createOpenAt || null,
           closeAt: createCloseAt || null,
           allowLate: createAllowLate,
+          isGraded: createIsGraded,
+          maxPoints: createIsGraded ? Number(createMaxPoints || 0) || null : null,
         }),
       });
       const raw = await response.text();
@@ -225,6 +243,8 @@ export function EngagementModule({ role }: Props) {
       setCreateOpenAt("");
       setCreateCloseAt("");
       setCreateAllowLate(true);
+      setCreateIsGraded(false);
+      setCreateMaxPoints("");
       await load(selectedCourseId, result.discussionId);
     } catch {
       setError("Unable to create discussion.");
@@ -318,8 +338,8 @@ export function EngagementModule({ role }: Props) {
           </select>
         </div>
 
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-        {loading ? <p className="brand-muted mt-3 text-sm">Loading discussions...</p> : null}
+        <ToastMessage type="error" message={error} />
+        {loading ? <div className="mt-3"><LoadingIndicator label="Loading discussions..." /></div> : null}
 
         {canModerate ? (
           <form className="mt-4 grid gap-2 rounded-md border border-[#dbe9fb] p-3" onSubmit={onCreateDiscussion}>
@@ -340,6 +360,23 @@ export function EngagementModule({ role }: Props) {
               <label className="brand-input inline-flex items-center gap-2">
                 <input type="checkbox" checked={createAllowLate} onChange={(event) => setCreateAllowLate(event.currentTarget.checked)} /> Allow late
               </label>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <label className="brand-input inline-flex items-center gap-2">
+                <input type="checkbox" checked={createIsGraded} onChange={(event) => setCreateIsGraded(event.currentTarget.checked)} />
+                Graded discussion
+              </label>
+              <input
+                className="brand-input"
+                type="number"
+                min={1}
+                step={1}
+                value={createMaxPoints}
+                onChange={(event) => setCreateMaxPoints(event.currentTarget.value)}
+                placeholder="Max points"
+                disabled={!createIsGraded}
+                required={createIsGraded}
+              />
             </div>
             <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={pending === "create-discussion" || !createModuleId || !modules.length}>
               {pending === "create-discussion" ? "Creating..." : "Create Topic"}
@@ -368,7 +405,9 @@ export function EngagementModule({ role }: Props) {
               </div>
               <p className="mt-1 text-xs text-[#3768ac]">{discussion.prompt}</p>
               <p className="mt-1 text-xs text-[#3a689f]">
-                Open: {formatDateTime(discussion.openAt)} | Close: {formatDateTime(discussion.closeAt)} | {discussion.isLocked ? "Locked" : "Open"}
+                Open: {formatDateTime(discussion.openAt)} | Close: {formatDateTime(discussion.closeAt)} |{" "}
+                {discussion.isGraded ? `Graded (${discussion.maxPoints ?? 0} pts)` : "Ungraded"} |{" "}
+                {discussion.isLocked ? "Locked" : "Open"}
               </p>
             </article>
           ))}
@@ -383,6 +422,9 @@ export function EngagementModule({ role }: Props) {
               <p className="brand-section-title">Discussion Workspace</p>
               <h3 className="mt-1 text-lg font-bold text-[#0d3f80]">{selectedDiscussion.title}</h3>
               <p className="mt-1 text-sm text-[#3768ac]">{selectedDiscussion.prompt}</p>
+              <p className="mt-1 text-xs text-[#3a689f]">
+                {selectedDiscussion.isGraded ? `Graded (${selectedDiscussion.maxPoints ?? 0} pts)` : "Ungraded"}
+              </p>
             </div>
             {canModerate ? (
               <button
@@ -502,6 +544,7 @@ export function EngagementModule({ role }: Props) {
                     <th className="px-2 py-1.5">Initial Post</th>
                     <th className="px-2 py-1.5">Replies</th>
                     <th className="px-2 py-1.5">Status</th>
+                    {selectedDiscussion.isGraded ? <th className="px-2 py-1.5">Score</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -511,6 +554,9 @@ export function EngagementModule({ role }: Props) {
                       <td className="px-2 py-1.5">{item.hasInitialPost ? "Yes" : "No"}</td>
                       <td className="px-2 py-1.5">{item.replyCount}</td>
                       <td className="px-2 py-1.5">{item.status}</td>
+                      {selectedDiscussion.isGraded ? (
+                        <td className="px-2 py-1.5">{item.score !== null ? item.score.toFixed(1) : "-"}</td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

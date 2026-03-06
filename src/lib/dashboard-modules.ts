@@ -47,6 +47,18 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["SUPER_ADMIN", "DEPARTMENT_HEAD", "TEACHER", "STUDENT"],
   },
   {
+    slug: "oversight",
+    title: "Oversight",
+    description: "Department head course oversight and teacher follow-ups.",
+    roles: ["SUPER_ADMIN", "DEPARTMENT_HEAD"],
+  },
+  {
+    slug: "messages",
+    title: "Messages",
+    description: "View reminders and comments from department heads.",
+    roles: ["TEACHER"],
+  },
+  {
     slug: "user-access",
     title: "User & Access",
     description: "User lifecycle, invites, and access policy controls.",

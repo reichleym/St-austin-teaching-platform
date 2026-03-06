@@ -17,6 +17,7 @@ type AssignmentConfigRecord = {
   allowLateSubmissions: boolean;
   attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
+  openAt: string | null;
   moduleId: string | null;
   lessonId: string | null;
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -32,6 +33,7 @@ type CreateAssignmentBody = {
   title?: string;
   description?: string | null;
   dueAt?: string | null;
+  openAt?: string | null;
   maxPoints?: number | string;
   assignmentType?: AssignmentType;
   rubricSteps?: string[];
@@ -51,6 +53,7 @@ type UpdateAssignmentBody = {
   title?: string;
   description?: string | null;
   dueAt?: string | null;
+  openAt?: string | null;
   maxPoints?: number | string;
   assignmentType?: AssignmentType;
   rubricSteps?: string[];
@@ -105,7 +108,6 @@ function parseRubricSteps(input: unknown): string[] {
 }
 
 function parseMaxAttempts(input: unknown, assignmentType: AssignmentType) {
-  if (assignmentType === "EXAM") return 1;
   const value = typeof input === "number" ? input : Number(input);
   if (!Number.isInteger(value) || value < 1) return 1;
   return Math.min(value, 20);
@@ -117,7 +119,7 @@ function parseCompletionRule(input: unknown): AssignmentConfigRecord["completion
 }
 
 function parseTimerMinutes(input: unknown, assignmentType: AssignmentType) {
-  if (assignmentType !== "QUIZ") return null;
+  if (assignmentType !== "QUIZ" && assignmentType !== "EXAM") return null;
   if (input === null || input === undefined || input === "") return null;
   const value = typeof input === "number" ? input : Number(input);
   if (!Number.isInteger(value) || value < 1) return null;
@@ -144,6 +146,7 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
   "allowLateSubmissions" BOOLEAN NOT NULL DEFAULT true,
   "attemptScoringStrategy" TEXT NOT NULL DEFAULT 'LATEST',
   "timerMinutes" INTEGER,
+  "openAt" TIMESTAMP(3),
   "moduleId" TEXT,
   "lessonId" TEXT,
   "completionRule" TEXT NOT NULL DEFAULT 'SUBMISSION_OR_GRADE',
@@ -154,6 +157,7 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_moduleId_idx" ON "AssignmentConfig"("moduleId");
 CREATE INDEX IF NOT EXISTS "AssignmentConfig_lessonId_idx" ON "AssignmentConfig"("lessonId");
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "timerMinutes" INTEGER;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "openAt" TIMESTAMP(3);
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "allowLateSubmissions" BOOLEAN;
 `);
@@ -222,6 +226,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowLateSubmissions: boolean | null;
       attemptScoringStrategy: string | null;
       timerMinutes: number | null;
+      openAt: Date | null;
       moduleId: string | null;
       lessonId: string | null;
       completionRule: string;
@@ -237,6 +242,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       "allowLateSubmissions",
       "attemptScoringStrategy",
       "timerMinutes",
+      "openAt",
       "moduleId",
       "lessonId",
       "completionRule"
@@ -256,6 +262,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowLateSubmissions: row.allowLateSubmissions !== false,
       attemptScoringStrategy: parseAttemptScoringStrategy(row.attemptScoringStrategy),
       timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
+      openAt: row.openAt?.toISOString() ?? null,
       moduleId: row.moduleId,
       lessonId: row.lessonId,
       completionRule: parseCompletionRule(row.completionRule),
@@ -273,15 +280,16 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
   const allowLateSubmissions = input.allowLateSubmissions !== false;
   const attemptScoringStrategy = parseAttemptScoringStrategy(input.attemptScoringStrategy);
   const timerMinutes = parseTimerMinutes(input.timerMinutes, assignmentType);
+  const openAt = parseOptionalDateTime(input.openAt);
   const moduleId = typeof input.moduleId === "string" && input.moduleId.trim() ? input.moduleId.trim() : null;
   const lessonId = typeof input.lessonId === "string" && input.lessonId.trim() ? input.lessonId.trim() : null;
   const completionRule = parseCompletionRule(input.completionRule);
 
   await prisma.$executeRaw`
     INSERT INTO "AssignmentConfig"
-      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","allowLateSubmissions","attemptScoringStrategy","timerMinutes","moduleId","lessonId","completionRule","updatedAt")
+      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","allowLateSubmissions","attemptScoringStrategy","timerMinutes","openAt","moduleId","lessonId","completionRule","updatedAt")
     VALUES
-      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${allowLateSubmissions}, ${attemptScoringStrategy}, ${timerMinutes}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
+      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${allowLateSubmissions}, ${attemptScoringStrategy}, ${timerMinutes}, ${openAt ?? null}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
     ON CONFLICT ("assignmentId")
     DO UPDATE SET
       "assignmentType" = EXCLUDED."assignmentType",
@@ -292,6 +300,7 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
       "allowLateSubmissions" = EXCLUDED."allowLateSubmissions",
       "attemptScoringStrategy" = EXCLUDED."attemptScoringStrategy",
       "timerMinutes" = EXCLUDED."timerMinutes",
+      "openAt" = EXCLUDED."openAt",
       "moduleId" = EXCLUDED."moduleId",
       "lessonId" = EXCLUDED."lessonId",
       "completionRule" = EXCLUDED."completionRule",
@@ -346,6 +355,7 @@ function defaultConfig(assignmentId: string): AssignmentConfigRecord {
     allowLateSubmissions: true,
     attemptScoringStrategy: "LATEST",
     timerMinutes: null,
+    openAt: null,
     moduleId: null,
     lessonId: null,
     completionRule: "SUBMISSION_OR_GRADE",
@@ -435,6 +445,7 @@ export async function POST(request: NextRequest) {
     const title = body.title?.trim() ?? "";
     const description = body.description?.trim() || null;
     const dueAt = parseOptionalDateTime(body.dueAt);
+    const openAt = parseOptionalDateTime(body.openAt);
     const maxPoints = parseMaxPoints(body.maxPoints) ?? 100;
 
     if (!courseId || !title) {
@@ -442,6 +453,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.dueAt !== undefined && dueAt === undefined) {
       return NextResponse.json({ error: "Invalid due date." }, { status: 400 });
+    }
+    if (body.openAt !== undefined && openAt === undefined) {
+      return NextResponse.json({ error: "Invalid open date." }, { status: 400 });
     }
 
     const course = await prisma.course.findUnique({
@@ -571,6 +585,10 @@ export async function PATCH(request: NextRequest) {
       const dueAt = parseOptionalDateTime(body.dueAt);
       if (dueAt === undefined) return NextResponse.json({ error: "Invalid due date." }, { status: 400 });
       data.dueAt = dueAt;
+    }
+    if (body.openAt !== undefined) {
+      const openAt = parseOptionalDateTime(body.openAt);
+      if (openAt === undefined) return NextResponse.json({ error: "Invalid open date." }, { status: 400 });
     }
     if (body.maxPoints !== undefined) {
       const maxPoints = parseMaxPoints(body.maxPoints);

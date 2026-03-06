@@ -80,6 +80,7 @@ ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizStartedAt" TIME
 `);
   await prisma.$executeRawUnsafe(`
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "openAt" TIMESTAMP(3);
 `);
 
   await prisma.$executeRawUnsafe(`
@@ -164,6 +165,7 @@ async function getAssignmentConfig(assignmentId: string) {
       attemptScoringStrategy: string | null;
       allowLateSubmissions: boolean | null;
       timerMinutes: number | null;
+      openAt: Date | null;
       dueAt: Date | null;
       maxPoints: Prisma.Decimal;
       courseId: string;
@@ -179,6 +181,7 @@ async function getAssignmentConfig(assignmentId: string) {
       COALESCE(cfg."attemptScoringStrategy", 'LATEST') AS "attemptScoringStrategy",
       COALESCE(cfg."allowLateSubmissions", true) AS "allowLateSubmissions",
       cfg."timerMinutes",
+      cfg."openAt",
       a."dueAt",
       a."maxPoints",
       a."courseId",
@@ -206,6 +209,7 @@ async function getAssignmentConfig(assignmentId: string) {
     allowLateSubmissions: row.allowLateSubmissions !== false,
     timerMinutes:
       row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
+    openAt: row.openAt,
     dueAt: row.dueAt,
     maxPoints: Number(row.maxPoints),
     courseId: row.courseId,
@@ -752,21 +756,18 @@ export async function POST(request: NextRequest) {
     `;
     const attemptCount = Number(countRows[0]?.count ?? 0);
 
-    if (config.assignmentType !== "QUIZ" && attemptCount >= 1) {
-      return NextResponse.json(
-        { error: "This assignment already has a submission. Only one submission is allowed." },
-        { status: 400 }
-      );
-    }
-
     if (attemptCount >= config.maxAttempts) {
       return NextResponse.json({ error: `Maximum attempts reached (${config.maxAttempts}).` }, { status: 400 });
+    }
+
+    const now = new Date();
+    if (config.openAt && now < config.openAt) {
+      return NextResponse.json({ error: "This assignment is not open yet." }, { status: 400 });
     }
 
     let lateByMinutes = 0;
     let isLate = false;
     if (config.dueAt) {
-      const now = new Date();
       if (now.getTime() > config.dueAt.getTime()) {
         isLate = true;
         lateByMinutes = Math.floor((now.getTime() - config.dueAt.getTime()) / (1000 * 60));
@@ -788,6 +789,20 @@ export async function POST(request: NextRequest) {
     const id = `asb_${Math.random().toString(36).slice(2, 14)}${Date.now().toString(36)}`;
     const attemptNumber = attemptCount + 1;
 
+    const timerMinutes = config.timerMinutes ?? 0;
+    const isTimedAssessment =
+      timerMinutes > 0 && (config.assignmentType === "QUIZ" || config.assignmentType === "EXAM");
+    const quizStartedAt = isTimedAssessment ? parseQuizStartedAt(body.quizStartedAt) : null;
+    if (isTimedAssessment && !quizStartedAt) {
+      return NextResponse.json({ error: "Start time is required for timed assessments." }, { status: 400 });
+    }
+    if (isTimedAssessment && quizStartedAt) {
+      const elapsedMs = Date.now() - quizStartedAt.getTime();
+      if (elapsedMs > timerMinutes * 60 * 1000) {
+        return NextResponse.json({ error: "Assessment timer expired. Submission rejected." }, { status: 400 });
+      }
+    }
+
     if (config.assignmentType === "QUIZ") {
       const quizQuestions = await prisma.$queryRaw<
         Array<{ id: string; correctOptionIndex: number; points: number; options: Prisma.JsonValue }>
@@ -799,17 +814,6 @@ export async function POST(request: NextRequest) {
       `;
       if (!quizQuestions.length) {
         return NextResponse.json({ error: "Quiz has no configured questions." }, { status: 400 });
-      }
-
-      const quizStartedAt = parseQuizStartedAt(body.quizStartedAt);
-      if (config.timerMinutes && !quizStartedAt) {
-        return NextResponse.json({ error: "Quiz start time is required for timed quizzes." }, { status: 400 });
-      }
-      if (config.timerMinutes && quizStartedAt) {
-        const elapsedMs = Date.now() - quizStartedAt.getTime();
-        if (elapsedMs > config.timerMinutes * 60 * 1000) {
-          return NextResponse.json({ error: "Quiz timer expired. Submission rejected." }, { status: 400 });
-        }
       }
 
       const answerMap = new Map(quizAnswers.map((item) => [item.questionId, item.selectedOptionIndex]));
@@ -897,9 +901,9 @@ export async function POST(request: NextRequest) {
 
     await prisma.$executeRaw`
       INSERT INTO "AssignmentSubmission"
-      ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","status")
+      ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","quizStartedAt","status")
       VALUES
-      (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${textResponse}, ${fileUrl}, ${fileName}, ${mimeType}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${"SUBMITTED"})
+      (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${textResponse}, ${fileUrl}, ${fileName}, ${mimeType}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${quizStartedAt}, ${"SUBMITTED"})
     `;
 
     await queuePlagiarismCheck(id);

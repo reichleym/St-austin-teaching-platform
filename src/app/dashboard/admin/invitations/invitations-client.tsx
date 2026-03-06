@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 
 type InviteRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "DEPARTMENT_HEAD";
 
@@ -80,6 +81,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
       const department = String(formData.get("department") ?? "");
       const subjects = String(formData.get("subjects") ?? "");
       const employeeId = String(formData.get("employeeId") ?? "");
+      const studentId = String(formData.get("studentId") ?? "");
       const guardianName = String(formData.get("guardianName") ?? "");
       const guardianPhone = String(formData.get("guardianPhone") ?? "");
       const country = String(formData.get("country") ?? "");
@@ -97,6 +99,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
           department,
           subjects,
           employeeId,
+          studentId,
           guardianName,
           guardianPhone,
           country,
@@ -255,6 +258,10 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
             <p className="brand-section-title">Student Profile</p>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <label className="grid gap-1.5">
+                <span className="brand-label">Student ID</span>
+                <input className="brand-input" type="text" name="studentId" placeholder="STU-1024" />
+              </label>
+              <label className="grid gap-1.5">
                 <span className="brand-label">Department</span>
                 <input className="brand-input" type="text" name="department" required placeholder="Science" />
               </label>
@@ -271,18 +278,15 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
         ) : null}
 
         <div>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {warning ? <p className="text-sm text-amber-700">{warning}</p> : null}
+          <ToastMessage type="error" message={error} />
+          <ToastMessage type="warning" message={warning} />
+          <ToastMessage type="success" message={inviteUrl ? "Invitation sent successfully." : ""} />
         </div>
 
         <button className="btn-brand-primary w-full px-4 py-2.5 disabled:opacity-60" disabled={isPending}>
           {isPending ? "Creating invite..." : "Create Invitation"}
         </button>
       </form>
-
-      {inviteUrl ? (
-        <p className="mt-4 text-sm font-semibold text-emerald-700">Invitation sent successfully.</p>
-      ) : null}
     </>
   );
 }

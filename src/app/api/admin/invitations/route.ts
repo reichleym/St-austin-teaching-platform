@@ -33,13 +33,15 @@ function isInvitationPhoneCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `guardianPhone`") ||
     error.message.includes("Unknown argument `country`") ||
     error.message.includes("Unknown argument `state`") ||
+    error.message.includes("Unknown argument `studentId`") ||
     error.message.includes("Unknown field `phone`") ||
     error.message.includes("Unknown field `name`") ||
     error.message.includes("Unknown field `department`") ||
     error.message.includes("Unknown field `guardianName`") ||
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `country`") ||
-    error.message.includes("Unknown field `state`")
+    error.message.includes("Unknown field `state`") ||
+    error.message.includes("Unknown field `studentId`")
   );
 }
 
@@ -69,6 +71,29 @@ END $$;
   `);
 }
 
+async function ensureInvitationSchema() {
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Invitation" ADD COLUMN IF NOT EXISTS "studentId" TEXT;`);
+  } catch {
+    // Ignore if table is missing or not yet migrated.
+  }
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "studentId" TEXT;`);
+  } catch {
+    // Ignore if table is missing or not yet migrated.
+  }
+  try {
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_studentId_key" ON "User"("studentId");`);
+  } catch {
+    // Ignore index creation errors to avoid blocking invites.
+  }
+  try {
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Invitation_studentId_idx" ON "Invitation"("studentId");`);
+  } catch {
+    // Ignore index creation errors to avoid blocking invites.
+  }
+}
+
 function makeId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
 }
@@ -95,6 +120,7 @@ async function createInvitationRaw(params: {
   guardianPhone?: string | null;
   country?: string | null;
   state?: string | null;
+  studentId?: string | null;
 }) {
   const id = makeId("inv");
   try {
@@ -102,7 +128,7 @@ async function createInvitationRaw(params: {
       Array<{ id: string; email: string; role: string; token: string; expiresAt: Date }>
     >`
       INSERT INTO "Invitation"
-        ("id","email","name","phone","department","guardianName","guardianPhone","country","state","role","token","expiresAt","acceptedAt","createdById","createdAt","updatedAt")
+        ("id","email","name","phone","department","guardianName","guardianPhone","country","state","studentId","role","token","expiresAt","acceptedAt","createdById","createdAt","updatedAt")
       VALUES
         (
           ${id},
@@ -114,6 +140,7 @@ async function createInvitationRaw(params: {
           ${params.guardianPhone ?? null},
           ${params.country ?? null},
           ${params.state ?? null},
+          ${params.studentId ?? null},
           CAST(${params.role} AS "Role"),
           ${params.token},
           ${params.expiresAt},
@@ -163,6 +190,7 @@ export async function POST(request: NextRequest) {
       guardianPhone?: string;
       country?: string;
       state?: string;
+      studentId?: string;
     };
 
     const email = body.email?.toLowerCase().trim();
@@ -174,6 +202,7 @@ export async function POST(request: NextRequest) {
     const guardianPhone = body.guardianPhone?.trim() ?? "";
     const country = body.country?.trim() ?? "";
     const state = body.state?.trim() ?? "";
+    const studentId = body.studentId?.trim() ?? "";
 
     if (!email || !role) {
       console.error("Invitation payload invalid", {
@@ -245,6 +274,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const normalizedStudentId = role === "STUDENT" && studentId ? studentId : null;
+    if (normalizedStudentId) {
+      try {
+        const existingStudentId = await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "User" WHERE "studentId" = ${normalizedStudentId} LIMIT 1
+        `;
+        if (existingStudentId[0]) {
+          return NextResponse.json({ error: "Student ID is already in use." }, { status: 400 });
+        }
+        const existingInviteId = await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "Invitation" WHERE "studentId" = ${normalizedStudentId} AND "acceptedAt" IS NULL LIMIT 1
+        `;
+        if (existingInviteId[0]) {
+          return NextResponse.json({ error: "Student ID already has a pending invitation." }, { status: 400 });
+        }
+      } catch {
+        // Ignore if DB column is not available yet.
+      }
+    }
+
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { id: true, role: true, status: true },
@@ -255,6 +304,7 @@ export async function POST(request: NextRequest) {
     }
 
     await ensureRoleEnum();
+    await ensureInvitationSchema();
     await ensureInvitationRoleConstraint();
     const token = generateInviteToken();
     const expiresAt = getInviteExpiry();
@@ -274,6 +324,7 @@ export async function POST(request: NextRequest) {
         guardianPhone: null,
         country: country || null,
         state: state || null,
+        studentId: null,
       });
       await prisma.adminActionLog.create({
         data: {
@@ -289,6 +340,7 @@ export async function POST(request: NextRequest) {
             phone: phone || null,
             country: country || null,
             state: state || null,
+            studentId: null,
           },
         },
       });
@@ -313,6 +365,7 @@ export async function POST(request: NextRequest) {
             guardianPhone: role === Role.STUDENT ? guardianPhone : null,
             country: country || null,
             state: state || null,
+            studentId: normalizedStudentId,
             role,
             token,
             expiresAt,
@@ -337,6 +390,7 @@ export async function POST(request: NextRequest) {
               guardianPhone: role === "STUDENT" ? guardianPhone || null : null,
               country: country || null,
               state: state || null,
+              studentId: normalizedStudentId,
             },
           },
         });
@@ -384,6 +438,7 @@ export async function POST(request: NextRequest) {
                 guardianPhone: role === "STUDENT" ? guardianPhone || null : null,
                 country: country || null,
                 state: state || null,
+                studentId: normalizedStudentId,
               },
             },
           });
@@ -393,7 +448,7 @@ export async function POST(request: NextRequest) {
 
         // Do this outside the transaction because a failed statement aborts the tx.
         try {
-          await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === "STUDENT" ? guardianName || null : null}, "guardianPhone" = ${role === "STUDENT" ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null} WHERE "id" = ${invitation.id}`;
+          await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === "STUDENT" ? guardianName || null : null}, "guardianPhone" = ${role === "STUDENT" ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null}, "studentId" = ${normalizedStudentId} WHERE "id" = ${invitation.id}`;
         } catch {
           // Ignore if DB column is not available yet.
         }
@@ -403,13 +458,16 @@ export async function POST(request: NextRequest) {
     const inviteUrl = `${request.nextUrl.origin}/invite/accept?token=${invitation.token}`;
     let warning: string | undefined;
     try {
+      const details: Array<{ label: string; value: string }> = [];
+      if (phone) details.push({ label: "Phone", value: phone });
+      if (normalizedStudentId) details.push({ label: "Student ID", value: normalizedStudentId });
       await sendInvitationEmail({
         to: email,
         name: fullName || null,
         role,
         inviteUrl,
         inviteExpires: invitation.expiresAt,
-        details: phone ? [{ label: "Phone", value: phone }] : undefined,
+        details: details.length ? details : undefined,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send invitation email.";

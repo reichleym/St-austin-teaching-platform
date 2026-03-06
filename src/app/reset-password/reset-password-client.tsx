@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 import { PasswordField } from "@/components/password-field";
 
 type Props = {
@@ -85,8 +86,8 @@ export default function ResetPasswordClient({ email, token }: Props) {
               required
             />
 
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
+            <ToastMessage type="error" message={error} />
+            <ToastMessage type="success" message={info} />
 
             <button className="btn-brand-primary px-4 py-2 disabled:opacity-60" disabled={isPending}>
               {isPending ? "Updating..." : "Update Password"}
@@ -103,4 +104,3 @@ export default function ResetPasswordClient({ email, token }: Props) {
     </main>
   );
 }
-

@@ -16,6 +16,7 @@ export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
       : roleKey === "DEPARTMENT_HEAD"
         ? "DEPARTMENT HEAD"
         : roleKey;
+  const timezoneLabel = "Current: WAT — West Africa Time (UTC/GMT +1 hour)";
 
   return (
     <header className="mb-6 flex items-center justify-between gap-4">
@@ -44,6 +45,7 @@ export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
                   Online
                 </span>
               </div>
+              {/* <p className="mt-1 text-[11px] font-semibold text-[#3b6aa5]">{timezoneLabel}</p> */}
             </div>
           </div>
           <LogoutButton />

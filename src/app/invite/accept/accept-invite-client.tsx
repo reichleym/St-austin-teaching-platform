@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 import { PasswordField } from "@/components/password-field";
 
 type Props = {
@@ -95,7 +96,7 @@ export default function AcceptInviteClient({ token }: Props) {
               inputClassName="brand-input pr-11"
             />
 
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <ToastMessage type="error" message={error} />
 
             <button className="btn-brand-primary px-4 py-2 disabled:opacity-60" disabled={isPending}>
               {isPending ? "Activating..." : "Activate Account"}

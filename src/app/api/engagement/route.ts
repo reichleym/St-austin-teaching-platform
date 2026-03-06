@@ -15,6 +15,8 @@ type ActionBody =
       openAt?: string | null;
       closeAt?: string | null;
       allowLate?: boolean;
+      isGraded?: boolean;
+      maxPoints?: number | string | null;
     }
   | {
       action: "createPost";
@@ -49,6 +51,7 @@ type StudentIndicator = {
   hasInitialPost: boolean;
   replyCount: number;
   status: "COMPLETED" | "PARTIAL" | "NOT_PARTICIPATED";
+  score: number | null;
 };
 
 function parseOptionalDate(input: string | null | undefined) {
@@ -86,6 +89,8 @@ CREATE TABLE IF NOT EXISTS "EngagementDiscussion" (
   "openAt" TIMESTAMP(3),
   "closeAt" TIMESTAMP(3),
   "allowLate" BOOLEAN NOT NULL DEFAULT false,
+  "isGraded" BOOLEAN NOT NULL DEFAULT false,
+  "maxPoints" DOUBLE PRECISION,
   "isLocked" BOOLEAN NOT NULL DEFAULT false,
   "createdById" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +99,8 @@ CREATE TABLE IF NOT EXISTS "EngagementDiscussion" (
 );
 CREATE INDEX IF NOT EXISTS "EngagementDiscussion_course_created_idx" ON "EngagementDiscussion"("courseId","createdAt");
 CREATE INDEX IF NOT EXISTS "EngagementDiscussion_module_idx" ON "EngagementDiscussion"("moduleId");
+ALTER TABLE "EngagementDiscussion" ADD COLUMN IF NOT EXISTS "isGraded" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "EngagementDiscussion" ADD COLUMN IF NOT EXISTS "maxPoints" DOUBLE PRECISION;
 
 CREATE TABLE IF NOT EXISTS "EngagementPost" (
   "id" TEXT NOT NULL,
@@ -162,7 +169,11 @@ async function ensureCourseManageAccess(courseId: string, user: { id: string; ro
   return { ok: true as const };
 }
 
-function computeIndicators(students: Array<{ id: string; name: string | null; email: string }>, posts: Array<{ id: string; authorId: string; parentPostId: string | null; parentAuthorId: string | null }>): StudentIndicator[] {
+function computeIndicators(
+  students: Array<{ id: string; name: string | null; email: string }>,
+  posts: Array<{ id: string; authorId: string; parentPostId: string | null; parentAuthorId: string | null }>,
+  grading?: { isGraded: boolean; maxPoints: number | null }
+): StudentIndicator[] {
   return students.map((student) => {
     const mine = posts.filter((post) => post.authorId === student.id);
     const hasInitialPost = mine.some((post) => post.parentPostId === null);
@@ -173,6 +184,12 @@ function computeIndicators(students: Array<{ id: string; name: string | null; em
     );
     const replyCount = uniqueClassmateReplies.size;
     const status: StudentIndicator["status"] = hasInitialPost && replyCount >= 2 ? "COMPLETED" : hasInitialPost || replyCount > 0 ? "PARTIAL" : "NOT_PARTICIPATED";
+    let score: number | null = null;
+    if (grading?.isGraded && Number.isFinite(grading.maxPoints) && (grading.maxPoints ?? 0) > 0) {
+      const maxPoints = Number(grading.maxPoints);
+      const rawScore = status === "COMPLETED" ? maxPoints : status === "PARTIAL" ? maxPoints * 0.5 : 0;
+      score = Math.round(rawScore * 10) / 10;
+    }
     return {
       studentId: student.id,
       studentName: student.name,
@@ -180,6 +197,7 @@ function computeIndicators(students: Array<{ id: string; name: string | null; em
       hasInitialPost,
       replyCount,
       status,
+      score,
     };
   });
 }
@@ -207,12 +225,14 @@ export async function GET(request: NextRequest) {
             openAt: Date | null;
             closeAt: Date | null;
             allowLate: boolean;
+            isGraded: boolean;
+            maxPoints: number | null;
             isLocked: boolean;
             createdAt: Date;
             updatedAt: Date;
           }>
         >`
-          SELECT "id", "courseId", "moduleId", "title", "prompt", "openAt", "closeAt", "allowLate", "isLocked", "createdAt", "updatedAt"
+          SELECT "id", "courseId", "moduleId", "title", "prompt", "openAt", "closeAt", "allowLate", "isGraded", "maxPoints", "isLocked", "createdAt", "updatedAt"
           FROM "EngagementDiscussion"
           WHERE "courseId" = ${selectedCourseId}
           ORDER BY "createdAt" DESC
@@ -267,7 +287,11 @@ export async function GET(request: NextRequest) {
     }
 
     const discussionSummaries = discussions.map((discussion) => {
-      const indicators = computeIndicators(students, postsByDiscussion.get(discussion.id) ?? []);
+      const indicators = computeIndicators(
+        students,
+        postsByDiscussion.get(discussion.id) ?? [],
+        { isGraded: discussion.isGraded, maxPoints: discussion.maxPoints }
+      );
       const completed = indicators.filter((item) => item.status === "COMPLETED").length;
       const partial = indicators.filter((item) => item.status === "PARTIAL").length;
       const notParticipated = indicators.filter((item) => item.status === "NOT_PARTICIPATED").length;
@@ -281,6 +305,8 @@ export async function GET(request: NextRequest) {
         openAt: discussion.openAt?.toISOString() ?? null,
         closeAt: discussion.closeAt?.toISOString() ?? null,
         allowLate: discussion.allowLate,
+        isGraded: !!discussion.isGraded,
+        maxPoints: discussion.maxPoints !== null ? Number(discussion.maxPoints) : null,
         isLocked: discussion.isLocked,
         createdAt: discussion.createdAt.toISOString(),
         updatedAt: discussion.updatedAt.toISOString(),
@@ -327,7 +353,11 @@ export async function GET(request: NextRequest) {
       : [];
 
     const selectedIndicators = selectedDiscussion
-      ? computeIndicators(students, postsByDiscussion.get(selectedDiscussion.id) ?? [])
+      ? computeIndicators(
+          students,
+          postsByDiscussion.get(selectedDiscussion.id) ?? [],
+          { isGraded: selectedDiscussion.isGraded, maxPoints: selectedDiscussion.maxPoints }
+        )
       : [];
 
     const selectedViewer = selectedIndicators.find((item) => item.studentId === user.id) ?? null;
@@ -349,6 +379,8 @@ export async function GET(request: NextRequest) {
             openAt: selectedDiscussion.openAt?.toISOString() ?? null,
             closeAt: selectedDiscussion.closeAt?.toISOString() ?? null,
             allowLate: selectedDiscussion.allowLate,
+            isGraded: !!selectedDiscussion.isGraded,
+            maxPoints: selectedDiscussion.maxPoints !== null ? Number(selectedDiscussion.maxPoints) : null,
             isLocked: selectedDiscussion.isLocked,
             posts: selectedPosts.map((post) => ({
               id: post.id,
@@ -427,6 +459,10 @@ export async function POST(request: NextRequest) {
       const openAt = parseOptionalDate(body.openAt ?? null);
       const closeAt = parseOptionalDate(body.closeAt ?? null);
       const allowLate = body.allowLate ?? true;
+      const isGraded = body.isGraded === true;
+      const maxPointsValue =
+        typeof body.maxPoints === "number" ? body.maxPoints : typeof body.maxPoints === "string" ? Number(body.maxPoints) : NaN;
+      const maxPoints = Number.isFinite(maxPointsValue) && maxPointsValue > 0 ? Math.round(maxPointsValue * 100) / 100 : null;
 
       if (!courseId || !title || !prompt || !moduleId) {
         return NextResponse.json({ error: "courseId, moduleId, title and prompt are required." }, { status: 400 });
@@ -436,6 +472,9 @@ export async function POST(request: NextRequest) {
       }
       if (openAt && closeAt && closeAt < openAt) {
         return NextResponse.json({ error: "close date must be after open date." }, { status: 400 });
+      }
+      if (isGraded && !maxPoints) {
+        return NextResponse.json({ error: "Max points are required for graded discussions." }, { status: 400 });
       }
 
       const access = await ensureCourseManageAccess(courseId, user);
@@ -453,9 +492,9 @@ export async function POST(request: NextRequest) {
       const id = `dsc_${randomUUID()}`;
       await prisma.$executeRaw`
         INSERT INTO "EngagementDiscussion"
-          ("id","courseId","moduleId","title","prompt","openAt","closeAt","allowLate","isLocked","createdById","createdAt","updatedAt")
+          ("id","courseId","moduleId","title","prompt","openAt","closeAt","allowLate","isGraded","maxPoints","isLocked","createdById","createdAt","updatedAt")
         VALUES
-          (${id},${courseId},${moduleId},${title},${prompt},${openAt},${closeAt},${allowLate},false,${user.id},NOW(),NOW())
+          (${id},${courseId},${moduleId},${title},${prompt},${openAt},${closeAt},${allowLate},${isGraded},${maxPoints},false,${user.id},NOW(),NOW())
       `;
 
       return NextResponse.json({ ok: true, discussionId: id }, { status: 201 });

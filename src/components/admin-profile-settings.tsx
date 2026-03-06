@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 import { PasswordField } from "@/components/password-field";
 
 type AdminProfile = {
@@ -108,14 +110,24 @@ export function AdminProfileSettings() {
         <p className="brand-muted mt-2 text-sm">Update your profile details used across the admin panel.</p>
         {profile ? <p className="mt-1 text-xs text-[#3a689f]">Account: {profile.email}</p> : null}
         {profile ? (
-          <p className="mt-1 text-xs text-[#3a689f]">Last updated: {new Date(profile.updatedAt).toLocaleString()}</p>
+          <p className="mt-1 text-xs text-[#3a689f]">
+            Last updated:{" "}
+            {new Date(profile.updatedAt).toLocaleString("en-GB", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })}
+          </p>
         ) : null}
       </article>
 
       <article className="brand-card p-5">
-        {isLoading ? <p className="brand-muted text-sm">Loading profile...</p> : null}
-        {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
-        {success ? <p className="mb-2 text-sm text-green-700">{success}</p> : null}
+        {isLoading ? <LoadingIndicator label="Loading profile..." /> : null}
+        <ToastMessage type="error" message={error} />
+        <ToastMessage type="success" message={success} />
 
         {!isLoading ? (
           <form className="grid gap-3" onSubmit={onSubmit}>

@@ -4,7 +4,7 @@ import { Prisma, Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
-import { dashboardModules } from "@/lib/dashboard-modules";
+import { DashboardRole, dashboardModules } from "@/lib/dashboard-modules";
 import { RoleOverview } from "@/components/role-overview";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminRole } from "@/lib/permissions";
@@ -16,12 +16,21 @@ import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
+import { DepartmentHeadOversightModule } from "@/components/department-head-oversight-module";
+import { TeacherMessagesModule } from "@/components/teacher-messages-module";
 
 type Props = {
   searchParams: Promise<{ module?: string }>;
 };
 
 type AnnouncementAudienceValue = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+type FocusPriority = "High" | "Medium" | "Low";
+type FocusItem = {
+  title: string;
+  detail: string;
+  priority: FocusPriority;
+};
+type AppRole = "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT";
 
 function isAnnouncementAudienceCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
@@ -64,7 +73,26 @@ export default async function DashboardPage({ searchParams }: Props) {
   }
 
   const roleKey = String(session.user.role ?? "");
-  const moduleRoleKey = roleKey === "ADMIN" ? "SUPER_ADMIN" : roleKey;
+  const appRole: AppRole =
+    roleKey === "ADMIN"
+      ? "ADMIN"
+      : roleKey === "SUPER_ADMIN"
+        ? "SUPER_ADMIN"
+        : roleKey === "DEPARTMENT_HEAD"
+          ? "DEPARTMENT_HEAD"
+          : roleKey === "TEACHER"
+            ? "TEACHER"
+            : "STUDENT";
+  const moduleRoleKey: DashboardRole =
+    roleKey === "ADMIN" || roleKey === "SUPER_ADMIN"
+      ? "SUPER_ADMIN"
+      : roleKey === "DEPARTMENT_HEAD"
+        ? "DEPARTMENT_HEAD"
+        : roleKey === "TEACHER"
+          ? "TEACHER"
+          : roleKey === "STUDENT"
+            ? "STUDENT"
+            : "STUDENT";
   const roleLabel =
     roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? "SUPER ADMIN"
@@ -130,7 +158,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     guardianPhone: string | null;
     country: string | null;
     state: string | null;
-    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+    role: string;
     createdAt: Date;
   }> = [];
 
@@ -162,7 +190,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -215,7 +243,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     guardianPhone: string | null;
     country: string | null;
     state: string | null;
-    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+    role: string;
     createdAt: Date;
   }> = [];
 
@@ -247,7 +275,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -300,7 +328,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     guardianPhone: string | null;
     country: string | null;
     state: string | null;
-    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+    role: string;
     createdAt: Date;
   }> = [];
 
@@ -313,7 +341,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -350,7 +378,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -369,7 +397,7 @@ export default async function DashboardPage({ searchParams }: Props) {
               name: string | null;
               email: string;
               status: "ACTIVE" | "DISABLED";
-              role: "TEACHER" | "STUDENT" | "SUPER_ADMIN" | "DEPARTMENT_HEAD";
+              role: string;
               phone: string | null;
               guardianName: string | null;
               guardianPhone: string | null;
@@ -725,6 +753,23 @@ export default async function DashboardPage({ searchParams }: Props) {
       return Number(countRows[0]?.count ?? 0);
     })
     .catch(() => 0);
+
+  const messageCount =
+    selected.slug === "messages"
+      ? await prisma.$queryRaw<Array<{ exists: boolean }>>`
+          SELECT to_regclass('public."DepartmentHeadMessage"') IS NOT NULL AS "exists"
+        `
+          .then(async (rows) => {
+            if (!rows[0]?.exists) return 0;
+            const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+              SELECT COUNT(*)::bigint AS count
+              FROM "DepartmentHeadMessage"
+              WHERE "teacherId" = ${session.user.id}
+            `;
+            return Number(countRows[0]?.count ?? 0);
+          })
+          .catch(() => 0)
+      : 0;
   const pendingEnrollmentRequestCount = isSuperAdmin
     ? await prisma.$queryRaw<Array<{ exists: boolean }>>`
         SELECT to_regclass('public."EnrollmentRequest"') IS NOT NULL AS "exists"
@@ -766,7 +811,7 @@ export default async function DashboardPage({ searchParams }: Props) {
               { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard?module=assessment" },
               { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard?module=announcements-feed" },
             ];
-  const overviewFocus =
+  const overviewFocus: FocusItem[] =
     roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? [
           {
@@ -871,6 +916,14 @@ export default async function DashboardPage({ searchParams }: Props) {
     moduleKpiLabel = "Department Heads";
     moduleKpiValue = departmentHeadList.length;
     moduleKpiHint = "total records";
+  } else if (selected.slug === "oversight") {
+    moduleKpiLabel = "Courses";
+    moduleKpiValue = enrolledCoursesCount;
+    moduleKpiHint = "under oversight";
+  } else if (selected.slug === "messages") {
+    moduleKpiLabel = "Messages";
+    moduleKpiValue = messageCount;
+    moduleKpiHint = "in your inbox";
   } else if (selected.slug === "system-settings" || selected.slug === "admin-profile" || selected.slug === "academic-policies") {
     moduleKpiLabel = "Settings";
     moduleKpiValue = "Admin";
@@ -935,13 +988,13 @@ export default async function DashboardPage({ searchParams }: Props) {
         ) : selected.slug === "announcements-feed" ? (
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
         ) : selected.slug === "courses" ? (
-          <CoursesModule role={roleKey} viewMode="all" />
+          <CoursesModule role={appRole} viewMode="all" />
         ) : selected.slug === "learning" ? (
-          <CoursesModule role={roleKey} viewMode={roleKey === "STUDENT" ? "enrolled" : "all"} />
+          <CoursesModule role={appRole} viewMode={roleKey === "STUDENT" ? "enrolled" : "all"} />
         ) : selected.slug === "assessment" ? (
-          <AssignmentsModule role={roleKey} />
+          <AssignmentsModule role={appRole} />
         ) : selected.slug === "engagement" ? (
-          <EngagementModule role={roleKey} />
+          <EngagementModule role={appRole} />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
@@ -996,6 +1049,10 @@ export default async function DashboardPage({ searchParams }: Props) {
               users={serializedDepartmentHeadList}
             />
           </section>
+        ) : selected.slug === "oversight" ? (
+          <DepartmentHeadOversightModule />
+        ) : selected.slug === "messages" ? (
+          <TeacherMessagesModule />
         ) : selected.slug === "admin-profile" ? (
           <AdminProfileSettings />
         ) : selected.slug === "academic-policies" ? (

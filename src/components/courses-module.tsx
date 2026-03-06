@@ -3,6 +3,8 @@
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { CourseStructurePanel } from "@/components/course-structure-panel";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -366,6 +368,26 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const toggleEditStudent = (studentId: string) => {
     setEditStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
   };
+  const selectAllFilteredCreateStudents = () => {
+    if (!filteredCreateStudents.length) return;
+    setCreateStudentIds((prev) => {
+      const next = new Set(prev);
+      filteredCreateStudents.forEach((student) => next.add(student.id));
+      return Array.from(next);
+    });
+  };
+  const clearFilteredCreateStudents = () => {
+    if (!filteredCreateStudents.length) return;
+    const filteredIds = new Set(filteredCreateStudents.map((student) => student.id));
+    setCreateStudentIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+  };
+  const selectAllEditStudents = () => {
+    if (!students.length) return;
+    setEditStudentIds(students.map((student) => student.id));
+  };
+  const clearEditStudents = () => {
+    setEditStudentIds([]);
+  };
   const toggleCreateDepartmentHead = (id: string) => {
     setCreateDepartmentHeadIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   };
@@ -527,8 +549,8 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           </div>
         ) : null}
 
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-        {isLoading ? <p className="brand-muted mt-3 text-sm">Loading courses...</p> : null}
+        <ToastMessage type="error" message={error} />
+        {isLoading ? <div className="mt-3"><LoadingIndicator label="Loading courses..." /></div> : null}
 
         {!isLoading && filteredCourses.length ? (
           <div className="mt-3 overflow-x-auto">
@@ -756,6 +778,23 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                   value={createStudentSearch}
                   onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
                 />
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    className="rounded-md border border-[#9bbfed] px-2 py-1 font-semibold text-[#1f518f]"
+                    onClick={selectAllFilteredCreateStudents}
+                  >
+                    Select filtered
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-[#c6ddfa] px-2 py-1 font-semibold text-[#1f518f]"
+                    onClick={clearFilteredCreateStudents}
+                  >
+                    Clear filtered
+                  </button>
+                  <span className="text-[#3a689f]">Selected: {createStudentIds.length}</span>
+                </div>
                 <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
                   {filteredCreateStudents.length ? (
                     filteredCreateStudents.map((student) => (
@@ -857,6 +896,23 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
             </label>
             <div className="grid gap-1.5">
               <span className="brand-label">Enrolled Students</span>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#9bbfed] px-2 py-1 font-semibold text-[#1f518f]"
+                  onClick={selectAllEditStudents}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#c6ddfa] px-2 py-1 font-semibold text-[#1f518f]"
+                  onClick={clearEditStudents}
+                >
+                  Clear
+                </button>
+                <span className="text-[#3a689f]">Selected: {editStudentIds.length}</span>
+              </div>
               <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
                 {students.length ? (
                   students.map((student) => (

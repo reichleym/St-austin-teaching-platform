@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 type Status = "loading" | "success" | "error";
 
@@ -53,11 +55,11 @@ function StudentVerifyContent() {
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center p-6">
       <section className="brand-glass p-6">
         <h1 className="brand-title brand-title-gradient text-2xl font-semibold">Student Email Verification</h1>
-        <p
-          className={`mt-3 text-sm ${visibleStatus === "success" ? "text-emerald-700" : visibleStatus === "error" ? "text-red-600" : "brand-muted"}`}
-        >
-          {visibleMessage}
-        </p>
+        <ToastMessage
+          type={visibleStatus === "success" ? "success" : visibleStatus === "error" ? "error" : "info"}
+          message={visibleMessage}
+        />
+        <p className="brand-muted mt-3 text-sm">We are processing your verification. Check the notification above.</p>
         <div className="mt-5">
           <Link href="/login" className="btn-brand-secondary inline-flex px-4 py-2 text-sm font-semibold no-underline">
             Go to Login
@@ -75,7 +77,9 @@ export default function StudentVerifyPage() {
         <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center p-6">
           <section className="brand-glass p-6">
             <h1 className="brand-title brand-title-gradient text-2xl font-semibold">Student Email Verification</h1>
-            <p className="brand-muted mt-3 text-sm">Loading verification...</p>
+            <div className="mt-3">
+              <LoadingIndicator label="Loading verification..." />
+            </div>
           </section>
         </main>
       }

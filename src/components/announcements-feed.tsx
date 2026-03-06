@@ -17,7 +17,14 @@ function formatDate(value: string | null) {
   if (!value) return "No expiry";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "No expiry";
-  return date.toLocaleString();
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export function AnnouncementsFeed({ announcements }: Props) {

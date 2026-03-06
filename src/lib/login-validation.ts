@@ -30,22 +30,33 @@ type LoginUserRecord = {
 
 export type LoginEvaluation =
   | { ok: true; user: LoginUserRecord }
-  | { ok: false; code: LoginFailureCode };
+  | { ok: false; code: LoginFailureCode; email?: string };
 
 export async function evaluateLoginAttempt(input: LoginInput): Promise<LoginEvaluation> {
-  const email = input.email?.toLowerCase().trim() ?? "";
+  const identifier = input.email?.trim() ?? "";
+  const email = identifier.toLowerCase();
   const password = input.password ?? "";
 
-  if (!email || !password) {
+  if (!identifier || !password) {
     return { ok: false, code: "MISSING_CREDENTIALS" };
   }
 
-  const result = await prisma.$queryRaw<LoginUserRecord[]>`
-    SELECT "id","email","name","image","passwordHash","role"::text AS "role","status"::text AS "status","emailVerified"
-    FROM "User"
-    WHERE "email" = ${email}
-    LIMIT 1
-  `;
+  let result: LoginUserRecord[] = [];
+  try {
+    result = await prisma.$queryRaw<LoginUserRecord[]>`
+      SELECT "id","email","name","image","passwordHash","role"::text AS "role","status"::text AS "status","emailVerified"
+      FROM "User"
+      WHERE lower("email") = ${email} OR "studentId" = ${identifier}
+      LIMIT 1
+    `;
+  } catch {
+    result = await prisma.$queryRaw<LoginUserRecord[]>`
+      SELECT "id","email","name","image","passwordHash","role"::text AS "role","status"::text AS "status","emailVerified"
+      FROM "User"
+      WHERE lower("email") = ${email}
+      LIMIT 1
+    `;
+  }
 
   const user = result[0];
   if (!user) {
@@ -126,7 +137,7 @@ END $$;
     }
 
     if (roleText === "STUDENT" && !user.emailVerified) {
-      return { ok: false, code: "EMAIL_NOT_VERIFIED" };
+      return { ok: false, code: "EMAIL_NOT_VERIFIED", email: user.email };
     }
   }
 
