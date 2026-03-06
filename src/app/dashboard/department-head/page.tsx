@@ -2,7 +2,7 @@ import { UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
-export default async function TeacherDashboardEntryPage() {
+export default async function DepartmentHeadDashboardEntryPage() {
   const session = await auth();
 
   if (!session?.user || session.user.status !== UserStatus.ACTIVE) {
@@ -15,12 +15,8 @@ export default async function TeacherDashboardEntryPage() {
     redirect("/dashboard/admin");
   }
 
-  if (roleText === "DEPARTMENT_HEAD") {
-    redirect("/dashboard/department-head");
-  }
-
-  if (roleText !== "TEACHER") {
-    redirect("/dashboard/student");
+  if (roleText !== "DEPARTMENT_HEAD") {
+    redirect("/dashboard");
   }
 
   redirect("/dashboard?module=overview");

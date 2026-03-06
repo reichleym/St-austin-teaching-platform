@@ -61,7 +61,41 @@ export async function evaluateLoginAttempt(input: LoginInput): Promise<LoginEval
     return { ok: false, code: "INVALID_CREDENTIALS" };
   }
 
-  const roleText = String(user.role);
+  let roleText = String(user.role);
+
+  const trySyncDepartmentHeadRole = async () => {
+    try {
+      await prisma.$executeRawUnsafe(`
+DO $$ BEGIN
+  ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'DEPARTMENT_HEAD';
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;
+      `);
+      const inviteRows = await prisma.$queryRaw<Array<{ role: string }>>`
+        SELECT "role"::text AS "role"
+        FROM "Invitation"
+        WHERE "email" = ${email}
+          AND "acceptedAt" IS NOT NULL
+        ORDER BY "acceptedAt" DESC
+        LIMIT 1
+      `;
+      if (inviteRows[0]?.role === "DEPARTMENT_HEAD") {
+        await prisma.$executeRaw`
+          UPDATE "User"
+          SET "role" = CAST('DEPARTMENT_HEAD' AS "Role"), "updatedAt" = NOW()
+          WHERE "id" = ${user.id}
+        `;
+        roleText = "DEPARTMENT_HEAD";
+      }
+    } catch {
+      // Ignore role sync failures to avoid blocking login.
+    }
+  };
+
+  if (input.audience === "USER" && roleText !== "DEPARTMENT_HEAD") {
+    await trySyncDepartmentHeadRole();
+  }
 
   if (input.audience === "SUPER_ADMIN") {
     if (roleText !== "SUPER_ADMIN" && roleText !== "ADMIN") {
@@ -75,8 +109,18 @@ export async function evaluateLoginAttempt(input: LoginInput): Promise<LoginEval
     }
 
     if (input.loginAs) {
-      const targetRoleText = input.loginAs === "TEACHER" ? "TEACHER" : "STUDENT";
-      if (roleText !== targetRoleText) {
+      if (input.loginAs === "DEPARTMENT_HEAD" && roleText !== "DEPARTMENT_HEAD") {
+        await trySyncDepartmentHeadRole();
+      }
+      if (input.loginAs === "DEPARTMENT_HEAD") {
+        if (roleText !== "DEPARTMENT_HEAD") {
+          return { ok: false, code: "INCORRECT_USER_TYPE" };
+        }
+      } else if (input.loginAs === "TEACHER") {
+        if (roleText !== "TEACHER" && roleText !== "DEPARTMENT_HEAD") {
+          return { ok: false, code: "INCORRECT_USER_TYPE" };
+        }
+      } else if (roleText !== "STUDENT") {
         return { ok: false, code: "INCORRECT_USER_TYPE" };
       }
     }

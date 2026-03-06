@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 
-type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
+type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseOption = {
   id: string;
@@ -158,7 +158,7 @@ export function AssignmentsModule({ role }: Props) {
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";
   const isSuperAdmin = role === "SUPER_ADMIN";
-  const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN";
+  const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN" || role === "DEPARTMENT_HEAD";
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);

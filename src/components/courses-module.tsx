@@ -4,7 +4,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "
 import { ConfirmModal } from "@/components/confirm-modal";
 import { CourseStructurePanel } from "@/components/course-structure-panel";
 
-type AppRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "ADMIN";
+type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
 type CourseItem = {
   id: string;
@@ -29,6 +29,11 @@ type CourseItem = {
     name: string | null;
     email: string;
     status: "ACTIVE" | "DROPPED" | "COMPLETED";
+  }>;
+  departmentHeads: Array<{
+    id: string;
+    name: string | null;
+    email: string;
   }>;
   myEnrollmentStatus: "ACTIVE" | "DROPPED" | "COMPLETED" | null;
   myEnrollmentRequestStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
@@ -105,6 +110,7 @@ function PersonLabel({ person }: { person: PersonOption }) {
 
 export function CoursesModule({ role, viewMode = "all" }: Props) {
   const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
+  const isDepartmentHead = role === "DEPARTMENT_HEAD";
   const isStudent = role === "STUDENT";
   const canManage = isSuperAdmin;
   const studentSimpleView = isStudent;
@@ -112,6 +118,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [teachers, setTeachers] = useState<PersonOption[]>([]);
   const [students, setStudents] = useState<PersonOption[]>([]);
+  const [departmentHeads, setDepartmentHeads] = useState<PersonOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -126,6 +133,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [createVisibility, setCreateVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [createTeacherId, setCreateTeacherId] = useState("");
   const [createStudentIds, setCreateStudentIds] = useState<string[]>([]);
+  const [createDepartmentHeadIds, setCreateDepartmentHeadIds] = useState<string[]>([]);
   const [createStudentSearch, setCreateStudentSearch] = useState("");
   const [createPending, setCreatePending] = useState(false);
 
@@ -136,6 +144,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [editTeacherId, setEditTeacherId] = useState("");
   const [editStudentIds, setEditStudentIds] = useState<string[]>([]);
+  const [editDepartmentHeadIds, setEditDepartmentHeadIds] = useState<string[]>([]);
   const [editPending, setEditPending] = useState(false);
 
   const [deletePendingCourseId, setDeletePendingCourseId] = useState("");
@@ -160,6 +169,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           courses?: CourseItem[];
           teachers?: PersonOption[];
           students?: PersonOption[];
+          departmentHeads?: PersonOption[];
           error?: string;
         })
         : {};
@@ -171,6 +181,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       setCourses(result.courses ?? []);
       setTeachers(result.teachers ?? []);
       setStudents(result.students ?? []);
+      setDepartmentHeads(result.departmentHeads ?? []);
       if (isSuperAdmin) {
         const requestResponse = await fetch("/api/courses/enrollment-requests", { method: "GET" });
         const requestRaw = await requestResponse.text();
@@ -184,6 +195,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       setCourses([]);
       setTeachers([]);
       setStudents([]);
+      setDepartmentHeads([]);
     } finally {
       setIsLoading(false);
     }
@@ -205,6 +217,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     setEditVisibility(selected.visibility);
     setEditTeacherId(selected.teacher?.id ?? "");
     setEditStudentIds(selected.enrolledStudents.map((item) => item.id));
+    setEditDepartmentHeadIds(selected.departmentHeads.map((item) => item.id));
   }, [courses, editCourseId]);
 
   const totalEnrollments = useMemo(() => courses.reduce((sum, item) => sum + item.enrollmentCount, 0), [courses]);
@@ -248,6 +261,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           visibility: createVisibility,
           teacherId: createTeacherId || null,
           studentIds: createStudentIds,
+          departmentHeadIds: createDepartmentHeadIds,
         }),
       });
 
@@ -267,6 +281,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       setCreateVisibility("DRAFT");
       setCreateTeacherId("");
       setCreateStudentIds([]);
+      setCreateDepartmentHeadIds([]);
       setCreateStudentSearch("");
       await loadData();
     } catch {
@@ -296,6 +311,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           visibility: editVisibility,
           teacherId: editTeacherId || null,
           studentIds: editStudentIds,
+          departmentHeadIds: editDepartmentHeadIds,
         }),
       });
 
@@ -349,6 +365,13 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
   const toggleEditStudent = (studentId: string) => {
     setEditStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
+  };
+  const toggleCreateDepartmentHead = (id: string) => {
+    setCreateDepartmentHeadIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const toggleEditDepartmentHead = (id: string) => {
+    setEditDepartmentHeadIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   };
 
   const onRequestEnrollment = async (courseId: string) => {
@@ -516,6 +539,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                   <th className="px-3 py-2 font-semibold">Title</th>
                   <th className="px-3 py-2 font-semibold">Duration</th>
                   <th className="px-3 py-2 font-semibold">Teacher</th>
+                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Department Heads</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrolled Students</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
@@ -536,6 +560,13 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                         {formatDurationYmd(course.startDate, course.endDate)}
                       </td>
                       <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
+                      {!studentSimpleView ? (
+                        <td className="px-3 py-2">
+                          {course.departmentHeads.length
+                            ? course.departmentHeads.map((head) => head.name || head.email).join(", ")
+                            : "-"}
+                        </td>
+                      ) : null}
                       {!studentSimpleView ? <td className="px-3 py-2">{course.visibility}</td> : null}
                       {!studentSimpleView ? (
                         <td className="px-3 py-2">
@@ -627,7 +658,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                               ? viewMode === "enrolled"
                                 ? 6
                                 : 5
-                              : 8
+                              : 9
                           }
                         >
                           <CourseStructurePanel
@@ -694,6 +725,25 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                   ))}
                 </select>
               </label>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Assign Department Heads</span>
+                <div className="max-h-40 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
+                  {departmentHeads.length ? (
+                    departmentHeads.map((head) => (
+                      <label key={head.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
+                        <input
+                          type="checkbox"
+                          checked={createDepartmentHeadIds.includes(head.id)}
+                          onChange={() => toggleCreateDepartmentHead(head.id)}
+                        />
+                        <span>{(head.name || "Unnamed") + " - " + head.email}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-sm text-[#3f70ae]">No active department heads found.</p>
+                  )}
+                </div>
+              </div>
               <label className="grid gap-1.5">
                 <span className="brand-label">Description (optional)</span>
                 <textarea className="brand-input min-h-[90px]" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={2000} />
@@ -782,6 +832,25 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                 ))}
               </select>
             </label>
+            <div className="grid gap-1.5">
+              <span className="brand-label">Assigned Department Heads</span>
+              <div className="max-h-40 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
+                {departmentHeads.length ? (
+                  departmentHeads.map((head) => (
+                    <label key={head.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
+                      <input
+                        type="checkbox"
+                        checked={editDepartmentHeadIds.includes(head.id)}
+                        onChange={() => toggleEditDepartmentHead(head.id)}
+                      />
+                      <span>{(head.name || "Unnamed") + " - " + head.email}</span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-sm text-[#3f70ae]">No active department heads found.</p>
+                )}
+              </div>
+            </div>
             <label className="grid gap-1.5">
               <span className="brand-label">Description (optional)</span>
               <textarea className="brand-input min-h-[90px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} maxLength={2000} />

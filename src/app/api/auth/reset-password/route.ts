@@ -58,7 +58,12 @@ export async function POST(request: NextRequest) {
     if (!resetToken) {
       return NextResponse.json({ error: "Reset link is invalid, expired, or already used." }, { status: 400 });
     }
-    if ((resetToken.role !== Role.TEACHER && resetToken.role !== Role.STUDENT) || resetToken.status !== "ACTIVE") {
+    if (
+      (resetToken.role !== Role.TEACHER &&
+        resetToken.role !== Role.STUDENT &&
+        resetToken.role !== Role.DEPARTMENT_HEAD) ||
+      resetToken.status !== "ACTIVE"
+    ) {
       return NextResponse.json({ error: "Reset link is invalid, expired, or already used." }, { status: 400 });
     }
 

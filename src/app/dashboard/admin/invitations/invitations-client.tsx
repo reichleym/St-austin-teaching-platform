@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-type InviteRole = "TEACHER" | "STUDENT";
+type InviteRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "DEPARTMENT_HEAD";
 
 type InvitationsClientProps = {
   initialRole?: InviteRole;
@@ -76,7 +76,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
       const firstName = String(formData.get("firstName") ?? "");
       const lastName = String(formData.get("lastName") ?? "");
       const phone = String(formData.get("phone") ?? "");
-      const role = String(formData.get("role") ?? "TEACHER") as InviteRole;
+      const role = selectedRole;
       const department = String(formData.get("department") ?? "");
       const subjects = String(formData.get("subjects") ?? "");
       const employeeId = String(formData.get("employeeId") ?? "");
@@ -115,8 +115,8 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
         return;
       }
 
-      setInviteUrl(result.inviteUrl ?? "");
-      setWarning(result.warning ?? "");
+    setInviteUrl(result.inviteUrl ?? "");
+    setWarning(result.warning ?? "");
     } catch {
       setError("Could not create invitation.");
     } finally {
@@ -131,7 +131,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
         Enrollment
       </span>
       <h1 className="brand-title brand-title-gradient mt-3 text-3xl font-semibold">Admin Invitations</h1>
-      <p className="brand-muted mt-2 text-sm">Invite teachers or students. Teachers are invite-only.</p>
+      <p className="brand-muted mt-2 text-sm">Invite admins, teachers, department heads, or students.</p>
 
       <p className="brand-section-title mt-6">Invite Details</p>
       <form onSubmit={onSubmit} className="mt-6 grid gap-5">
@@ -146,7 +146,9 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
                 value={selectedRole}
                 onChange={(event) => setSelectedRole(event.currentTarget.value as InviteRole)}
               >
+                <option value="SUPER_ADMIN">Admin</option>
                 <option value="TEACHER">Teacher</option>
+                <option value="DEPARTMENT_HEAD">Department Head</option>
                 <option value="STUDENT">Student</option>
               </select>
               <span className="brand-helper">Choose the invitation type first.</span>
@@ -222,11 +224,19 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
 
         {selectedRole === "TEACHER" ? (
           <div className="brand-panel p-4">
-            <p className="brand-section-title">Teacher Profile</p>
+            <p className="brand-section-title">
+              Teacher Profile
+            </p>
             <div className="mt-3 grid gap-4 md:grid-cols-3">
               <label className="grid gap-1.5">
                 <span className="brand-label">Department</span>
-                <input className="brand-input" type="text" name="department" required placeholder="Science" />
+                <input
+                  className="brand-input"
+                  type="text"
+                  name="department"
+                  required
+                  placeholder="Science"
+                />
               </label>
               <label className="grid gap-1.5">
                 <span className="brand-label">Subjects</span>
@@ -271,11 +281,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
       </form>
 
       {inviteUrl ? (
-        <section className="brand-accent-card mt-6 p-4">
-          <p className="text-sm font-semibold text-[#7e5900]">Invitation Link</p>
-          <p className="mt-2 break-all text-sm text-[#184989]">{inviteUrl}</p>
-          <p className="mt-2 text-xs text-[#805900]">Share this link securely with the invited user.</p>
-        </section>
+        <p className="mt-4 text-sm font-semibold text-emerald-700">Invitation sent successfully.</p>
       ) : null}
     </>
   );

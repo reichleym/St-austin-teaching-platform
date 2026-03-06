@@ -310,9 +310,12 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   };
 
   const isStudentFullEdit = fullEditUser?.role === "STUDENT";
-  const isTeacherFullEdit = fullEditUser?.role === "TEACHER";
-  const isTeacherView = title.toLowerCase().includes("teacher");
-  const entityLabel = isTeacherView ? "Teachers" : "Students";
+  const isTeacherFullEdit = fullEditUser?.role === "TEACHER" || fullEditUser?.role === "DEPARTMENT_HEAD";
+  const viewTitle = title.toLowerCase();
+  const isDepartmentHeadView = viewTitle.includes("department");
+  const isTeacherView = viewTitle.includes("teacher");
+  const isAdminView = viewTitle.includes("admin");
+  const entityLabel = isDepartmentHeadView ? "Department Heads" : isTeacherView ? "Teachers" : isAdminView ? "Admins" : "Students";
   const totalLabel = `Total ${entityLabel}`;
   const activeLabel = `Active ${entityLabel}`;
 

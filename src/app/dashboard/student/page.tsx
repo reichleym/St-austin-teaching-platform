@@ -1,4 +1,4 @@
-import { Role, UserStatus } from "@prisma/client";
+import { UserStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
@@ -15,7 +15,11 @@ export default async function StudentDashboardEntryPage() {
     redirect("/dashboard/admin");
   }
 
-  if (session.user.role !== Role.STUDENT) {
+  if (roleText === "DEPARTMENT_HEAD") {
+    redirect("/dashboard/department-head");
+  }
+
+  if (roleText !== "STUDENT") {
     redirect("/dashboard/teacher");
   }
 

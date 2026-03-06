@@ -165,13 +165,12 @@ export function AcademicPoliciesSettings() {
                     placeholder="Min %"
                     aria-label={`Grade band ${index + 1} minimum percentage`}
                     value={band.min}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setGradeBands((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, min: event.currentTarget.value } : item,
-                        ),
-                      )
-                    }
+                        prev.map((item, itemIndex) => (itemIndex === index ? { ...item, min: value } : item)),
+                      );
+                    }}
                   />
                   <input
                     className="brand-input"
@@ -180,26 +179,24 @@ export function AcademicPoliciesSettings() {
                     placeholder="Max %"
                     aria-label={`Grade band ${index + 1} maximum percentage`}
                     value={band.max}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setGradeBands((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, max: event.currentTarget.value } : item,
-                        ),
-                      )
-                    }
+                        prev.map((item, itemIndex) => (itemIndex === index ? { ...item, max: value } : item)),
+                      );
+                    }}
                   />
                   <input
                     className="brand-input"
                     placeholder="Letter (A, B+, etc.)"
                     aria-label={`Grade band ${index + 1} letter grade`}
                     value={band.letter}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setGradeBands((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, letter: event.currentTarget.value } : item,
-                        ),
-                      )
-                    }
+                        prev.map((item, itemIndex) => (itemIndex === index ? { ...item, letter: value } : item)),
+                      );
+                    }}
                   />
                   <button
                     type="button"
@@ -236,13 +233,12 @@ export function AcademicPoliciesSettings() {
                     placeholder="Window hours (e.g., 24)"
                     aria-label={`Late penalty rule ${index + 1} window hours`}
                     value={rule.windowHours}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setLatePenaltyBands((prev) =>
-                        prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, windowHours: event.currentTarget.value } : item,
-                        ),
-                      )
-                    }
+                        prev.map((item, itemIndex) => (itemIndex === index ? { ...item, windowHours: value } : item)),
+                      );
+                    }}
                   />
                   <input
                     className="brand-input"
@@ -252,13 +248,14 @@ export function AcademicPoliciesSettings() {
                     placeholder="Deduction %"
                     aria-label={`Late penalty rule ${index + 1} deduction percentage`}
                     value={rule.deductionPercent}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setLatePenaltyBands((prev) =>
                         prev.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, deductionPercent: event.currentTarget.value } : item,
+                          itemIndex === index ? { ...item, deductionPercent: value } : item,
                         ),
-                      )
-                    }
+                      );
+                    }}
                   />
                   <button
                     type="button"

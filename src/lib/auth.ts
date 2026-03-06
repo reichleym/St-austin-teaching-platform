@@ -9,6 +9,7 @@ type LoginAudience = "SUPER_ADMIN" | "USER";
 
 function normalizeRole(role: string | Role | null | undefined): Role {
   if (role === "SUPER_ADMIN" || role === "ADMIN") return Role.SUPER_ADMIN;
+  if (role === "DEPARTMENT_HEAD") return (Role.DEPARTMENT_HEAD ?? ("DEPARTMENT_HEAD" as Role));
   if (role === "TEACHER") return Role.TEACHER;
   return Role.STUDENT;
 }
