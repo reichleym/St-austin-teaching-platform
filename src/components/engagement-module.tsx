@@ -301,21 +301,24 @@ export function EngagementModule({ role }: Props) {
       <section className="brand-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="brand-section-title">Discussion Topics</p>
-          <select
-            className="brand-input w-[320px]"
-            value={selectedCourseId}
-            onChange={(event) => {
-              const next = event.currentTarget.value;
-              setSelectedCourseId(next);
-              void load(next, "");
-            }}
-          >
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.code} - {course.title}
-              </option>
-            ))}
-          </select>
+          <label className="grid gap-1.5">
+            <span className="brand-label">Course</span>
+            <select
+              className="brand-input w-[320px]"
+              value={selectedCourseId}
+              onChange={(event) => {
+                const next = event.currentTarget.value;
+                setSelectedCourseId(next);
+                void load(next, "");
+              }}
+            >
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.code} - {course.title}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
@@ -324,19 +327,34 @@ export function EngagementModule({ role }: Props) {
         {canModerate ? (
           <form className="mt-4 grid gap-2 rounded-md border border-[#dbe9fb] p-3" onSubmit={onCreateDiscussion}>
             <p className="brand-label">Create Discussion Topic</p>
-            <input className="brand-input" placeholder="Discussion title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
-            <textarea className="brand-input min-h-[84px]" placeholder="Prompt / question" value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Discussion Title</span>
+              <input className="brand-input" placeholder="Discussion title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Prompt</span>
+              <textarea className="brand-input min-h-[84px]" placeholder="Prompt / question" value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
+            </label>
             <div className="grid gap-2 md:grid-cols-4">
-              <select className="brand-input" value={createModuleId} onChange={(event) => setCreateModuleId(event.currentTarget.value)}>
-                <option value="">Select module</option>
-                {modules.map((module) => (
-                  <option key={module.id} value={module.id}>
-                    {module.title}
-                  </option>
-                ))}
-              </select>
-              <input className="brand-input" type="datetime-local" value={createOpenAt} onChange={(event) => setCreateOpenAt(event.currentTarget.value)} required />
-              <input className="brand-input" type="datetime-local" value={createCloseAt} onChange={(event) => setCreateCloseAt(event.currentTarget.value)} required />
+              <label className="grid gap-1">
+                <span className="brand-label">Module</span>
+                <select className="brand-input" value={createModuleId} onChange={(event) => setCreateModuleId(event.currentTarget.value)}>
+                  <option value="">Select module</option>
+                  {modules.map((module) => (
+                    <option key={module.id} value={module.id}>
+                      {module.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1">
+                <span className="brand-label">Open At</span>
+                <input className="brand-input" type="datetime-local" value={createOpenAt} onChange={(event) => setCreateOpenAt(event.currentTarget.value)} required />
+              </label>
+              <label className="grid gap-1">
+                <span className="brand-label">Close At</span>
+                <input className="brand-input" type="datetime-local" value={createCloseAt} onChange={(event) => setCreateCloseAt(event.currentTarget.value)} required />
+              </label>
               <label className="brand-input inline-flex items-center gap-2">
                 <input type="checkbox" checked={createAllowLate} onChange={(event) => setCreateAllowLate(event.currentTarget.checked)} /> Allow late
               </label>
@@ -414,7 +432,10 @@ export function EngagementModule({ role }: Props) {
             {replyToPostId ? (
               <p className="text-xs text-[#2f5f98]">Reply mode active. <button type="button" className="underline" onClick={() => setReplyToPostId("")}>Cancel reply</button></p>
             ) : null}
-            <textarea className="brand-input min-h-[90px]" placeholder="Write your post" value={postContent} onChange={(event) => setPostContent(event.currentTarget.value)} disabled={!canPostInCurrentDiscussion} />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Post Content</span>
+              <textarea className="brand-input min-h-[90px]" placeholder="Write your post" value={postContent} onChange={(event) => setPostContent(event.currentTarget.value)} disabled={!canPostInCurrentDiscussion} />
+            </label>
             <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={pending === "create-post" || !canPostInCurrentDiscussion}>
               {pending === "create-post" ? "Posting..." : replyToPostId ? "Reply" : "Post"}
             </button>

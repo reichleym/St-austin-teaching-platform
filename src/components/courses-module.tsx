@@ -156,6 +156,10 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestItem[]>([]);
   const [requestActionId, setRequestActionId] = useState("");
   const [enrollPendingCourseId, setEnrollPendingCourseId] = useState("");
+  const availableDepartmentHeadIds = useMemo(
+    () => new Set(departmentHeads.map((head) => head.id)),
+    [departmentHeads]
+  );
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -217,8 +221,11 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     setEditVisibility(selected.visibility);
     setEditTeacherId(selected.teacher?.id ?? "");
     setEditStudentIds(selected.enrolledStudents.map((item) => item.id));
-    setEditDepartmentHeadIds(selected.departmentHeads.map((item) => item.id));
-  }, [courses, editCourseId]);
+    const selectedDepartmentHeadIds = selected.departmentHeads
+      .map((item) => item.id)
+      .filter((id) => availableDepartmentHeadIds.has(id));
+    setEditDepartmentHeadIds(selectedDepartmentHeadIds);
+  }, [availableDepartmentHeadIds, courses, editCourseId]);
 
   const totalEnrollments = useMemo(() => courses.reduce((sum, item) => sum + item.enrollmentCount, 0), [courses]);
 
@@ -297,6 +304,10 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
     setEditPending(true);
     setError("");
+    const nextDepartmentHeadIds =
+      availableDepartmentHeadIds.size > 0
+        ? editDepartmentHeadIds.filter((id) => availableDepartmentHeadIds.has(id))
+        : editDepartmentHeadIds;
 
     try {
       const response = await fetch("/api/courses", {
@@ -311,7 +322,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           visibility: editVisibility,
           teacherId: editTeacherId || null,
           studentIds: editStudentIds,
-          departmentHeadIds: editDepartmentHeadIds,
+          departmentHeadIds: nextDepartmentHeadIds,
         }),
       });
 
@@ -750,12 +761,15 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
               </label>
               <div className="grid gap-1.5">
                 <span className="brand-label">Enroll Students During Creation</span>
-                <input
-                  className="brand-input"
-                  placeholder="Search by name, phone, or email"
-                  value={createStudentSearch}
-                  onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
-                />
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Search Students</span>
+                  <input
+                    className="brand-input"
+                    placeholder="Search by name, phone, or email"
+                    value={createStudentSearch}
+                    onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
+                  />
+                </label>
                 <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
                   {filteredCreateStudents.length ? (
                     filteredCreateStudents.map((student) => (

@@ -119,36 +119,49 @@ export function AdminProfileSettings() {
 
         {!isLoading ? (
           <form className="grid gap-3" onSubmit={onSubmit}>
-            <input
-              className="brand-input"
-              placeholder="Full name"
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-              required
-            />
-            <input
-              className="brand-input"
-              placeholder="Phone number"
-              value={phone}
-              onChange={(event) => setPhone(event.currentTarget.value)}
-            />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Full Name</span>
+              <input
+                className="brand-input"
+                placeholder="Full name"
+                value={name}
+                onChange={(event) => setName(event.currentTarget.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Phone Number</span>
+              <input
+                className="brand-input"
+                placeholder="Phone number"
+                value={phone}
+                onChange={(event) => setPhone(event.currentTarget.value)}
+              />
+            </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <input
-                className="brand-input"
-                placeholder="Country"
-                value={country}
-                onChange={(event) => setCountry(event.currentTarget.value)}
-              />
-              <input
-                className="brand-input"
-                placeholder="State"
-                value={state}
-                onChange={(event) => setState(event.currentTarget.value)}
-              />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Country</span>
+                <input
+                  className="brand-input"
+                  placeholder="Country"
+                  value={country}
+                  onChange={(event) => setCountry(event.currentTarget.value)}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">State</span>
+                <input
+                  className="brand-input"
+                  placeholder="State"
+                  value={state}
+                  onChange={(event) => setState(event.currentTarget.value)}
+                />
+              </label>
             </div>
             <p className="brand-label mt-1">Change Password</p>
             <div className="grid gap-3 md:grid-cols-2">
               <PasswordField
+                label="Current Password"
                 placeholder="Current password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.currentTarget.value)}
@@ -156,6 +169,7 @@ export function AdminProfileSettings() {
                 inputClassName="brand-input pr-11"
               />
               <PasswordField
+                label="New Password"
                 placeholder="New password (min 8 chars)"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.currentTarget.value)}

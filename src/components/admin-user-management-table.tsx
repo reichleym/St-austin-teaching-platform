@@ -336,13 +336,16 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
         <section className="brand-card overflow-x-auto p-5">
           <p className="brand-section-title">{title}</p>
           <div className="mt-3 flex justify-end">
-            <input
-              className="brand-input w-[220px] max-w-full"
-              type="search"
-              placeholder="Search by name, email, or phone"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.currentTarget.value)}
-            />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Search Users</span>
+              <input
+                className="brand-input w-[220px] max-w-full"
+                type="search"
+                placeholder="Search by name, email, or phone"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.currentTarget.value)}
+              />
+            </label>
           </div>
           {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 
@@ -366,6 +369,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                         {quickEditing ? (
                           <input
                             className="brand-input min-w-[180px]"
+                            aria-label={`Name for ${user.email}`}
                             value={quickDraft.name}
                             onChange={(event) => {
                               const value = event.currentTarget.value;
@@ -381,6 +385,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                           <input
                             className="brand-input min-w-[220px]"
                             type="email"
+                            aria-label={`Email for ${user.name || user.email}`}
                             value={quickDraft.email}
                             onChange={(event) => {
                               const value = event.currentTarget.value;
@@ -395,6 +400,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                         {quickEditing ? (
                           <select
                             className="brand-input min-w-[140px]"
+                            aria-label={`Status for ${user.name || user.email}`}
                             value={quickDraft.status}
                             onChange={(event) => {
                               const value = event.currentTarget.value as UserStatus;
@@ -461,17 +467,20 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                 <span className="font-semibold">{totalFiltered}</span>
               </p>
               <div className="flex items-center gap-2 text-[#1f518f]">
-                <span>Show</span>
-                <select
-                  className="brand-input min-w-[92px]"
-                  value={pageSize}
-                  onChange={(event) => setPageSize(Number(event.currentTarget.value))}
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+                <label className="inline-flex items-center gap-2">
+                  <span>Show</span>
+                  <select
+                    className="brand-input min-w-[92px]"
+                    aria-label="Rows per page"
+                    value={pageSize}
+                    onChange={(event) => setPageSize(Number(event.currentTarget.value))}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
               </div>
               <div className="flex items-center gap-2">
                 <p className="text-[#1f518f]">

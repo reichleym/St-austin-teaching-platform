@@ -17,6 +17,7 @@ type AssignmentConfigRecord = {
   allowLateSubmissions: boolean;
   attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
+  startAt: Date | null;
   moduleId: string | null;
   lessonId: string | null;
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -31,6 +32,8 @@ type CreateAssignmentBody = {
   courseId?: string;
   title?: string;
   description?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   dueAt?: string | null;
   maxPoints?: number | string;
   assignmentType?: AssignmentType;
@@ -50,6 +53,8 @@ type UpdateAssignmentBody = {
   assignmentId?: string;
   title?: string;
   description?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
   dueAt?: string | null;
   maxPoints?: number | string;
   assignmentType?: AssignmentType;
@@ -104,6 +109,11 @@ function parseRubricSteps(input: unknown): string[] {
     .slice(0, 50);
 }
 
+function hasRequiredAssessmentContent(assignmentType: AssignmentType, description: string | null, rubricSteps: string[]) {
+  if (assignmentType === "HOMEWORK") return true;
+  return !!(description?.trim() || rubricSteps.length > 0);
+}
+
 function parseMaxAttempts(input: unknown, assignmentType: AssignmentType) {
   if (assignmentType === "EXAM") return 1;
   const value = typeof input === "number" ? input : Number(input);
@@ -116,12 +126,11 @@ function parseCompletionRule(input: unknown): AssignmentConfigRecord["completion
   return "SUBMISSION_OR_GRADE";
 }
 
-function parseTimerMinutes(input: unknown, assignmentType: AssignmentType) {
-  if (assignmentType !== "QUIZ") return null;
+function parseTimerMinutes(input: unknown) {
   if (input === null || input === undefined || input === "") return null;
   const value = typeof input === "number" ? input : Number(input);
   if (!Number.isInteger(value) || value < 1) return null;
-  return Math.min(value, 240);
+  return Math.min(value, 1440);
 }
 
 function parseAttemptScoringStrategy(input: unknown): "LATEST" | "HIGHEST" {
@@ -144,6 +153,7 @@ CREATE TABLE IF NOT EXISTS "AssignmentConfig" (
   "allowLateSubmissions" BOOLEAN NOT NULL DEFAULT true,
   "attemptScoringStrategy" TEXT NOT NULL DEFAULT 'LATEST',
   "timerMinutes" INTEGER,
+  "startAt" TIMESTAMP(3),
   "moduleId" TEXT,
   "lessonId" TEXT,
   "completionRule" TEXT NOT NULL DEFAULT 'SUBMISSION_OR_GRADE',
@@ -156,6 +166,7 @@ CREATE INDEX IF NOT EXISTS "AssignmentConfig_lessonId_idx" ON "AssignmentConfig"
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "timerMinutes" INTEGER;
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "allowLateSubmissions" BOOLEAN;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "startAt" TIMESTAMP(3);
 `);
 }
 
@@ -222,6 +233,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowLateSubmissions: boolean | null;
       attemptScoringStrategy: string | null;
       timerMinutes: number | null;
+      startAt: Date | null;
       moduleId: string | null;
       lessonId: string | null;
       completionRule: string;
@@ -237,6 +249,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       "allowLateSubmissions",
       "attemptScoringStrategy",
       "timerMinutes",
+      "startAt",
       "moduleId",
       "lessonId",
       "completionRule"
@@ -256,6 +269,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
       allowLateSubmissions: row.allowLateSubmissions !== false,
       attemptScoringStrategy: parseAttemptScoringStrategy(row.attemptScoringStrategy),
       timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
+      startAt: row.startAt ?? null,
       moduleId: row.moduleId,
       lessonId: row.lessonId,
       completionRule: parseCompletionRule(row.completionRule),
@@ -272,16 +286,17 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
   const autoGrade = assignmentType === "QUIZ" ? !!input.autoGrade : false;
   const allowLateSubmissions = input.allowLateSubmissions !== false;
   const attemptScoringStrategy = parseAttemptScoringStrategy(input.attemptScoringStrategy);
-  const timerMinutes = parseTimerMinutes(input.timerMinutes, assignmentType);
+  const timerMinutes = parseTimerMinutes(input.timerMinutes);
+  const startAt = parseOptionalDateTime(input.startAt);
   const moduleId = typeof input.moduleId === "string" && input.moduleId.trim() ? input.moduleId.trim() : null;
   const lessonId = typeof input.lessonId === "string" && input.lessonId.trim() ? input.lessonId.trim() : null;
   const completionRule = parseCompletionRule(input.completionRule);
 
   await prisma.$executeRaw`
     INSERT INTO "AssignmentConfig"
-      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","allowLateSubmissions","attemptScoringStrategy","timerMinutes","moduleId","lessonId","completionRule","updatedAt")
+      ("assignmentId","assignmentType","rubricSteps","allowedSubmissionTypes","maxAttempts","autoGrade","allowLateSubmissions","attemptScoringStrategy","timerMinutes","startAt","moduleId","lessonId","completionRule","updatedAt")
     VALUES
-      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${allowLateSubmissions}, ${attemptScoringStrategy}, ${timerMinutes}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
+      (${assignmentId}, ${assignmentType}, ${JSON.stringify(rubricSteps)}::jsonb, ${JSON.stringify(allowedSubmissionTypes)}::jsonb, ${maxAttempts}, ${autoGrade}, ${allowLateSubmissions}, ${attemptScoringStrategy}, ${timerMinutes}, ${startAt ?? null}, ${moduleId}, ${lessonId}, ${completionRule}, NOW())
     ON CONFLICT ("assignmentId")
     DO UPDATE SET
       "assignmentType" = EXCLUDED."assignmentType",
@@ -292,6 +307,7 @@ async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignm
       "allowLateSubmissions" = EXCLUDED."allowLateSubmissions",
       "attemptScoringStrategy" = EXCLUDED."attemptScoringStrategy",
       "timerMinutes" = EXCLUDED."timerMinutes",
+      "startAt" = EXCLUDED."startAt",
       "moduleId" = EXCLUDED."moduleId",
       "lessonId" = EXCLUDED."lessonId",
       "completionRule" = EXCLUDED."completionRule",
@@ -346,6 +362,7 @@ function defaultConfig(assignmentId: string): AssignmentConfigRecord {
     allowLateSubmissions: true,
     attemptScoringStrategy: "LATEST",
     timerMinutes: null,
+    startAt: null,
     moduleId: null,
     lessonId: null,
     completionRule: "SUBMISSION_OR_GRADE",
@@ -399,19 +416,29 @@ export async function GET() {
 
     return NextResponse.json({
       courses,
-      assignments: assignments.map((item) => ({
-        id: item.id,
-        courseId: item.courseId,
-        title: item.title,
-        description: item.description,
-        dueAt: item.dueAt?.toISOString() ?? null,
-        maxPoints: Number(item.maxPoints),
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt.toISOString(),
-        course: item.course,
-        config: configByAssignmentId.get(item.id) ?? defaultConfig(item.id),
-        submissionCount: submissionCountByAssignmentId.get(item.id) ?? 0,
-      })),
+      assignments: assignments.map((item) => {
+        const config = configByAssignmentId.get(item.id) ?? defaultConfig(item.id);
+        const serializedStartAt = config.startAt?.toISOString() ?? null;
+        const serializedEndAt = item.dueAt?.toISOString() ?? null;
+        return {
+          id: item.id,
+          courseId: item.courseId,
+          title: item.title,
+          description: item.description,
+          startAt: serializedStartAt,
+          endAt: serializedEndAt,
+          dueAt: serializedEndAt,
+          maxPoints: Number(item.maxPoints),
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+          course: item.course,
+          config: {
+            ...config,
+            startAt: serializedStartAt,
+          },
+          submissionCount: submissionCountByAssignmentId.get(item.id) ?? 0,
+        };
+      }),
     });
   } catch (error) {
     if (error instanceof PermissionError) {
@@ -434,14 +461,33 @@ export async function POST(request: NextRequest) {
     const courseId = body.courseId?.trim() ?? "";
     const title = body.title?.trim() ?? "";
     const description = body.description?.trim() || null;
-    const dueAt = parseOptionalDateTime(body.dueAt);
+    const assignmentType = parseAssignmentType(body.assignmentType);
+    const rubricSteps = parseRubricSteps(body.rubricSteps);
+    const startAt = parseOptionalDateTime(body.startAt);
+    const endAtInput = body.endAt !== undefined ? body.endAt : body.dueAt;
+    const endAt = parseOptionalDateTime(endAtInput);
     const maxPoints = parseMaxPoints(body.maxPoints) ?? 100;
 
     if (!courseId || !title) {
       return NextResponse.json({ error: "courseId and title are required." }, { status: 400 });
     }
-    if (body.dueAt !== undefined && dueAt === undefined) {
-      return NextResponse.json({ error: "Invalid due date." }, { status: 400 });
+    if (body.startAt !== undefined && startAt === undefined) {
+      return NextResponse.json({ error: "Invalid start date/time." }, { status: 400 });
+    }
+    if ((body.endAt !== undefined || body.dueAt !== undefined) && endAt === undefined) {
+      return NextResponse.json({ error: "Invalid end date/time." }, { status: 400 });
+    }
+    if (!startAt || !endAt) {
+      return NextResponse.json({ error: "startAt and endAt are required." }, { status: 400 });
+    }
+    if (startAt.getTime() > endAt.getTime()) {
+      return NextResponse.json({ error: "Start date/time must be before end date/time." }, { status: 400 });
+    }
+    if (!hasRequiredAssessmentContent(assignmentType, description, rubricSteps)) {
+      return NextResponse.json(
+        { error: "Quiz and exam assignments cannot be empty. Add instructions or rubric steps." },
+        { status: 400 }
+      );
     }
 
     const course = await prisma.course.findUnique({
@@ -470,7 +516,7 @@ export async function POST(request: NextRequest) {
         courseId,
         title,
         description,
-        dueAt: dueAt ?? null,
+        dueAt: endAt,
         maxPoints: new Prisma.Decimal(maxPoints),
       },
       include: {
@@ -488,10 +534,18 @@ export async function POST(request: NextRequest) {
 
     await upsertAssignmentConfig(created.id, {
       ...body,
+      assignmentType,
+      rubricSteps,
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      dueAt: endAt.toISOString(),
       moduleId: moduleLessonValidation.moduleId,
       lessonId: moduleLessonValidation.lessonId,
     });
     const configByAssignmentId = await loadAssignmentConfigs([created.id]);
+    const config = configByAssignmentId.get(created.id) ?? defaultConfig(created.id);
+    const serializedStartAt = config.startAt?.toISOString() ?? null;
+    const serializedEndAt = created.dueAt?.toISOString() ?? null;
 
     return NextResponse.json(
       {
@@ -501,12 +555,17 @@ export async function POST(request: NextRequest) {
           courseId: created.courseId,
           title: created.title,
           description: created.description,
-          dueAt: created.dueAt?.toISOString() ?? null,
+          startAt: serializedStartAt,
+          endAt: serializedEndAt,
+          dueAt: serializedEndAt,
           maxPoints: Number(created.maxPoints),
           createdAt: created.createdAt.toISOString(),
           updatedAt: created.updatedAt.toISOString(),
           course: created.course,
-          config: configByAssignmentId.get(created.id) ?? defaultConfig(created.id),
+          config: {
+            ...config,
+            startAt: serializedStartAt,
+          },
         },
       },
       { status: 201 }
@@ -544,6 +603,17 @@ export async function PATCH(request: NextRequest) {
     if (user.role === Role.TEACHER && existing.course.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only update assignments in your assigned courses." }, { status: 403 });
     }
+    const existingConfig = (await loadAssignmentConfigs([assignmentId])).get(assignmentId) ?? defaultConfig(assignmentId);
+    const resolvedAssignmentType = parseAssignmentType(body.assignmentType ?? existingConfig.assignmentType);
+    const resolvedDescription =
+      body.description !== undefined ? body.description?.trim() || null : existing.description?.trim() || null;
+    const resolvedRubricSteps = body.rubricSteps !== undefined ? parseRubricSteps(body.rubricSteps) : existingConfig.rubricSteps;
+    if (!hasRequiredAssessmentContent(resolvedAssignmentType, resolvedDescription, resolvedRubricSteps)) {
+      return NextResponse.json(
+        { error: "Quiz and exam assignments cannot be empty. Add instructions or rubric steps." },
+        { status: 400 }
+      );
+    }
 
     const normalizedModuleId =
       typeof body.moduleId === "string" && body.moduleId.trim() ? body.moduleId.trim() : null;
@@ -565,12 +635,25 @@ export async function PATCH(request: NextRequest) {
       data.title = title;
     }
     if (body.description !== undefined) {
-      data.description = body.description?.trim() || null;
+      data.description = resolvedDescription;
     }
-    if (body.dueAt !== undefined) {
-      const dueAt = parseOptionalDateTime(body.dueAt);
-      if (dueAt === undefined) return NextResponse.json({ error: "Invalid due date." }, { status: 400 });
-      data.dueAt = dueAt;
+    const hasStartAtInput = body.startAt !== undefined;
+    const hasEndAtInput = body.endAt !== undefined || body.dueAt !== undefined;
+    let resolvedStartAt = existingConfig.startAt;
+    let resolvedEndAt = existing.dueAt;
+    if (hasStartAtInput) {
+      const startAt = parseOptionalDateTime(body.startAt);
+      if (startAt === undefined) return NextResponse.json({ error: "Invalid start date/time." }, { status: 400 });
+      resolvedStartAt = startAt;
+    }
+    if (hasEndAtInput) {
+      const endAt = parseOptionalDateTime(body.endAt !== undefined ? body.endAt : body.dueAt);
+      if (endAt === undefined) return NextResponse.json({ error: "Invalid end date/time." }, { status: 400 });
+      resolvedEndAt = endAt;
+      data.dueAt = endAt;
+    }
+    if (resolvedStartAt && resolvedEndAt && resolvedStartAt.getTime() > resolvedEndAt.getTime()) {
+      return NextResponse.json({ error: "Start date/time must be before end date/time." }, { status: 400 });
     }
     if (body.maxPoints !== undefined) {
       const maxPoints = parseMaxPoints(body.maxPoints);
@@ -615,10 +698,18 @@ export async function PATCH(request: NextRequest) {
 
     await upsertAssignmentConfig(assignmentId, {
       ...body,
+      assignmentType: resolvedAssignmentType,
+      rubricSteps: resolvedRubricSteps,
+      startAt: resolvedStartAt ? resolvedStartAt.toISOString() : null,
+      endAt: resolvedEndAt ? resolvedEndAt.toISOString() : null,
+      dueAt: resolvedEndAt ? resolvedEndAt.toISOString() : null,
       moduleId: moduleLessonValidation.moduleId,
       lessonId: moduleLessonValidation.lessonId,
     });
     const configByAssignmentId = await loadAssignmentConfigs([assignmentId]);
+    const config = configByAssignmentId.get(assignmentId) ?? defaultConfig(assignmentId);
+    const serializedStartAt = config.startAt?.toISOString() ?? null;
+    const serializedEndAt = updated.dueAt?.toISOString() ?? null;
 
     return NextResponse.json({
       ok: true,
@@ -627,12 +718,17 @@ export async function PATCH(request: NextRequest) {
         courseId: updated.courseId,
         title: updated.title,
         description: updated.description,
-        dueAt: updated.dueAt?.toISOString() ?? null,
+        startAt: serializedStartAt,
+        endAt: serializedEndAt,
+        dueAt: serializedEndAt,
         maxPoints: Number(updated.maxPoints),
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
         course: updated.course,
-        config: configByAssignmentId.get(assignmentId) ?? defaultConfig(assignmentId),
+        config: {
+          ...config,
+          startAt: serializedStartAt,
+        },
       },
     });
   } catch (error) {

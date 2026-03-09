@@ -22,7 +22,12 @@ type CreateSubmissionBody = {
   fileName?: string | null;
   mimeType?: string | null;
   quizStartedAt?: string | null;
-  quizAnswers?: Array<{ questionId: string; selectedOptionIndex: number }>;
+  quizAnswers?: Array<{
+    questionId: string;
+    selectedOptionIndex?: number;
+    selectedOptionIndices?: number[];
+    shortAnswerText?: string | null;
+  }>;
 };
 
 type UpdateSubmissionBody = {
@@ -80,6 +85,7 @@ ALTER TABLE "AssignmentSubmission" ADD COLUMN IF NOT EXISTS "quizStartedAt" TIME
 `);
   await prisma.$executeRawUnsafe(`
 ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "attemptScoringStrategy" TEXT;
+ALTER TABLE "AssignmentConfig" ADD COLUMN IF NOT EXISTS "startAt" TIMESTAMP(3);
 `);
 
   await prisma.$executeRawUnsafe(`
@@ -87,8 +93,11 @@ CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
   "id" TEXT NOT NULL,
   "assignmentId" TEXT NOT NULL,
   "prompt" TEXT NOT NULL,
+  "questionType" TEXT NOT NULL DEFAULT 'MCQ',
   "options" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "correctOptionIndexes" JSONB NOT NULL DEFAULT '[0]'::jsonb,
   "correctOptionIndex" INTEGER NOT NULL,
+  "shortAnswerKey" TEXT,
   "points" DOUBLE PRECISION NOT NULL DEFAULT 1,
   "position" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +105,19 @@ CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
   CONSTRAINT "AssignmentQuizQuestion_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX IF NOT EXISTS "AssignmentQuizQuestion_assignmentId_idx" ON "AssignmentQuizQuestion"("assignmentId");
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "questionType" TEXT;
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "correctOptionIndexes" JSONB;
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "shortAnswerKey" TEXT;
+UPDATE "AssignmentQuizQuestion"
+SET "questionType" = 'MCQ'
+WHERE "questionType" IS NULL;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "questionType" SET DEFAULT 'MCQ';
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "questionType" SET NOT NULL;
+UPDATE "AssignmentQuizQuestion"
+SET "correctOptionIndexes" = jsonb_build_array("correctOptionIndex")
+WHERE "correctOptionIndexes" IS NULL;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "correctOptionIndexes" SET DEFAULT '[0]'::jsonb;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "correctOptionIndexes" SET NOT NULL;
 `);
 
   await prisma.$executeRawUnsafe(`
@@ -164,7 +186,8 @@ async function getAssignmentConfig(assignmentId: string) {
       attemptScoringStrategy: string | null;
       allowLateSubmissions: boolean | null;
       timerMinutes: number | null;
-      dueAt: Date | null;
+      startAt: Date | null;
+      endAt: Date | null;
       maxPoints: Prisma.Decimal;
       courseId: string;
       courseVisibility: string | null;
@@ -179,7 +202,8 @@ async function getAssignmentConfig(assignmentId: string) {
       COALESCE(cfg."attemptScoringStrategy", 'LATEST') AS "attemptScoringStrategy",
       COALESCE(cfg."allowLateSubmissions", true) AS "allowLateSubmissions",
       cfg."timerMinutes",
-      a."dueAt",
+      cfg."startAt",
+      a."dueAt" AS "endAt",
       a."maxPoints",
       a."courseId",
       c."visibility"::text AS "courseVisibility",
@@ -206,7 +230,8 @@ async function getAssignmentConfig(assignmentId: string) {
     allowLateSubmissions: row.allowLateSubmissions !== false,
     timerMinutes:
       row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
-    dueAt: row.dueAt,
+    startAt: row.startAt,
+    endAt: row.endAt,
     maxPoints: Number(row.maxPoints),
     courseId: row.courseId,
     courseVisibility: row.courseVisibility,
@@ -241,6 +266,21 @@ function parseQuizStartedAt(input: unknown) {
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function normalizeOptionIndexes(input: unknown, fallback: unknown) {
+  const primary = Array.isArray(input) ? input.map((item) => Number(item)) : [];
+  const values = primary.length ? primary : [Number(fallback)];
+  return Array.from(new Set(values.filter((item) => Number.isInteger(item)))).sort((a, b) => a - b);
+}
+
+function parseQuestionType(input: unknown): "MCQ" | "SHORT_ANSWER" {
+  return input === "SHORT_ANSWER" ? "SHORT_ANSWER" : "MCQ";
+}
+
+function hasExactOptionMatch(selected: number[], expected: number[]) {
+  if (selected.length !== expected.length) return false;
+  return selected.every((index) => expected.includes(index));
 }
 
 function normalizeLifecycleState(input: string | null | undefined): GradeLifecycleState {
@@ -722,24 +762,25 @@ export async function POST(request: NextRequest) {
       ? body.quizAnswers
           .map((item) => ({
             questionId: typeof item?.questionId === "string" ? item.questionId.trim() : "",
-            selectedOptionIndex: Number(item?.selectedOptionIndex),
+            selectedOptionIndices: normalizeOptionIndexes(item?.selectedOptionIndices, item?.selectedOptionIndex),
+            shortAnswerText: typeof item?.shortAnswerText === "string" ? item.shortAnswerText.trim() : "",
           }))
-          .filter((item) => item.questionId && Number.isInteger(item.selectedOptionIndex))
+          .filter((item) => item.questionId && (item.selectedOptionIndices.length > 0 || item.shortAnswerText.length > 0))
       : [];
 
-    if (config.assignmentType === "QUIZ") {
+    if (config.assignmentType === "QUIZ" || config.assignmentType === "EXAM") {
       if (!quizAnswers.length) {
-        return NextResponse.json({ error: "Quiz answers are required." }, { status: 400 });
+        return NextResponse.json({ error: "Question answers are required." }, { status: 400 });
       }
     }
 
-    if (config.assignmentType !== "QUIZ" && hasText && !config.allowedSubmissionTypes.includes("TEXT")) {
+    if (config.assignmentType !== "QUIZ" && config.assignmentType !== "EXAM" && hasText && !config.allowedSubmissionTypes.includes("TEXT")) {
       return NextResponse.json({ error: "This assignment does not allow text submissions." }, { status: 400 });
     }
-    if (config.assignmentType !== "QUIZ" && hasFile && !config.allowedSubmissionTypes.includes("FILE")) {
+    if (config.assignmentType !== "QUIZ" && config.assignmentType !== "EXAM" && hasFile && !config.allowedSubmissionTypes.includes("FILE")) {
       return NextResponse.json({ error: "This assignment does not allow file submissions." }, { status: 400 });
     }
-    if (config.assignmentType !== "QUIZ" && !hasText && !hasFile) {
+    if (config.assignmentType !== "QUIZ" && config.assignmentType !== "EXAM" && !hasText && !hasFile) {
       return NextResponse.json({ error: "Provide text response and/or file upload." }, { status: 400 });
     }
 
@@ -763,13 +804,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Maximum attempts reached (${config.maxAttempts}).` }, { status: 400 });
     }
 
+    const now = new Date();
+    if (config.startAt && now.getTime() < config.startAt.getTime()) {
+      return NextResponse.json(
+        { error: "Submission window has not opened yet for this assignment." },
+        { status: 400 }
+      );
+    }
+
     let lateByMinutes = 0;
     let isLate = false;
-    if (config.dueAt) {
-      const now = new Date();
-      if (now.getTime() > config.dueAt.getTime()) {
+    if (config.endAt) {
+      if (now.getTime() > config.endAt.getTime()) {
         isLate = true;
-        lateByMinutes = Math.floor((now.getTime() - config.dueAt.getTime()) / (1000 * 60));
+        lateByMinutes = Math.floor((now.getTime() - config.endAt.getTime()) / (1000 * 60));
       }
     }
     if (isLate && config.allowLateSubmissions === false) {
@@ -784,122 +832,168 @@ export async function POST(request: NextRequest) {
       select: { lateSubmissionPenaltyRules: true },
     });
     const latePenaltyPct = isLate ? parsePenaltyPercent(settings?.lateSubmissionPenaltyRules ?? null, lateByMinutes) : 0;
+    const submissionStartedAt = parseQuizStartedAt(body.quizStartedAt);
+    if (config.timerMinutes && !submissionStartedAt) {
+      return NextResponse.json({ error: "Assignment start time is required for timed assignments." }, { status: 400 });
+    }
+    if (config.timerMinutes && submissionStartedAt) {
+      const elapsedMs = Date.now() - submissionStartedAt.getTime();
+      if (elapsedMs > config.timerMinutes * 60 * 1000) {
+        return NextResponse.json({ error: "Assignment time frame expired. Submission rejected." }, { status: 400 });
+      }
+    }
 
     const id = `asb_${Math.random().toString(36).slice(2, 14)}${Date.now().toString(36)}`;
     const attemptNumber = attemptCount + 1;
 
-    if (config.assignmentType === "QUIZ") {
-      const quizQuestions = await prisma.$queryRaw<
-        Array<{ id: string; correctOptionIndex: number; points: number; options: Prisma.JsonValue }>
+    const isQuestionBasedAssignment = config.assignmentType === "QUIZ" || config.assignmentType === "EXAM";
+    const normalizedQuestionAnswers = quizAnswers.map((item) => ({
+      questionId: item.questionId,
+      selectedOptionIndices: item.selectedOptionIndices,
+      shortAnswerText: item.shortAnswerText || "",
+    }));
+    if (isQuestionBasedAssignment) {
+      const questions = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          questionType: string;
+          correctOptionIndexes: Prisma.JsonValue;
+          correctOptionIndex: number;
+          points: number;
+        }>
       >`
-        SELECT "id","correctOptionIndex","points","options"
+        SELECT "id","questionType","correctOptionIndexes","correctOptionIndex","points"
         FROM "AssignmentQuizQuestion"
         WHERE "assignmentId" = ${assignmentId}
         ORDER BY "position" ASC, "createdAt" ASC
       `;
-      if (!quizQuestions.length) {
-        return NextResponse.json({ error: "Quiz has no configured questions." }, { status: 400 });
+      if (!questions.length) {
+        return NextResponse.json(
+          { error: config.assignmentType === "QUIZ" ? "Quiz has no configured questions." : "Exam has no configured questions." },
+          { status: 400 }
+        );
       }
 
-      const quizStartedAt = parseQuizStartedAt(body.quizStartedAt);
-      if (config.timerMinutes && !quizStartedAt) {
-        return NextResponse.json({ error: "Quiz start time is required for timed quizzes." }, { status: 400 });
+      const answerMap = new Map<
+        string,
+        { selectedOptionIndices: number[]; shortAnswerText: string }
+      >();
+      for (const item of normalizedQuestionAnswers) {
+        answerMap.set(item.questionId, {
+          selectedOptionIndices: item.selectedOptionIndices,
+          shortAnswerText: item.shortAnswerText,
+        });
       }
-      if (config.timerMinutes && quizStartedAt) {
-        const elapsedMs = Date.now() - quizStartedAt.getTime();
-        if (elapsedMs > config.timerMinutes * 60 * 1000) {
-          return NextResponse.json({ error: "Quiz timer expired. Submission rejected." }, { status: 400 });
+
+      for (const question of questions) {
+        const questionType = parseQuestionType(question.questionType);
+        const answer = answerMap.get(question.id);
+        if (!answer) {
+          return NextResponse.json({ error: "Answer all questions before submitting." }, { status: 400 });
+        }
+        if (questionType === "MCQ" && answer.selectedOptionIndices.length === 0) {
+          return NextResponse.json({ error: "Answer all questions before submitting." }, { status: 400 });
+        }
+        if (questionType === "SHORT_ANSWER" && !answer.shortAnswerText.trim()) {
+          return NextResponse.json({ error: "Answer all questions before submitting." }, { status: 400 });
         }
       }
 
-      const answerMap = new Map(quizAnswers.map((item) => [item.questionId, item.selectedOptionIndex]));
-      let earned = 0;
-      let maxQuizScore = 0;
-      for (const question of quizQuestions) {
-        const points = Number(question.points || 0);
-        if (points > 0) maxQuizScore += points;
-        const selected = answerMap.get(question.id);
-        if (selected !== undefined && selected === Number(question.correctOptionIndex)) {
-          earned += Math.max(0, points);
+      if (config.assignmentType === "QUIZ") {
+        let earned = 0;
+        let maxQuizScore = 0;
+        for (const question of questions) {
+          const points = Number(question.points || 0);
+          if (points > 0) maxQuizScore += points;
+          const questionType = parseQuestionType(question.questionType);
+          if (questionType !== "MCQ") {
+            return NextResponse.json({ error: "Quiz contains unsupported non-MCQ question type." }, { status: 400 });
+          }
+          const answer = answerMap.get(question.id);
+          const selected = answer?.selectedOptionIndices ?? [];
+          const expected = normalizeOptionIndexes(question.correctOptionIndexes, question.correctOptionIndex);
+          if (hasExactOptionMatch(selected, expected)) {
+            earned += Math.max(0, points);
+          }
         }
-      }
 
-      const normalizedRaw =
-        maxQuizScore > 0 ? Math.round(((earned / maxQuizScore) * Number(config.maxPoints)) * 100) / 100 : 0;
-      const penalty = Number(latePenaltyPct || 0);
-      const finalScore = Math.max(0, Math.round(normalizedRaw * (1 - penalty / 100) * 100) / 100);
+        const normalizedRaw =
+          maxQuizScore > 0 ? Math.round(((earned / maxQuizScore) * Number(config.maxPoints)) * 100) / 100 : 0;
+        const penalty = Number(latePenaltyPct || 0);
+        const finalScore = Math.max(0, Math.round(normalizedRaw * (1 - penalty / 100) * 100) / 100);
 
-      await prisma.$executeRaw`
-        INSERT INTO "AssignmentSubmission"
-        ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","rawScore","finalScore","quizAnswers","quizAutoScore","quizMaxScore","quizStartedAt","gradedAt","publishedAt","status")
-        VALUES
-        (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${null}, ${null}, ${null}, ${null}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${normalizedRaw}, ${finalScore}, ${JSON.stringify(quizAnswers)}::jsonb, ${earned}, ${maxQuizScore}, ${quizStartedAt}, NOW(), NOW(), ${"GRADE_PUBLISHED"})
-      `;
+        await prisma.$executeRaw`
+          INSERT INTO "AssignmentSubmission"
+          ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","rawScore","finalScore","quizAnswers","quizAutoScore","quizMaxScore","quizStartedAt","gradedAt","publishedAt","status")
+          VALUES
+          (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${null}, ${null}, ${null}, ${null}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${normalizedRaw}, ${finalScore}, ${JSON.stringify(normalizedQuestionAnswers)}::jsonb, ${earned}, ${maxQuizScore}, ${submissionStartedAt}, NOW(), NOW(), ${"GRADE_PUBLISHED"})
+        `;
 
-      const resolvedFinalScore = await resolveFinalScoreForGrade(
-        assignmentId,
-        user.id,
-        config.attemptScoringStrategy
-      );
-      if (resolvedFinalScore === null) {
-        return NextResponse.json({ error: "Unable to resolve final score for grade publication." }, { status: 500 });
-      }
+        const resolvedFinalScore = await resolveFinalScoreForGrade(
+          assignmentId,
+          user.id,
+          config.attemptScoringStrategy
+        );
+        if (resolvedFinalScore === null) {
+          return NextResponse.json({ error: "Unable to resolve final score for grade publication." }, { status: 500 });
+        }
 
-      await prisma.grade.upsert({
-        where: {
-          assignmentId_studentId: {
+        await prisma.grade.upsert({
+          where: {
+            assignmentId_studentId: {
+              assignmentId,
+              studentId: user.id,
+            },
+          },
+          create: {
             assignmentId,
             studentId: user.id,
+            points: new Prisma.Decimal(resolvedFinalScore),
+            awardedById: null,
+            publishedAt: new Date(),
           },
-        },
-        create: {
+          update: {
+            points: new Prisma.Decimal(resolvedFinalScore),
+            awardedById: null,
+            publishedAt: new Date(),
+          },
+        });
+
+        await logGradeHistory({
           assignmentId,
           studentId: user.id,
-          points: new Prisma.Decimal(resolvedFinalScore),
-          awardedById: null,
-          publishedAt: new Date(),
-        },
-        update: {
-          points: new Prisma.Decimal(resolvedFinalScore),
-          awardedById: null,
-          publishedAt: new Date(),
-        },
-      });
+          submissionId: id,
+          actorId: null,
+          action: "QUIZ_AUTO_PUBLISHED",
+          oldRawScore: null,
+          newRawScore: normalizedRaw,
+          oldFinalScore: null,
+          newFinalScore: resolvedFinalScore,
+          oldState: "SUBMITTED",
+          newState: "GRADE_PUBLISHED",
+          metadata: { latePenaltyPct, attemptNumber },
+        });
 
-      await logGradeHistory({
-        assignmentId,
-        studentId: user.id,
-        submissionId: id,
-        actorId: null,
-        action: "QUIZ_AUTO_PUBLISHED",
-        oldRawScore: null,
-        newRawScore: normalizedRaw,
-        oldFinalScore: null,
-        newFinalScore: resolvedFinalScore,
-        oldState: "SUBMITTED",
-        newState: "GRADE_PUBLISHED",
-        metadata: { latePenaltyPct, attemptNumber },
-      });
+        await createNotification({
+          recipientId: user.id,
+          type: "GRADE_PUBLISHED",
+          title: "Quiz grade published",
+          message: `Your quiz grade for assignment ${assignmentId} is now published.`,
+          metadata: { assignmentId, submissionId: id, finalScore: resolvedFinalScore },
+        });
 
-      await createNotification({
-        recipientId: user.id,
-        type: "GRADE_PUBLISHED",
-        title: "Quiz grade published",
-        message: `Your quiz grade for assignment ${assignmentId} is now published.`,
-        metadata: { assignmentId, submissionId: id, finalScore: resolvedFinalScore },
-      });
-
-      return NextResponse.json(
-        { ok: true, assignmentId, attemptNumber, latePenaltyPct, rawScore: normalizedRaw, finalScore },
-        { status: 201 }
-      );
+        return NextResponse.json(
+          { ok: true, assignmentId, attemptNumber, latePenaltyPct, rawScore: normalizedRaw, finalScore },
+          { status: 201 }
+        );
+      }
     }
 
     await prisma.$executeRaw`
       INSERT INTO "AssignmentSubmission"
-      ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","status")
+      ("id","assignmentId","studentId","attemptNumber","textResponse","fileUrl","fileName","mimeType","submittedAt","isLate","lateByMinutes","latePenaltyPct","quizAnswers","status")
       VALUES
-      (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${textResponse}, ${fileUrl}, ${fileName}, ${mimeType}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${"SUBMITTED"})
+      (${id}, ${assignmentId}, ${user.id}, ${attemptNumber}, ${textResponse}, ${fileUrl}, ${fileName}, ${mimeType}, NOW(), ${isLate}, ${lateByMinutes}, ${latePenaltyPct}, ${isQuestionBasedAssignment ? JSON.stringify(normalizedQuestionAnswers) : null}::jsonb, ${"SUBMITTED"})
     `;
 
     await queuePlagiarismCheck(id);

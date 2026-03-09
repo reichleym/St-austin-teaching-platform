@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { toast } from "@/lib/toast";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -26,6 +27,7 @@ type AssignmentConfig = {
   allowLateSubmissions: boolean;
   attemptScoringStrategy: "LATEST" | "HIGHEST";
   timerMinutes: number | null;
+  startAt?: string | null;
   moduleId: string | null;
   lessonId: string | null;
   completionRule: "SUBMISSION_OR_GRADE" | "SUBMISSION_ONLY" | "GRADE_ONLY";
@@ -47,7 +49,9 @@ type AssignmentItem = {
   courseId: string;
   title: string;
   description: string | null;
-  dueAt: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  dueAt?: string | null;
   maxPoints: number;
   createdAt: string;
   updatedAt: string;
@@ -87,16 +91,20 @@ type QuizQuestion = {
   id: string;
   assignmentId: string;
   prompt: string;
+  questionType?: "MCQ" | "SHORT_ANSWER";
   options: string[];
-  correctOptionIndex: number;
+  correctOptionIndexes?: number[];
+  shortAnswerKey?: string | null;
   points: number;
   position: number;
 };
 
 type DraftQuizQuestion = {
+  questionType: "MCQ" | "SHORT_ANSWER";
   prompt: string;
   options: string[];
-  correctOptionIndex: number;
+  correctOptionIndexes: number[];
+  shortAnswerKey?: string | null;
   points: number;
 };
 
@@ -117,19 +125,81 @@ type Props = {
   role: AppRole;
 };
 
-const toDateInput = (value: string | null) => {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
-};
-
 const formatDate = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleDateString();
 };
+
+const formatTime = (value: string | null) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+const toDateInput = (value: string | null | undefined) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toTimeInput = (value: string | null | undefined) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
+const toBoundaryIso = (value: string, boundary: "start" | "end") => {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const parsed = new Date(`${normalized}T${boundary === "end" ? "23:59:59.999" : "00:00:00.000"}`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+};
+
+const toDateTimeIso = (dateValue: string, timeValue: string) => {
+  const normalizedDate = dateValue.trim();
+  const normalizedTime = timeValue.trim();
+  if (!normalizedDate || !normalizedTime) return null;
+  const parsed = new Date(`${normalizedDate}T${normalizedTime}:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+};
+
+const formatAssignmentWindow = (
+  assignmentType: "HOMEWORK" | "QUIZ" | "EXAM",
+  startAt: string | null,
+  endAt: string | null
+) => {
+  if (assignmentType === "HOMEWORK") {
+    return `${formatDate(startAt)} ${formatTime(startAt)} - ${formatDate(endAt)} ${formatTime(endAt)}`;
+  }
+  return `${formatDate(startAt)} - ${formatDate(endAt)}`;
+};
+
+const toggleOptionSelection = (selected: number[], index: number) => {
+  if (selected.includes(index)) {
+    return selected.filter((item) => item !== index);
+  }
+  return [...selected, index].sort((a, b) => a - b);
+};
+
+const formatOptionIndexes = (indexes: number[]) =>
+  indexes
+    .map((index) => `Option ${String.fromCharCode(65 + index)}`)
+    .join(", ");
+
+const isQuestionAssignment = (assignmentType: "HOMEWORK" | "QUIZ" | "EXAM") =>
+  assignmentType === "QUIZ" || assignmentType === "EXAM";
 
 const formatMinutes = (minutes: number) => {
   if (!minutes) return "0m";
@@ -173,7 +243,10 @@ export function AssignmentsModule({ role }: Props) {
   const [createCourseId, setCreateCourseId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
-  const [createDueAt, setCreateDueAt] = useState("");
+  const [createStartAt, setCreateStartAt] = useState("");
+  const [createEndAt, setCreateEndAt] = useState("");
+  const [createStartTime, setCreateStartTime] = useState("");
+  const [createEndTime, setCreateEndTime] = useState("");
   const [createMaxPoints, setCreateMaxPoints] = useState("100");
   const [createType, setCreateType] = useState<"HOMEWORK" | "QUIZ" | "EXAM">("HOMEWORK");
   const [createAllowedText, setCreateAllowedText] = useState(true);
@@ -192,14 +265,19 @@ export function AssignmentsModule({ role }: Props) {
   const [createQuestionOptionB, setCreateQuestionOptionB] = useState("");
   const [createQuestionOptionC, setCreateQuestionOptionC] = useState("");
   const [createQuestionOptionD, setCreateQuestionOptionD] = useState("");
-  const [createQuestionCorrectIndex, setCreateQuestionCorrectIndex] = useState("0");
+  const [createQuestionType, setCreateQuestionType] = useState<"MCQ" | "SHORT_ANSWER">("MCQ");
+  const [createQuestionCorrectIndexes, setCreateQuestionCorrectIndexes] = useState<number[]>([0]);
+  const [createQuestionShortAnswerKey, setCreateQuestionShortAnswerKey] = useState("");
   const [createQuestionPoints, setCreateQuestionPoints] = useState("1");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [editId, setEditId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editDueAt, setEditDueAt] = useState("");
+  const [editStartAt, setEditStartAt] = useState("");
+  const [editEndAt, setEditEndAt] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
   const [editMaxPoints, setEditMaxPoints] = useState("100");
   const [editType, setEditType] = useState<"HOMEWORK" | "QUIZ" | "EXAM">("HOMEWORK");
   const [editAllowedText, setEditAllowedText] = useState(true);
@@ -217,7 +295,8 @@ export function AssignmentsModule({ role }: Props) {
 
   const [studentTextResponse, setStudentTextResponse] = useState("");
   const [studentFile, setStudentFile] = useState<File | null>(null);
-  const [studentQuizAnswers, setStudentQuizAnswers] = useState<Record<string, number>>({});
+  const [studentQuizAnswers, setStudentQuizAnswers] = useState<Record<string, number[]>>({});
+  const [studentShortAnswers, setStudentShortAnswers] = useState<Record<string, string>>({});
   const [studentQuizStartedAt, setStudentQuizStartedAt] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [studentPending, setStudentPending] = useState(false);
@@ -235,7 +314,9 @@ export function AssignmentsModule({ role }: Props) {
   const [newQuestionOptionB, setNewQuestionOptionB] = useState("");
   const [newQuestionOptionC, setNewQuestionOptionC] = useState("");
   const [newQuestionOptionD, setNewQuestionOptionD] = useState("");
-  const [newQuestionCorrectIndex, setNewQuestionCorrectIndex] = useState("0");
+  const [newQuestionType, setNewQuestionType] = useState<"MCQ" | "SHORT_ANSWER">("MCQ");
+  const [newQuestionCorrectIndexes, setNewQuestionCorrectIndexes] = useState<number[]>([0]);
+  const [newQuestionShortAnswerKey, setNewQuestionShortAnswerKey] = useState("");
   const [newQuestionPoints, setNewQuestionPoints] = useState("1");
   const [createQuestionPending, setCreateQuestionPending] = useState(false);
   const [deleteQuestionPendingId, setDeleteQuestionPendingId] = useState("");
@@ -248,6 +329,12 @@ export function AssignmentsModule({ role }: Props) {
   const [reviewPendingId, setReviewPendingId] = useState("");
   const [reviewApprovedPointsByRequest, setReviewApprovedPointsByRequest] = useState<Record<string, string>>({});
   const [reviewNoteByRequest, setReviewNoteByRequest] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!error.trim()) return;
+    toast.error(error);
+    setError("");
+  }, [error]);
 
   const selectedAssignment = useMemo(
     () => assignments.find((item) => item.id === selectedAssignmentId) ?? null,
@@ -407,33 +494,66 @@ export function AssignmentsModule({ role }: Props) {
   }, [canManage, createCourseId, loadCourseStructure]);
 
   useEffect(() => {
+    if (createType !== "EXAM" && createQuestionType === "SHORT_ANSWER") {
+      setCreateQuestionType("MCQ");
+      setCreateQuestionShortAnswerKey("");
+    }
+  }, [createQuestionType, createType]);
+
+  useEffect(() => {
     if (selectedAssignmentId) {
       void loadSubmissions(selectedAssignmentId);
     }
   }, [loadSubmissions, selectedAssignmentId]);
 
   useEffect(() => {
-    if (!selectedAssignmentId || selectedAssignment?.config.assignmentType !== "QUIZ") {
+    if (!selectedAssignmentId) {
       setQuizQuestions([]);
       setStudentQuizAnswers({});
+      setStudentShortAnswers({});
       setStudentQuizStartedAt(null);
       return;
     }
-    void loadQuizQuestions(selectedAssignmentId);
-    if (isStudent && !studentQuizStartedAt) {
+    if (selectedAssignment && isQuestionAssignment(selectedAssignment.config.assignmentType)) {
+      void loadQuizQuestions(selectedAssignmentId);
+    } else {
+      setQuizQuestions([]);
+      setStudentQuizAnswers({});
+      setStudentShortAnswers({});
+    }
+    if (isStudent && selectedAssignment?.config.timerMinutes && !studentQuizStartedAt) {
       setStudentQuizStartedAt(new Date().toISOString());
     }
-  }, [isStudent, loadQuizQuestions, selectedAssignment?.config.assignmentType, selectedAssignmentId, studentQuizStartedAt]);
+  }, [isStudent, loadQuizQuestions, selectedAssignment?.config.assignmentType, selectedAssignment?.config.timerMinutes, selectedAssignmentId, studentQuizStartedAt]);
 
   useEffect(() => {
-    if (!isStudent || selectedAssignment?.config.assignmentType !== "QUIZ" || !selectedAssignment.config.timerMinutes) {
+    setStudentQuizStartedAt(null);
+  }, [selectedAssignmentId]);
+
+  useEffect(() => {
+    if (selectedAssignment?.config.assignmentType !== "EXAM" && newQuestionType === "SHORT_ANSWER") {
+      setNewQuestionType("MCQ");
+      setNewQuestionShortAnswerKey("");
+    }
+  }, [newQuestionType, selectedAssignment?.config.assignmentType]);
+
+  useEffect(() => {
+    if (!isStudent || !selectedAssignment?.config.timerMinutes) {
       return;
     }
     const timer = window.setInterval(() => {
       setNowTick(Date.now());
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isStudent, selectedAssignment?.config.assignmentType, selectedAssignment?.config.timerMinutes]);
+  }, [isStudent, selectedAssignment?.config.timerMinutes]);
+
+  useEffect(() => {
+    if (!isStudent || !selectedAssignment) return;
+    const timer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 30 * 1000);
+    return () => window.clearInterval(timer);
+  }, [isStudent, selectedAssignment]);
 
   useEffect(() => {
     if (!editId) return;
@@ -441,7 +561,10 @@ export function AssignmentsModule({ role }: Props) {
     if (!selected) return;
     setEditTitle(selected.title);
     setEditDescription(selected.description ?? "");
-    setEditDueAt(toDateInput(selected.dueAt));
+    setEditStartAt(toDateInput(selected.startAt ?? selected.config.startAt ?? null));
+    setEditEndAt(toDateInput(selected.endAt ?? selected.dueAt ?? null));
+    setEditStartTime(toTimeInput(selected.startAt ?? selected.config.startAt ?? null));
+    setEditEndTime(toTimeInput(selected.endAt ?? selected.dueAt ?? null));
     setEditMaxPoints(String(selected.maxPoints));
     setEditType(selected.config.assignmentType);
     setEditAllowedText(selected.config.allowedSubmissionTypes.includes("TEXT"));
@@ -465,32 +588,57 @@ export function AssignmentsModule({ role }: Props) {
 
   const addDraftQuestion = () => {
     const prompt = createQuestionPrompt.trim();
+    if (createType === "QUIZ" && createQuestionType !== "MCQ") {
+      setError("Quiz supports MCQ questions only.");
+      return;
+    }
     const options = [createQuestionOptionA, createQuestionOptionB, createQuestionOptionC, createQuestionOptionD]
       .map((item) => item.trim())
       .filter(Boolean);
-    const correctOptionIndex = Number(createQuestionCorrectIndex);
+    const correctOptionIndexes = Array.from(
+      new Set(createQuestionCorrectIndexes.filter((index) => Number.isInteger(index) && index >= 0 && index < options.length))
+    ).sort((a, b) => a - b);
+    const shortAnswerKey = createQuestionShortAnswerKey.trim() || null;
     const points = Number(createQuestionPoints);
 
-    if (!prompt || options.length < 2) {
-      setError("Quiz question needs a prompt and at least two options.");
+    if (!prompt) {
+      setError("Question prompt is required.");
       return;
     }
-    if (!Number.isInteger(correctOptionIndex) || correctOptionIndex < 0 || correctOptionIndex >= options.length) {
-      setError("Select a valid correct option for the quiz question.");
-      return;
+    if (createQuestionType === "MCQ") {
+      if (options.length < 2) {
+        setError("MCQ question needs at least two options.");
+        return;
+      }
+      if (!correctOptionIndexes.length) {
+        setError("Select at least one valid correct option for the quiz question.");
+        return;
+      }
     }
     if (!Number.isFinite(points) || points <= 0) {
-      setError("Quiz question points must be greater than zero.");
+      setError("Question points must be greater than zero.");
       return;
     }
 
-    setCreateDraftQuestions((prev) => [...prev, { prompt, options, correctOptionIndex, points }]);
+    setCreateDraftQuestions((prev) => [
+      ...prev,
+      {
+        questionType: createQuestionType,
+        prompt,
+        options: createQuestionType === "MCQ" ? options : [],
+        correctOptionIndexes: createQuestionType === "MCQ" ? correctOptionIndexes : [],
+        shortAnswerKey: createQuestionType === "SHORT_ANSWER" ? shortAnswerKey : null,
+        points,
+      },
+    ]);
     setCreateQuestionPrompt("");
     setCreateQuestionOptionA("");
     setCreateQuestionOptionB("");
     setCreateQuestionOptionC("");
     setCreateQuestionOptionD("");
-    setCreateQuestionCorrectIndex("0");
+    setCreateQuestionType("MCQ");
+    setCreateQuestionCorrectIndexes([0]);
+    setCreateQuestionShortAnswerKey("");
     setCreateQuestionPoints("1");
   };
 
@@ -499,6 +647,39 @@ export function AssignmentsModule({ role }: Props) {
     setCreatePending(true);
     setError("");
     try {
+      const createRubricSteps = createRubric.split("\n").map((item) => item.trim()).filter(Boolean);
+      const hasCreateContent = createDescription.trim().length > 0 || createRubricSteps.length > 0;
+      if ((createType === "QUIZ" || createType === "EXAM") && !hasCreateContent) {
+        setError("Quiz and exam assignments cannot be empty. Add instructions or rubric steps.");
+        return;
+      }
+      if (isQuestionAssignment(createType) && createDraftQuestions.length === 0) {
+        setError(createType === "QUIZ" ? "Add at least one quiz question before creating the quiz assignment." : "Add at least one question before creating the exam assignment.");
+        return;
+      }
+
+      const createStartIso =
+        createType === "HOMEWORK"
+          ? toDateTimeIso(createStartAt, createStartTime)
+          : toBoundaryIso(createStartAt, "start");
+      const createEndIso =
+        createType === "HOMEWORK"
+          ? toDateTimeIso(createEndAt, createEndTime)
+          : toBoundaryIso(createEndAt, "end");
+
+      if (!createStartIso || !createEndIso) {
+        setError(
+          createType === "HOMEWORK"
+            ? "Provide a valid start date, end date, start time, and end time for homework."
+            : "Provide valid start and end dates."
+        );
+        return;
+      }
+      if (new Date(createEndIso).getTime() <= new Date(createStartIso).getTime()) {
+        setError(createType === "HOMEWORK" ? "Homework end time must be after start time." : "End date must be after start date.");
+        return;
+      }
+
       const response = await fetch("/api/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -506,15 +687,16 @@ export function AssignmentsModule({ role }: Props) {
           courseId: createCourseId,
           title: createTitle,
           description: createDescription,
-          dueAt: createDueAt || null,
+          startAt: createStartIso,
+          endAt: createEndIso,
           maxPoints: createMaxPoints,
           assignmentType: createType,
           allowedSubmissionTypes: buildAllowedTypes(createAllowedText, createAllowedFile),
           maxAttempts: Number(createAttempts),
           allowLateSubmissions: createAllowLateSubmissions,
           attemptScoringStrategy: createAttemptScoringStrategy,
-          timerMinutes: createType === "QUIZ" ? Number(createTimerMinutes || 0) || null : null,
-          rubricSteps: createRubric.split("\n").map((item) => item.trim()).filter(Boolean),
+          timerMinutes: createType === "HOMEWORK" ? null : Number(createTimerMinutes || 0) || null,
+          rubricSteps: createRubricSteps,
           autoGrade: createType === "QUIZ",
           moduleId: createModuleId || null,
           lessonId: createLessonId || null,
@@ -528,16 +710,18 @@ export function AssignmentsModule({ role }: Props) {
       }
 
       const createdAssignmentId = result.assignment?.id ?? "";
-      if (createType === "QUIZ" && createdAssignmentId && createDraftQuestions.length > 0) {
+      if (isQuestionAssignment(createType) && createdAssignmentId && createDraftQuestions.length > 0) {
         for (const question of createDraftQuestions) {
           const questionResponse = await fetch("/api/assignments/questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               assignmentId: createdAssignmentId,
+              questionType: question.questionType,
               prompt: question.prompt,
               options: question.options,
-              correctOptionIndex: question.correctOptionIndex,
+              correctOptionIndexes: question.correctOptionIndexes,
+              shortAnswerKey: question.shortAnswerKey ?? null,
               points: question.points,
             }),
           });
@@ -552,7 +736,10 @@ export function AssignmentsModule({ role }: Props) {
 
       setCreateTitle("");
       setCreateDescription("");
-      setCreateDueAt("");
+      setCreateStartAt("");
+      setCreateEndAt("");
+      setCreateStartTime("");
+      setCreateEndTime("");
       setCreateMaxPoints("100");
       setCreateType("HOMEWORK");
       setCreateAttempts("1");
@@ -565,6 +752,15 @@ export function AssignmentsModule({ role }: Props) {
       setCreateAllowedText(true);
       setCreateAllowedFile(true);
       setCreateDraftQuestions([]);
+      setCreateQuestionPrompt("");
+      setCreateQuestionOptionA("");
+      setCreateQuestionOptionB("");
+      setCreateQuestionOptionC("");
+      setCreateQuestionOptionD("");
+      setCreateQuestionType("MCQ");
+      setCreateQuestionCorrectIndexes([0]);
+      setCreateQuestionShortAnswerKey("");
+      setCreateQuestionPoints("1");
       setShowCreateModal(false);
       await load();
     } catch {
@@ -580,6 +776,35 @@ export function AssignmentsModule({ role }: Props) {
     setEditPending(true);
     setError("");
     try {
+      const editRubricSteps = editRubric.split("\n").map((item) => item.trim()).filter(Boolean);
+      const hasEditContent = editDescription.trim().length > 0 || editRubricSteps.length > 0;
+      if ((editType === "QUIZ" || editType === "EXAM") && !hasEditContent) {
+        setError("Quiz and exam assignments cannot be empty. Add instructions or rubric steps.");
+        return;
+      }
+
+      const editStartIso =
+        editType === "HOMEWORK"
+          ? toDateTimeIso(editStartAt, editStartTime)
+          : toBoundaryIso(editStartAt, "start");
+      const editEndIso =
+        editType === "HOMEWORK"
+          ? toDateTimeIso(editEndAt, editEndTime)
+          : toBoundaryIso(editEndAt, "end");
+
+      if (!editStartIso || !editEndIso) {
+        setError(
+          editType === "HOMEWORK"
+            ? "Provide a valid start date, end date, start time, and end time for homework."
+            : "Provide valid start and end dates."
+        );
+        return;
+      }
+      if (new Date(editEndIso).getTime() <= new Date(editStartIso).getTime()) {
+        setError(editType === "HOMEWORK" ? "Homework end time must be after start time." : "End date must be after start date.");
+        return;
+      }
+
       const response = await fetch("/api/assignments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -587,15 +812,16 @@ export function AssignmentsModule({ role }: Props) {
           assignmentId: editId,
           title: editTitle,
           description: editDescription,
-          dueAt: editDueAt || null,
+          startAt: editStartIso,
+          endAt: editEndIso,
           maxPoints: editMaxPoints,
           assignmentType: editType,
           allowedSubmissionTypes: buildAllowedTypes(editAllowedText, editAllowedFile),
           maxAttempts: Number(editAttempts),
           allowLateSubmissions: editAllowLateSubmissions,
           attemptScoringStrategy: editAttemptScoringStrategy,
-          timerMinutes: editType === "QUIZ" ? Number(editTimerMinutes || 0) || null : null,
-          rubricSteps: editRubric.split("\n").map((item) => item.trim()).filter(Boolean),
+          timerMinutes: editType === "HOMEWORK" ? null : Number(editTimerMinutes || 0) || null,
+          rubricSteps: editRubricSteps,
           autoGrade: editType === "QUIZ",
           moduleId: editModuleId || null,
           lessonId: editLessonId || null,
@@ -671,22 +897,50 @@ export function AssignmentsModule({ role }: Props) {
 
   const onCreateQuestion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedAssignment || selectedAssignment.config.assignmentType !== "QUIZ") return;
+    if (!selectedAssignment || !isQuestionAssignment(selectedAssignment.config.assignmentType)) return;
     setCreateQuestionPending(true);
     setError("");
     try {
+      const prompt = newQuestionPrompt.trim();
+      if (selectedAssignment.config.assignmentType === "QUIZ" && newQuestionType !== "MCQ") {
+        setError("Quiz supports MCQ questions only.");
+        return;
+      }
       const options = [newQuestionOptionA, newQuestionOptionB, newQuestionOptionC, newQuestionOptionD]
         .map((item) => item.trim())
         .filter(Boolean);
+      const correctOptionIndexes = Array.from(
+        new Set(newQuestionCorrectIndexes.filter((index) => Number.isInteger(index) && index >= 0 && index < options.length))
+      ).sort((a, b) => a - b);
+      const shortAnswerKey = newQuestionShortAnswerKey.trim() || null;
+      const points = Number(newQuestionPoints);
+      if (!prompt) {
+        setError("Question prompt is required.");
+        return;
+      }
+      if (newQuestionType === "MCQ" && options.length < 2) {
+        setError("At least two options are required for MCQ.");
+        return;
+      }
+      if (newQuestionType === "MCQ" && !correctOptionIndexes.length) {
+        setError("Select at least one valid correct option.");
+        return;
+      }
+      if (!Number.isFinite(points) || points <= 0) {
+        setError("Question points must be greater than zero.");
+        return;
+      }
       const response = await fetch("/api/assignments/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assignmentId: selectedAssignment.id,
-          prompt: newQuestionPrompt,
-          options,
-          correctOptionIndex: Number(newQuestionCorrectIndex),
-          points: Number(newQuestionPoints),
+          questionType: newQuestionType,
+          prompt,
+          options: newQuestionType === "MCQ" ? options : [],
+          correctOptionIndexes: newQuestionType === "MCQ" ? correctOptionIndexes : [],
+          shortAnswerKey: newQuestionType === "SHORT_ANSWER" ? shortAnswerKey : null,
+          points,
         }),
       });
       const raw = await response.text();
@@ -700,7 +954,9 @@ export function AssignmentsModule({ role }: Props) {
       setNewQuestionOptionB("");
       setNewQuestionOptionC("");
       setNewQuestionOptionD("");
-      setNewQuestionCorrectIndex("0");
+      setNewQuestionType("MCQ");
+      setNewQuestionCorrectIndexes([0]);
+      setNewQuestionShortAnswerKey("");
       setNewQuestionPoints("1");
       await loadQuizQuestions(selectedAssignment.id);
     } catch {
@@ -742,6 +998,25 @@ export function AssignmentsModule({ role }: Props) {
     setStudentPending(true);
     setError("");
     try {
+      const isQuestionBased = isQuestionAssignment(selectedAssignment.config.assignmentType);
+      if (isQuestionBased) {
+        if (!quizQuestions.length) {
+          setError("No questions are configured for this assignment.");
+          return;
+        }
+        const hasUnansweredQuestion = quizQuestions.some((question) => {
+          const questionType = question.questionType ?? "MCQ";
+          if (questionType === "SHORT_ANSWER") {
+            return !(studentShortAnswers[question.id]?.trim() ?? "");
+          }
+          return (studentQuizAnswers[question.id] ?? []).length === 0;
+        });
+        if (hasUnansweredQuestion) {
+          setError("Answer all questions before submitting.");
+          return;
+        }
+      }
+
       let fileUrl: string | null = null;
       let fileName: string | null = null;
       let mimeType: string | null = null;
@@ -772,13 +1047,17 @@ export function AssignmentsModule({ role }: Props) {
           fileUrl,
           fileName,
           mimeType,
-          quizStartedAt: selectedAssignment.config.assignmentType === "QUIZ" ? studentQuizStartedAt : null,
+          quizStartedAt: selectedAssignment.config.timerMinutes ? studentQuizStartedAt : null,
           quizAnswers:
-            selectedAssignment.config.assignmentType === "QUIZ"
-              ? Object.entries(studentQuizAnswers).map(([questionId, selectedOptionIndex]) => ({
-                  questionId,
-                  selectedOptionIndex,
-                }))
+            isQuestionBased
+              ? quizQuestions.map((question) => {
+                  const questionType = question.questionType ?? "MCQ";
+                  return {
+                    questionId: question.id,
+                    selectedOptionIndices: questionType === "SHORT_ANSWER" ? [] : (studentQuizAnswers[question.id] ?? []),
+                    shortAnswerText: questionType === "SHORT_ANSWER" ? (studentShortAnswers[question.id] ?? "") : "",
+                  };
+                })
               : [],
         }),
       });
@@ -793,6 +1072,7 @@ export function AssignmentsModule({ role }: Props) {
       setStudentTextResponse("");
       setStudentFile(null);
       setStudentQuizAnswers({});
+      setStudentShortAnswers({});
       setStudentQuizStartedAt(new Date().toISOString());
       await loadSubmissions(selectedAssignment.id);
     } catch {
@@ -900,29 +1180,40 @@ export function AssignmentsModule({ role }: Props) {
   };
 
   const quizRemainingSeconds = useMemo(() => {
+    const timerMinutes = selectedAssignment?.config.timerMinutes ?? null;
     if (
       !isStudent ||
-      selectedAssignment?.config.assignmentType !== "QUIZ" ||
-      !selectedAssignment.config.timerMinutes ||
+      !timerMinutes ||
       !studentQuizStartedAt
     ) {
       return null;
     }
     const startedAt = new Date(studentQuizStartedAt).getTime();
     if (Number.isNaN(startedAt)) return null;
-    const limitMs = selectedAssignment.config.timerMinutes * 60 * 1000;
+    const limitMs = timerMinutes * 60 * 1000;
     const remainingMs = Math.max(0, startedAt + limitMs - nowTick);
     return Math.floor(remainingMs / 1000);
-  }, [isStudent, nowTick, selectedAssignment, studentQuizStartedAt]);
+  }, [isStudent, nowTick, selectedAssignment?.config.timerMinutes, studentQuizStartedAt]);
+
+  const selectedAssignmentStartAt = selectedAssignment?.startAt ?? selectedAssignment?.config.startAt ?? null;
+  const selectedAssignmentEndAt = selectedAssignment?.endAt ?? selectedAssignment?.dueAt ?? null;
+  const selectedStartAtMs = selectedAssignmentStartAt ? new Date(selectedAssignmentStartAt).getTime() : NaN;
+  const selectedEndAtMs = selectedAssignmentEndAt ? new Date(selectedAssignmentEndAt).getTime() : NaN;
+  const isSubmissionBeforeWindow =
+    isStudent && selectedAssignmentStartAt ? Number.isFinite(selectedStartAtMs) && nowTick < selectedStartAtMs : false;
+  const isSubmissionAfterWindow =
+    isStudent && selectedAssignmentEndAt ? Number.isFinite(selectedEndAtMs) && nowTick > selectedEndAtMs : false;
+  const isSubmissionBlockedByWindow = isSubmissionBeforeWindow || (isSubmissionAfterWindow && !selectedAssignment?.config.allowLateSubmissions);
 
   const studentAttemptCount = isStudent ? submissions.length : 0;
   const studentCanSubmit = useMemo(() => {
     if (!isStudent || !selectedAssignment) return false;
-    if (selectedAssignment.config.assignmentType === "QUIZ") {
+    if (isSubmissionBlockedByWindow) return false;
+    if (isQuestionAssignment(selectedAssignment.config.assignmentType)) {
       return studentAttemptCount < selectedAssignment.config.maxAttempts;
     }
     return studentAttemptCount === 0;
-  }, [isStudent, selectedAssignment, studentAttemptCount]);
+  }, [isStudent, isSubmissionBlockedByWindow, selectedAssignment, studentAttemptCount]);
 
   return (
     <section className="grid min-w-0 gap-4">
@@ -944,25 +1235,33 @@ export function AssignmentsModule({ role }: Props) {
                   Proposed: {request.proposedPoints ?? "N/A"} | Requested by: {request.requestedBy?.name || request.requestedBy?.email || "Teacher"}
                 </p>
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  <input
-                    className="brand-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Approved points (optional)"
-                    value={reviewApprovedPointsByRequest[request.id] ?? ""}
-                    onChange={(event) =>
-                      setReviewApprovedPointsByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
-                    }
-                  />
-                  <input
-                    className="brand-input"
-                    placeholder="Review note (optional)"
-                    value={reviewNoteByRequest[request.id] ?? ""}
-                    onChange={(event) =>
-                      setReviewNoteByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
-                    }
-                  />
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Approved Points</span>
+                    <input
+                      className="brand-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Approved points (optional)"
+                      aria-label={`Approved points for ${request.assignment?.title ?? "assignment"}`}
+                      value={reviewApprovedPointsByRequest[request.id] ?? ""}
+                      onChange={(event) =>
+                        setReviewApprovedPointsByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Review Note</span>
+                    <input
+                      className="brand-input"
+                      placeholder="Review note (optional)"
+                      aria-label={`Review note for ${request.assignment?.title ?? "assignment"}`}
+                      value={reviewNoteByRequest[request.id] ?? ""}
+                      onChange={(event) =>
+                        setReviewNoteByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
+                      }
+                    />
+                  </label>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                   <button
@@ -1013,7 +1312,6 @@ export function AssignmentsModule({ role }: Props) {
             ) : null}
           </div>
         </div>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         {loading ? <p className="brand-muted mt-3 text-sm">Loading assignments...</p> : null}
 
         {!loading && filteredAssignments.length ? (
@@ -1026,7 +1324,7 @@ export function AssignmentsModule({ role }: Props) {
                 <th className="px-3 py-2 font-semibold">Type</th>
                 <th className="px-3 py-2 font-semibold">Linked To</th>
                 <th className="px-3 py-2 font-semibold">Attempts</th>
-                <th className="px-3 py-2 font-semibold">Due</th>
+                <th className="px-3 py-2 font-semibold">Window</th>
                 <th className="px-3 py-2 font-semibold">Max Points</th>
                 <th className="px-3 py-2 font-semibold">Submissions</th>
                 <th className="px-3 py-2 font-semibold">Actions</th>
@@ -1051,7 +1349,9 @@ export function AssignmentsModule({ role }: Props) {
                       : "Course Only"}
                   </td>
                   <td className="px-3 py-2">{item.config.maxAttempts}</td>
-                  <td className="px-3 py-2">{formatDate(item.dueAt)}</td>
+                  <td className="px-3 py-2">
+                    {formatAssignmentWindow(item.config.assignmentType, item.startAt, item.endAt ?? item.dueAt ?? null)}
+                  </td>
                   <td className="px-3 py-2">{item.maxPoints}</td>
                   <td className="px-3 py-2">{item.submissionCount ?? 0}</td>
                   <td className="px-3 py-2">
@@ -1100,8 +1400,9 @@ export function AssignmentsModule({ role }: Props) {
           <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
           <p className="brand-muted mt-2 break-words text-sm">
             Submission Types: {selectedAssignment.config.allowedSubmissionTypes.join(", ")} | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
-            {selectedAssignment.config.assignmentType === "QUIZ" && selectedAssignment.config.timerMinutes
-              ? ` | Timer: ${selectedAssignment.config.timerMinutes} min`
+            {` | Window: ${formatAssignmentWindow(selectedAssignment.config.assignmentType, selectedAssignmentStartAt, selectedAssignmentEndAt)}`}
+            {selectedAssignment.config.timerMinutes
+              ? ` | Time Frame: ${selectedAssignment.config.timerMinutes} min`
               : ""}
           </p>
 
@@ -1110,58 +1411,90 @@ export function AssignmentsModule({ role }: Props) {
               {submissionsLoading ? <p className="brand-muted text-sm">Checking your submission status...</p> : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
-                  {selectedAssignment.config.assignmentType === "QUIZ"
-                    ? "You have reached the maximum quiz attempts."
-                    : "You already submitted this assignment. Resubmission is not allowed."}
+                  {isSubmissionBeforeWindow
+                    ? `Submission opens on ${formatDate(selectedAssignmentStartAt)}.`
+                    : isSubmissionAfterWindow && !selectedAssignment.config.allowLateSubmissions
+                      ? "Submission window has ended. Late submissions are blocked."
+                      : isQuestionAssignment(selectedAssignment.config.assignmentType)
+                        ? `You have reached the maximum ${selectedAssignment.config.assignmentType.toLowerCase()} attempts.`
+                        : "You already submitted this assignment. Resubmission is not allowed."}
                 </p>
               ) : null}
-              {selectedAssignment.config.assignmentType === "QUIZ" ? (
+              {!submissionsLoading && studentCanSubmit && isSubmissionAfterWindow && selectedAssignment.config.allowLateSubmissions ? (
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Submission window ended on {formatDate(selectedAssignmentEndAt)}. Late penalties may apply.
+                </p>
+              ) : null}
+              {selectedAssignment.config.timerMinutes && quizRemainingSeconds !== null ? (
+                <p className="text-sm font-semibold text-[#1f518f]">
+                  Time Remaining: {Math.floor(quizRemainingSeconds / 60)}m {quizRemainingSeconds % 60}s
+                </p>
+              ) : null}
+              {isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
                 <>
-                  {quizRemainingSeconds !== null ? (
-                    <p className="text-sm font-semibold text-[#1f518f]">
-                      Time Remaining: {Math.floor(quizRemainingSeconds / 60)}m {quizRemainingSeconds % 60}s
-                    </p>
-                  ) : null}
-                  {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading quiz questions...</p> : null}
+                  {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
                   {quizQuestions.map((question, index) => (
                     <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                       <p className="text-sm font-semibold text-[#0d3f80]">
                         Q{index + 1}. {question.prompt} ({question.points} pts)
                       </p>
-                      <div className="mt-2 grid gap-2">
-                        {question.options.map((option, optionIndex) => (
-                          <label key={`${question.id}_${optionIndex}`} className="inline-flex items-center gap-2 text-sm text-[#234f8f]">
-                            <input
-                              type="radio"
-                              name={`quiz_${question.id}`}
-                              checked={studentQuizAnswers[question.id] === optionIndex}
-                              onChange={() =>
-                                setStudentQuizAnswers((prev) => ({ ...prev, [question.id]: optionIndex }))
-                              }
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </div>
+                      {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? (
+                        <label className="mt-2 grid gap-1.5">
+                          <span className="brand-label">Short Answer</span>
+                          <textarea
+                            className="brand-input min-h-[90px]"
+                            placeholder="Type your answer"
+                            value={studentShortAnswers[question.id] ?? ""}
+                            onChange={(event) =>
+                              setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }))
+                            }
+                          />
+                        </label>
+                      ) : (
+                        <div className="mt-2 grid gap-2">
+                          {question.options.map((option, optionIndex) => (
+                            <label key={`${question.id}_${optionIndex}`} className="inline-flex items-center gap-2 text-sm text-[#234f8f]">
+                              <input
+                                type="checkbox"
+                                checked={studentQuizAnswers[question.id]?.includes(optionIndex) ?? false}
+                                onChange={() =>
+                                  setStudentQuizAnswers((prev) => ({
+                                    ...prev,
+                                    [question.id]: toggleOptionSelection(prev[question.id] ?? [], optionIndex),
+                                  }))
+                                }
+                              />
+                              <span>{option}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </>
               ) : null}
-              {selectedAssignment.config.assignmentType !== "QUIZ" && selectedAssignment.config.allowedSubmissionTypes.includes("TEXT") ? (
-                <textarea
-                  className="brand-input min-h-[100px]"
-                  placeholder="Text response"
-                  value={studentTextResponse}
-                  onChange={(event) => setStudentTextResponse(event.currentTarget.value)}
-                />
+              {!isQuestionAssignment(selectedAssignment.config.assignmentType) && selectedAssignment.config.allowedSubmissionTypes.includes("TEXT") ? (
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Text Response</span>
+                  <textarea
+                    className="brand-input min-h-[100px]"
+                    placeholder="Text response"
+                    aria-label="Text response"
+                    value={studentTextResponse}
+                    onChange={(event) => setStudentTextResponse(event.currentTarget.value)}
+                  />
+                </label>
               ) : null}
-              {selectedAssignment.config.assignmentType !== "QUIZ" && selectedAssignment.config.allowedSubmissionTypes.includes("FILE") ? (
-                <input type="file" className="brand-input" onChange={(event) => setStudentFile(event.currentTarget.files?.[0] ?? null)} />
+              {!isQuestionAssignment(selectedAssignment.config.assignmentType) && selectedAssignment.config.allowedSubmissionTypes.includes("FILE") ? (
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Upload File</span>
+                  <input type="file" className="brand-input" aria-label="Upload assignment file" onChange={(event) => setStudentFile(event.currentTarget.files?.[0] ?? null)} />
+                </label>
               ) : null}
               {studentCanSubmit ? (
                 <button
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
-                  disabled={studentPending || submissionsLoading || (selectedAssignment.config.assignmentType === "QUIZ" && quizRemainingSeconds === 0)}
+                  disabled={studentPending || submissionsLoading || (!!selectedAssignment.config.timerMinutes && quizRemainingSeconds === 0)}
                 >
                   {studentPending ? "Submitting..." : "Submit Attempt"}
                 </button>
@@ -1169,32 +1502,101 @@ export function AssignmentsModule({ role }: Props) {
             </form>
           ) : null}
 
-          {canManage && selectedAssignment.config.assignmentType === "QUIZ" ? (
+          {canManage && isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
             <div className="mt-4 rounded-md border border-[#dbe9fb] p-3">
-              <p className="brand-label">Quiz Questions (MCQ)</p>
+              <p className="brand-label">
+                {selectedAssignment.config.assignmentType === "QUIZ" ? "Quiz Questions (MCQ)" : "Exam Questions (MCQ + Short Answer)"}
+              </p>
               <form className="mt-2 grid gap-2" onSubmit={onCreateQuestion}>
-                <input
-                  className="brand-input"
-                  placeholder="Question prompt"
-                  value={newQuestionPrompt}
-                  onChange={(event) => setNewQuestionPrompt(event.currentTarget.value)}
-                  required
-                />
-                <div className="grid gap-2 md:grid-cols-2">
-                  <input className="brand-input" placeholder="Option A" value={newQuestionOptionA} onChange={(event) => setNewQuestionOptionA(event.currentTarget.value)} required />
-                  <input className="brand-input" placeholder="Option B" value={newQuestionOptionB} onChange={(event) => setNewQuestionOptionB(event.currentTarget.value)} required />
-                  <input className="brand-input" placeholder="Option C (optional)" value={newQuestionOptionC} onChange={(event) => setNewQuestionOptionC(event.currentTarget.value)} />
-                  <input className="brand-input" placeholder="Option D (optional)" value={newQuestionOptionD} onChange={(event) => setNewQuestionOptionD(event.currentTarget.value)} />
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <select className="brand-input" value={newQuestionCorrectIndex} onChange={(event) => setNewQuestionCorrectIndex(event.currentTarget.value)}>
-                    <option value="0">Correct: Option A</option>
-                    <option value="1">Correct: Option B</option>
-                    <option value="2">Correct: Option C</option>
-                    <option value="3">Correct: Option D</option>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Question Prompt</span>
+                  <input
+                    className="brand-input"
+                    placeholder="Question prompt"
+                    aria-label="Quiz question prompt"
+                    value={newQuestionPrompt}
+                    onChange={(event) => setNewQuestionPrompt(event.currentTarget.value)}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Question Type</span>
+                  <select
+                    className="brand-input"
+                    value={newQuestionType}
+                    onChange={(event) => setNewQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
+                  >
+                    <option value="MCQ">Multiple Choice (MCQ)</option>
+                    {selectedAssignment.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
                   </select>
-                  <input className="brand-input" type="number" min="0.5" step="0.5" value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
-                </div>
+                </label>
+                {newQuestionType === "MCQ" ? (
+                  <>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Option A</span>
+                        <input className="brand-input" placeholder="Option A" aria-label="Option A" value={newQuestionOptionA} onChange={(event) => setNewQuestionOptionA(event.currentTarget.value)} required />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Option B</span>
+                        <input className="brand-input" placeholder="Option B" aria-label="Option B" value={newQuestionOptionB} onChange={(event) => setNewQuestionOptionB(event.currentTarget.value)} required />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Option C</span>
+                        <input className="brand-input" placeholder="Option C (optional)" aria-label="Option C" value={newQuestionOptionC} onChange={(event) => setNewQuestionOptionC(event.currentTarget.value)} />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Option D</span>
+                        <input className="brand-input" placeholder="Option D (optional)" aria-label="Option D" value={newQuestionOptionD} onChange={(event) => setNewQuestionOptionD(event.currentTarget.value)} />
+                      </label>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <span className="brand-label">Correct Options</span>
+                        <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
+                          {[
+                            { label: "Option A", value: newQuestionOptionA, index: 0 },
+                            { label: "Option B", value: newQuestionOptionB, index: 1 },
+                            { label: "Option C", value: newQuestionOptionC, index: 2 },
+                            { label: "Option D", value: newQuestionOptionD, index: 3 },
+                          ].map((option) => (
+                            <label key={`new_correct_${option.index}`} className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={newQuestionCorrectIndexes.includes(option.index)}
+                                disabled={!option.value.trim()}
+                                onChange={() =>
+                                  setNewQuestionCorrectIndexes((prev) => toggleOptionSelection(prev, option.index))
+                                }
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Points</span>
+                        <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Question points" value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">Reference Answer (Optional)</span>
+                      <input
+                        className="brand-input"
+                        placeholder="Reference answer for teacher"
+                        value={newQuestionShortAnswerKey}
+                        onChange={(event) => setNewQuestionShortAnswerKey(event.currentTarget.value)}
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">Points</span>
+                      <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Question points" value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
+                    </label>
+                  </div>
+                )}
                 <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={createQuestionPending}>
                   {createQuestionPending ? "Adding..." : "Add Question"}
                 </button>
@@ -1217,6 +1619,10 @@ export function AssignmentsModule({ role }: Props) {
                       </button>
                     </div>
                     <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
+                    <p className="mt-1 text-xs text-[#3768ac]">Type: {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
+                    {(question.questionType ?? "MCQ") === "MCQ" && question.correctOptionIndexes?.length ? (
+                      <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1306,27 +1712,35 @@ export function AssignmentsModule({ role }: Props) {
 
                   {canManage && submission.status !== "ATTEMPT_CANCELLED" && !isPublishedOrLockedState(submission.status) ? (
                     <div className="mt-3 grid gap-2">
-                      <input
-                        className="brand-input"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Raw score"
-                        value={gradeRawScoreBySubmission[submission.id] ?? (submission.rawScore?.toString() ?? "")}
-                        onChange={(event) => {
-                          const nextValue = event.currentTarget.value;
-                          setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: nextValue }));
-                        }}
-                      />
-                      <textarea
-                        className="brand-input min-h-[72px]"
-                        placeholder="Feedback"
-                        value={gradeFeedbackBySubmission[submission.id] ?? (submission.feedback ?? "")}
-                        onChange={(event) => {
-                          const nextValue = event.currentTarget.value;
-                          setGradeFeedbackBySubmission((prev) => ({ ...prev, [submission.id]: nextValue }));
-                        }}
-                      />
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Raw Score</span>
+                        <input
+                          className="brand-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Raw score"
+                          aria-label={`Raw score for attempt ${submission.attemptNumber}`}
+                          value={gradeRawScoreBySubmission[submission.id] ?? (submission.rawScore?.toString() ?? "")}
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget.value;
+                            setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: nextValue }));
+                          }}
+                        />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Feedback</span>
+                        <textarea
+                          className="brand-input min-h-[72px]"
+                          placeholder="Feedback"
+                          aria-label={`Feedback for attempt ${submission.attemptNumber}`}
+                          value={gradeFeedbackBySubmission[submission.id] ?? (submission.feedback ?? "")}
+                          onChange={(event) => {
+                            const nextValue = event.currentTarget.value;
+                            setGradeFeedbackBySubmission((prev) => ({ ...prev, [submission.id]: nextValue }));
+                          }}
+                        />
+                      </label>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -1373,22 +1787,30 @@ export function AssignmentsModule({ role }: Props) {
                           </button>
                           {requestEditForSubmissionId === submission.id ? (
                             <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-3">
-                              <textarea
-                                className="brand-input min-h-[78px]"
-                                placeholder="Reason for grade edit request"
-                                value={requestEditReason}
-                                onChange={(event) => setRequestEditReason(event.currentTarget.value)}
-                              />
-                              <input
-                                className="brand-input"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="Proposed points"
-                                value={requestEditProposedPoints}
-                                onChange={(event) => setRequestEditProposedPoints(event.currentTarget.value)}
-                                required
-                              />
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Reason for Grade Edit</span>
+                                <textarea
+                                  className="brand-input min-h-[78px]"
+                                  placeholder="Reason for grade edit request"
+                                  aria-label="Grade edit request reason"
+                                  value={requestEditReason}
+                                  onChange={(event) => setRequestEditReason(event.currentTarget.value)}
+                                />
+                              </label>
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Proposed Points</span>
+                                <input
+                                  className="brand-input"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="Proposed points"
+                                  aria-label="Proposed points"
+                                  value={requestEditProposedPoints}
+                                  onChange={(event) => setRequestEditProposedPoints(event.currentTarget.value)}
+                                  required
+                                />
+                              </label>
                               <button
                                 type="button"
                                 className="btn-brand-primary w-fit px-3 py-1.5 text-xs font-semibold"
@@ -1418,28 +1840,56 @@ export function AssignmentsModule({ role }: Props) {
         <section className="brand-card min-w-0 w-full max-w-5xl overflow-hidden p-5">
           <p className="brand-section-title">Create Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onCreate}>
-            <select className="brand-input" value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
-              <option value="">Select course</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>{course.code} - {course.title}</option>
-              ))}
-            </select>
-            <input className="brand-input" placeholder="Assignment title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
-            <textarea className="brand-input min-h-[84px]" placeholder="Instructions" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} />
-            <textarea className="brand-input min-h-[84px]" placeholder="Rubric steps (one per line)" value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Course</span>
+              <select className="brand-input" aria-label="Course" value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
+                <option value="">Select course</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>{course.code} - {course.title}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Assignment Title</span>
+              <input className="brand-input" placeholder="Assignment title" aria-label="Assignment title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Instructions</span>
+              <textarea className="brand-input min-h-[84px]" placeholder="Instructions" aria-label="Instructions" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Rubric Steps</span>
+              <textarea className="brand-input min-h-[84px]" placeholder="Rubric steps (one per line)" aria-label="Rubric steps" value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
+            </label>
             <div className="grid gap-3 md:grid-cols-3">
-              <input className="brand-input" type="date" value={createDueAt} onChange={(event) => setCreateDueAt(event.currentTarget.value)} />
-              <input className="brand-input" type="number" min="1" step="0.01" value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
-              <input className="brand-input" type="number" min="1" step="1" value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
+              {createType !== "HOMEWORK" ? (
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Time Frame (Minutes)</span>
+                  <input
+                    className="brand-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Assignment time frame in minutes"
+                    aria-label="Assignment time frame in minutes"
+                    value={createTimerMinutes}
+                    onChange={(event) => setCreateTimerMinutes(event.currentTarget.value)}
+                  />
+                </label>
+              ) : null}
             </div>
-            <select
-              className="brand-input"
-              value={createAttemptScoringStrategy}
-              onChange={(event) => setCreateAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
-            >
-              <option value="LATEST">Attempt Rule: Latest attempt counts</option>
-              <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
-            </select>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Attempt Scoring Strategy</span>
+              <select
+                className="brand-input"
+                aria-label="Attempt scoring strategy"
+                value={createAttemptScoringStrategy}
+                onChange={(event) => setCreateAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
+              >
+                <option value="LATEST">Attempt Rule: Latest attempt counts</option>
+                <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+              </select>
+            </label>
             <label className="brand-input inline-flex items-center gap-2">
               <input
                 type="checkbox"
@@ -1449,51 +1899,120 @@ export function AssignmentsModule({ role }: Props) {
               Allow late submissions
             </label>
             <div className="grid gap-3 md:grid-cols-3">
-              <select className="brand-input" value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
-                <option value="HOMEWORK">HOMEWORK</option>
-                <option value="QUIZ">QUIZ</option>
-                <option value="EXAM">EXAM</option>
-              </select>
-              <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
-              <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Assignment Type</span>
+                <select className="brand-input" aria-label="Assignment type" value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
+                  <option value="HOMEWORK">HOMEWORK</option>
+                  <option value="QUIZ">QUIZ</option>
+                  <option value="EXAM">EXAM</option>
+                </select>
+              </label>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Allow Text Submissions</span>
+                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
+              </div>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Allow File Submissions</span>
+                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
+              </div>
             </div>
-            {createType === "QUIZ" ? (
+            {isQuestionAssignment(createType) ? (
               <div className="grid gap-3">
-                <input
-                  className="brand-input"
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="Quiz timer (minutes)"
-                  value={createTimerMinutes}
-                  onChange={(event) => setCreateTimerMinutes(event.currentTarget.value)}
-                />
                 <div className="rounded-md border border-[#dbe9fb] p-3">
-                  <p className="brand-label">Quiz MCQ Builder</p>
+                  <p className="brand-label">
+                    {createType === "QUIZ" ? "Quiz MCQ Builder" : "Exam Question Builder (MCQ + Short Answer)"}
+                  </p>
                   <div className="mt-2 grid gap-2">
-                    <input
-                      className="brand-input"
-                      placeholder="Question prompt"
-                      value={createQuestionPrompt}
-                      onChange={(event) => setCreateQuestionPrompt(event.currentTarget.value)}
-                    />
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <input className="brand-input" placeholder="Option A" value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option B" value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option C (optional)" value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
-                      <input className="brand-input" placeholder="Option D (optional)" value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <select className="brand-input" value={createQuestionCorrectIndex} onChange={(event) => setCreateQuestionCorrectIndex(event.currentTarget.value)}>
-                        <option value="0">Correct: Option A</option>
-                        <option value="1">Correct: Option B</option>
-                        <option value="2">Correct: Option C</option>
-                        <option value="3">Correct: Option D</option>
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">Question Prompt</span>
+                      <input
+                        className="brand-input"
+                        placeholder="Question prompt"
+                        aria-label="Draft question prompt"
+                        value={createQuestionPrompt}
+                        onChange={(event) => setCreateQuestionPrompt(event.currentTarget.value)}
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">Question Type</span>
+                      <select
+                        className="brand-input"
+                        value={createQuestionType}
+                        onChange={(event) => setCreateQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
+                      >
+                        <option value="MCQ">Multiple Choice (MCQ)</option>
+                        {createType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
                       </select>
-                      <input className="brand-input" type="number" min="0.5" step="0.5" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
-                    </div>
+                    </label>
+                    {createQuestionType === "MCQ" ? (
+                      <>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="grid gap-1.5">
+                            <span className="brand-label">Option A</span>
+                            <input className="brand-input" placeholder="Option A" aria-label="Draft option A" value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
+                          </label>
+                          <label className="grid gap-1.5">
+                            <span className="brand-label">Option B</span>
+                            <input className="brand-input" placeholder="Option B" aria-label="Draft option B" value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
+                          </label>
+                          <label className="grid gap-1.5">
+                            <span className="brand-label">Option C</span>
+                            <input className="brand-input" placeholder="Option C (optional)" aria-label="Draft option C" value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
+                          </label>
+                          <label className="grid gap-1.5">
+                            <span className="brand-label">Option D</span>
+                            <input className="brand-input" placeholder="Option D (optional)" aria-label="Draft option D" value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
+                          </label>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="grid gap-1.5">
+                            <span className="brand-label">Correct Options</span>
+                            <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
+                              {[
+                                { label: "Option A", value: createQuestionOptionA, index: 0 },
+                                { label: "Option B", value: createQuestionOptionB, index: 1 },
+                                { label: "Option C", value: createQuestionOptionC, index: 2 },
+                                { label: "Option D", value: createQuestionOptionD, index: 3 },
+                              ].map((option) => (
+                                <label key={`draft_correct_${option.index}`} className="inline-flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={createQuestionCorrectIndexes.includes(option.index)}
+                                    disabled={!option.value.trim()}
+                                    onChange={() =>
+                                      setCreateQuestionCorrectIndexes((prev) => toggleOptionSelection(prev, option.index))
+                                    }
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <label className="grid gap-1.5">
+                            <span className="brand-label">Question Points</span>
+                            <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Draft question points" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
+                          </label>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">Reference Answer (Optional)</span>
+                          <input
+                            className="brand-input"
+                            placeholder="Reference answer for teacher"
+                            value={createQuestionShortAnswerKey}
+                            onChange={(event) => setCreateQuestionShortAnswerKey(event.currentTarget.value)}
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">Question Points</span>
+                          <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Draft question points" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
+                        </label>
+                      </div>
+                    )}
                     <button type="button" className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" onClick={addDraftQuestion}>
-                      Add To Quiz Draft
+                      Add To Draft
                     </button>
                   </div>
 
@@ -1516,44 +2035,114 @@ export function AssignmentsModule({ role }: Props) {
                           </button>
                         </div>
                         <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">Type: {question.questionType === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
+                        {question.questionType === "MCQ" ? (
+                          <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
             ) : null}
+            <div className={`grid gap-3 ${createType === "HOMEWORK" ? "md:grid-cols-6" : "md:grid-cols-4"}`}>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Start Date</span>
+                <input
+                  className="brand-input"
+                  type="date"
+                  aria-label="Start date"
+                  value={createStartAt}
+                  onChange={(event) => setCreateStartAt(event.currentTarget.value)}
+                  required
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">End Date</span>
+                <input
+                  className="brand-input"
+                  type="date"
+                  aria-label="End date"
+                  value={createEndAt}
+                  onChange={(event) => setCreateEndAt(event.currentTarget.value)}
+                  required
+                />
+              </label>
+              {createType === "HOMEWORK" ? (
+                <>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Start Time</span>
+                    <input
+                      className="brand-input"
+                      type="time"
+                      aria-label="Start time"
+                      value={createStartTime}
+                      onChange={(event) => setCreateStartTime(event.currentTarget.value)}
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">End Time</span>
+                    <input
+                      className="brand-input"
+                      type="time"
+                      aria-label="End time"
+                      value={createEndTime}
+                      onChange={(event) => setCreateEndTime(event.currentTarget.value)}
+                      required
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label className="grid gap-1.5">
+                <span className="brand-label">Maximum Points</span>
+                <input className="brand-input" type="number" min="1" step="0.01" aria-label="Maximum points" value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Maximum Attempts</span>
+                <input className="brand-input" type="number" min="1" step="1" aria-label="Maximum attempts" value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
+              </label>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <select
-                className="brand-input"
-                value={createModuleId}
-                onChange={(event) => {
-                  const nextModuleId = event.currentTarget.value;
-                  setCreateModuleId(nextModuleId);
-                  setCreateLessonId("");
-                }}
-              >
-                <option value="">No module link</option>
-                {(structureByCourseId[createCourseId] ?? []).map((module) => (
-                  <option key={module.id} value={module.id}>
-                    {module.title}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="brand-input"
-                value={createLessonId}
-                onChange={(event) => setCreateLessonId(event.currentTarget.value)}
-                disabled={!createModuleId}
-              >
-                <option value="">No lesson link</option>
-                {(structureByCourseId[createCourseId] ?? [])
-                  .find((module) => module.id === createModuleId)
-                  ?.lessons.map((lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.title}
+              <label className="grid gap-1.5">
+                <span className="brand-label">Module Link</span>
+                <select
+                  className="brand-input"
+                  aria-label="Module link"
+                  value={createModuleId}
+                  onChange={(event) => {
+                    const nextModuleId = event.currentTarget.value;
+                    setCreateModuleId(nextModuleId);
+                    setCreateLessonId("");
+                  }}
+                >
+                  <option value="">No module link</option>
+                  {(structureByCourseId[createCourseId] ?? []).map((module) => (
+                    <option key={module.id} value={module.id}>
+                      {module.title}
                     </option>
-                  )) ?? null}
-              </select>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Lesson Link</span>
+                <select
+                  className="brand-input"
+                  aria-label="Lesson link"
+                  value={createLessonId}
+                  onChange={(event) => setCreateLessonId(event.currentTarget.value)}
+                  disabled={!createModuleId}
+                >
+                  <option value="">No lesson link</option>
+                  {(structureByCourseId[createCourseId] ?? [])
+                    .find((module) => module.id === createModuleId)
+                    ?.lessons.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {lesson.title}
+                      </option>
+                    )) ?? null}
+                </select>
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createPending}>
@@ -1573,22 +2162,48 @@ export function AssignmentsModule({ role }: Props) {
         <section className="brand-card min-w-0 w-full max-w-4xl overflow-hidden p-5">
           <p className="brand-section-title">Edit Assignment</p>
           <form className="mt-3 grid gap-3" onSubmit={onUpdate}>
-            <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
-            <textarea className="brand-input min-h-[84px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
-            <textarea className="brand-input min-h-[84px]" value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
+            <label className="grid gap-1.5">
+              <span className="brand-label">Assignment Title</span>
+              <input className="brand-input" aria-label="Assignment title" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Instructions</span>
+              <textarea className="brand-input min-h-[84px]" aria-label="Instructions" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Rubric Steps</span>
+              <textarea className="brand-input min-h-[84px]" aria-label="Rubric steps" value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
+            </label>
+            
             <div className="grid gap-3 md:grid-cols-3">
-              <input className="brand-input" type="date" value={editDueAt} onChange={(event) => setEditDueAt(event.currentTarget.value)} />
-              <input className="brand-input" type="number" min="1" step="0.01" value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
-              <input className="brand-input" type="number" min="1" step="1" value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
+              {editType !== "HOMEWORK" ? (
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Time Frame (Minutes)</span>
+                  <input
+                    className="brand-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Assignment time frame in minutes"
+                    aria-label="Assignment time frame in minutes"
+                    value={editTimerMinutes}
+                    onChange={(event) => setEditTimerMinutes(event.currentTarget.value)}
+                  />
+                </label>
+              ) : null}
             </div>
-            <select
-              className="brand-input"
-              value={editAttemptScoringStrategy}
-              onChange={(event) => setEditAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
-            >
-              <option value="LATEST">Attempt Rule: Latest attempt counts</option>
-              <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
-            </select>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Attempt Scoring Strategy</span>
+              <select
+                className="brand-input"
+                aria-label="Attempt scoring strategy"
+                value={editAttemptScoringStrategy}
+                onChange={(event) => setEditAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
+              >
+                <option value="LATEST">Attempt Rule: Latest attempt counts</option>
+                <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+              </select>
+            </label>
             <label className="brand-input inline-flex items-center gap-2">
               <input
                 type="checkbox"
@@ -1598,57 +2213,117 @@ export function AssignmentsModule({ role }: Props) {
               Allow late submissions
             </label>
             <div className="grid gap-3 md:grid-cols-3">
-              <select className="brand-input" value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
-                <option value="HOMEWORK">HOMEWORK</option>
-                <option value="QUIZ">QUIZ</option>
-                <option value="EXAM">EXAM</option>
-              </select>
-              <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
-              <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Assignment Type</span>
+                <select className="brand-input" aria-label="Assignment type" value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
+                  <option value="HOMEWORK">HOMEWORK</option>
+                  <option value="QUIZ">QUIZ</option>
+                  <option value="EXAM">EXAM</option>
+                </select>
+              </label>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Allow Text Submissions</span>
+                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
+              </div>
+              <div className="grid gap-1.5">
+                <span className="brand-label">Allow File Submissions</span>
+                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
+              </div>
             </div>
-            {editType === "QUIZ" ? (
-              <input
-                className="brand-input"
-                type="number"
-                min="1"
-                step="1"
-                placeholder="Quiz timer (minutes)"
-                value={editTimerMinutes}
-                onChange={(event) => setEditTimerMinutes(event.currentTarget.value)}
-              />
-            ) : null}
+            <div className={`grid gap-3 ${editType === "HOMEWORK" ? "md:grid-cols-6" : "md:grid-cols-4"}`}>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Start Date</span>
+                <input
+                  className="brand-input"
+                  type="date"
+                  aria-label="Start date"
+                  value={editStartAt}
+                  onChange={(event) => setEditStartAt(event.currentTarget.value)}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">End Date</span>
+                <input
+                  className="brand-input"
+                  type="date"
+                  aria-label="End date"
+                  value={editEndAt}
+                  onChange={(event) => setEditEndAt(event.currentTarget.value)}
+                />
+              </label>
+              {editType === "HOMEWORK" ? (
+                <>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Start Time</span>
+                    <input
+                      className="brand-input"
+                      type="time"
+                      aria-label="Start time"
+                      value={editStartTime}
+                      onChange={(event) => setEditStartTime(event.currentTarget.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">End Time</span>
+                    <input
+                      className="brand-input"
+                      type="time"
+                      aria-label="End time"
+                      value={editEndTime}
+                      onChange={(event) => setEditEndTime(event.currentTarget.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+              <label className="grid gap-1.5">
+                <span className="brand-label">Maximum Points</span>
+                <input className="brand-input" type="number" min="1" step="0.01" aria-label="Maximum points" value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Maximum Attempts</span>
+                <input className="brand-input" type="number" min="1" step="1" aria-label="Maximum attempts" value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
+              </label>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <select
-                className="brand-input"
-                value={editModuleId}
-                onChange={(event) => {
-                  const nextModuleId = event.currentTarget.value;
-                  setEditModuleId(nextModuleId);
-                  setEditLessonId("");
-                }}
-              >
-                <option value="">No module link</option>
-                {(structureByCourseId[editAssignment?.courseId ?? ""] ?? []).map((module) => (
-                  <option key={module.id} value={module.id}>
-                    {module.title}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="brand-input"
-                value={editLessonId}
-                onChange={(event) => setEditLessonId(event.currentTarget.value)}
-                disabled={!editModuleId}
-              >
-                <option value="">No lesson link</option>
-                {(structureByCourseId[editAssignment?.courseId ?? ""] ?? [])
-                  .find((module) => module.id === editModuleId)
-                  ?.lessons.map((lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.title}
+              <label className="grid gap-1.5">
+                <span className="brand-label">Module Link</span>
+                <select
+                  className="brand-input"
+                  aria-label="Module link"
+                  value={editModuleId}
+                  onChange={(event) => {
+                    const nextModuleId = event.currentTarget.value;
+                    setEditModuleId(nextModuleId);
+                    setEditLessonId("");
+                  }}
+                >
+                  <option value="">No module link</option>
+                  {(structureByCourseId[editAssignment?.courseId ?? ""] ?? []).map((module) => (
+                    <option key={module.id} value={module.id}>
+                      {module.title}
                     </option>
-                  )) ?? null}
-              </select>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Lesson Link</span>
+                <select
+                  className="brand-input"
+                  aria-label="Lesson link"
+                  value={editLessonId}
+                  onChange={(event) => setEditLessonId(event.currentTarget.value)}
+                  disabled={!editModuleId}
+                >
+                  <option value="">No lesson link</option>
+                  {(structureByCourseId[editAssignment?.courseId ?? ""] ?? [])
+                    .find((module) => module.id === editModuleId)
+                    ?.lessons.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {lesson.title}
+                      </option>
+                    )) ?? null}
+                </select>
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <button className="btn-brand-secondary px-4 py-2 text-sm font-semibold" disabled={editPending}>

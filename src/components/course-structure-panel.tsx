@@ -438,17 +438,20 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
         <div className="flex items-center gap-3">
           <span className="brand-muted text-xs">{moduleCountLabel}</span>
           {showCourseSelector ? (
-            <select
-              className="brand-input w-[300px]"
-              value={selectedCourseId}
-              onChange={(event) => setSelectedCourseId(event.currentTarget.value)}
-            >
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.code} - {course.title}
-                </option>
-              ))}
-            </select>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Course</span>
+              <select
+                className="brand-input w-[300px]"
+                value={selectedCourseId}
+                onChange={(event) => setSelectedCourseId(event.currentTarget.value)}
+              >
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.code} - {course.title}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
         </div>
       </div>
@@ -466,33 +469,45 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
         <form className="mt-4 grid gap-3 rounded-lg border border-[#d4e5fa] bg-white p-4" onSubmit={onCreateModule}>
           <p className="brand-label">Create Module</p>
           <div className="grid gap-3 md:grid-cols-2">
-            <input
-              className="brand-input"
-              placeholder="Module title"
-              value={createModuleTitle}
-              onChange={(event) => setCreateModuleTitle(event.currentTarget.value)}
-              required
-            />
-            <input
-              className="brand-input"
-              placeholder="Description (optional)"
-              value={createModuleDescription}
-              onChange={(event) => setCreateModuleDescription(event.currentTarget.value)}
-            />
-            <input
-              className="brand-input"
-              type="date"
-              value={createModuleReleaseAt}
-              onChange={(event) => setCreateModuleReleaseAt(event.currentTarget.value)}
-            />
-            <select
-              className="brand-input"
-              value={createModuleVisibilityRule}
-              onChange={(event) => setCreateModuleVisibilityRule(event.currentTarget.value as "ALL_VISIBLE" | "LIMITED_ACCESS")}
-            >
-              <option value="ALL_VISIBLE">All visible</option>
-              <option value="LIMITED_ACCESS">Limited access</option>
-            </select>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Module Title</span>
+              <input
+                className="brand-input"
+                placeholder="Module title"
+                value={createModuleTitle}
+                onChange={(event) => setCreateModuleTitle(event.currentTarget.value)}
+                required
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Description</span>
+              <input
+                className="brand-input"
+                placeholder="Description (optional)"
+                value={createModuleDescription}
+                onChange={(event) => setCreateModuleDescription(event.currentTarget.value)}
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Release Date</span>
+              <input
+                className="brand-input"
+                type="date"
+                value={createModuleReleaseAt}
+                onChange={(event) => setCreateModuleReleaseAt(event.currentTarget.value)}
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Visibility Rule</span>
+              <select
+                className="brand-input"
+                value={createModuleVisibilityRule}
+                onChange={(event) => setCreateModuleVisibilityRule(event.currentTarget.value as "ALL_VISIBLE" | "LIMITED_ACCESS")}
+              >
+                <option value="ALL_VISIBLE">All visible</option>
+                <option value="LIMITED_ACCESS">Limited access</option>
+              </select>
+            </label>
           </div>
           <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createModulePending}>
             {createModulePending ? "Creating..." : "Create Module"}
@@ -563,14 +578,26 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                   });
                 }}
               >
-                <input className="brand-input" name="title" defaultValue={module.title} required />
-                <input className="brand-input" name="description" defaultValue={module.description ?? ""} placeholder="Description" />
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Module Title</span>
+                  <input className="brand-input" name="title" defaultValue={module.title} required />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Description</span>
+                  <input className="brand-input" name="description" defaultValue={module.description ?? ""} placeholder="Description" />
+                </label>
                 <div className="grid gap-2 md:grid-cols-2">
-                  <input className="brand-input" type="date" name="releaseAt" defaultValue={toDateInput(module.releaseAt)} />
-                  <select className="brand-input" name="visibilityRule" defaultValue={module.visibilityRule}>
-                    <option value="ALL_VISIBLE">All visible</option>
-                    <option value="LIMITED_ACCESS">Limited access</option>
-                  </select>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Release Date</span>
+                    <input className="brand-input" type="date" name="releaseAt" defaultValue={toDateInput(module.releaseAt)} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Visibility Rule</span>
+                    <select className="brand-input" name="visibilityRule" defaultValue={module.visibilityRule}>
+                      <option value="ALL_VISIBLE">All visible</option>
+                      <option value="LIMITED_ACCESS">Limited access</option>
+                    </select>
+                  </label>
                 </div>
                 <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={pendingModuleId === module.id}>
                   Save Module
@@ -680,14 +707,26 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                         });
                       }}
                     >
-                      <input className="brand-input" name="title" defaultValue={lesson.title} required />
-                      <textarea className="brand-input min-h-[72px]" name="content" defaultValue={lesson.content ?? ""} />
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Lesson Title</span>
+                        <input className="brand-input" name="title" defaultValue={lesson.title} required />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Lesson Content</span>
+                        <textarea className="brand-input min-h-[72px]" name="content" defaultValue={lesson.content ?? ""} />
+                      </label>
                       <div className="grid gap-2 md:grid-cols-2">
-                        <select className="brand-input" name="visibility" defaultValue={lesson.visibility}>
-                          <option value="VISIBLE">Visible</option>
-                          <option value="HIDDEN">Hidden</option>
-                        </select>
-                        <input className="brand-input" name="embedUrl" defaultValue={lesson.embedUrl ?? ""} placeholder="YouTube URL" />
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">Visibility</span>
+                          <select className="brand-input" name="visibility" defaultValue={lesson.visibility}>
+                            <option value="VISIBLE">Visible</option>
+                            <option value="HIDDEN">Hidden</option>
+                          </select>
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">YouTube URL</span>
+                          <input className="brand-input" name="embedUrl" defaultValue={lesson.embedUrl ?? ""} placeholder="YouTube URL" />
+                        </label>
                       </div>
                       <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={pendingLessonId === lesson.id}>
                         Save Lesson
@@ -737,86 +776,98 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
             {canManage ? (
               <form className="mt-3 grid gap-2 rounded-md border border-dashed border-[#c3daf8] p-3" onSubmit={(event) => void createLesson(module.id, event)}>
                 <p className="brand-label">Add Lesson</p>
-                <input
-                  className="brand-input"
-                  placeholder="Lesson title"
-                  value={lessonDraftByModule[module.id]?.title ?? ""}
-                  onChange={(event) => {
-                    const nextTitle = event.currentTarget.value;
-                    setLessonDraftByModule((prev) => ({
-                      ...prev,
-                      [module.id]: {
-                        title: nextTitle,
-                        content: prev[module.id]?.content ?? "",
-                        visibility: prev[module.id]?.visibility ?? "VISIBLE",
-                        embedUrl: prev[module.id]?.embedUrl ?? "",
-                        youtubeUrl: prev[module.id]?.youtubeUrl ?? "",
-                        files: prev[module.id]?.files ?? [],
-                      },
-                    }));
-                  }}
-                  required
-                />
-                <textarea
-                  className="brand-input min-h-[72px]"
-                  placeholder="Lesson content"
-                  value={lessonDraftByModule[module.id]?.content ?? ""}
-                  onChange={(event) => {
-                    const nextContent = event.currentTarget.value;
-                    setLessonDraftByModule((prev) => ({
-                      ...prev,
-                      [module.id]: {
-                        title: prev[module.id]?.title ?? "",
-                        content: nextContent,
-                        visibility: prev[module.id]?.visibility ?? "VISIBLE",
-                        embedUrl: prev[module.id]?.embedUrl ?? "",
-                        youtubeUrl: prev[module.id]?.youtubeUrl ?? "",
-                        files: prev[module.id]?.files ?? [],
-                      },
-                    }));
-                  }}
-                />
-                <div className="grid gap-2 md:grid-cols-[160px_minmax(260px,1fr)_auto] md:items-center">
-                  <select
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Lesson Title</span>
+                  <input
                     className="brand-input"
-                    value={lessonDraftByModule[module.id]?.visibility ?? "VISIBLE"}
+                    placeholder="Lesson title"
+                    value={lessonDraftByModule[module.id]?.title ?? ""}
                     onChange={(event) => {
-                      const nextVisibility = event.currentTarget.value as "VISIBLE" | "HIDDEN";
+                      const nextTitle = event.currentTarget.value;
                       setLessonDraftByModule((prev) => ({
                         ...prev,
                         [module.id]: {
-                          title: prev[module.id]?.title ?? "",
+                          title: nextTitle,
                           content: prev[module.id]?.content ?? "",
-                          visibility: nextVisibility,
+                          visibility: prev[module.id]?.visibility ?? "VISIBLE",
                           embedUrl: prev[module.id]?.embedUrl ?? "",
                           youtubeUrl: prev[module.id]?.youtubeUrl ?? "",
                           files: prev[module.id]?.files ?? [],
                         },
                       }));
                     }}
-                  >
-                    <option value="VISIBLE">Visible</option>
-                    <option value="HIDDEN">Hidden</option>
-                  </select>
-                  <input
-                    className="brand-input"
-                    placeholder="YouTube URL"
-                    value={lessonDraftByModule[module.id]?.youtubeUrl ?? ""}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Lesson Content</span>
+                  <textarea
+                    className="brand-input min-h-[72px]"
+                    placeholder="Lesson content"
+                    value={lessonDraftByModule[module.id]?.content ?? ""}
                     onChange={(event) => {
-                      const nextYouTubeUrl = event.currentTarget.value;
+                      const nextContent = event.currentTarget.value;
                       setLessonDraftByModule((prev) => ({
                         ...prev,
                         [module.id]: {
                           title: prev[module.id]?.title ?? "",
-                          content: prev[module.id]?.content ?? "",
+                          content: nextContent,
                           visibility: prev[module.id]?.visibility ?? "VISIBLE",
-                          embedUrl: nextYouTubeUrl,
-                          youtubeUrl: nextYouTubeUrl,
+                          embedUrl: prev[module.id]?.embedUrl ?? "",
+                          youtubeUrl: prev[module.id]?.youtubeUrl ?? "",
                           files: prev[module.id]?.files ?? [],
                         },
                       }));
                     }}
                   />
+                </label>
+                <div className="grid gap-2 md:grid-cols-[160px_minmax(260px,1fr)_auto] md:items-center">
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">Visibility</span>
+                    <select
+                      className="brand-input"
+                      value={lessonDraftByModule[module.id]?.visibility ?? "VISIBLE"}
+                      onChange={(event) => {
+                        const nextVisibility = event.currentTarget.value as "VISIBLE" | "HIDDEN";
+                        setLessonDraftByModule((prev) => ({
+                          ...prev,
+                          [module.id]: {
+                            title: prev[module.id]?.title ?? "",
+                            content: prev[module.id]?.content ?? "",
+                            visibility: nextVisibility,
+                            embedUrl: prev[module.id]?.embedUrl ?? "",
+                            youtubeUrl: prev[module.id]?.youtubeUrl ?? "",
+                            files: prev[module.id]?.files ?? [],
+                          },
+                        }));
+                      }}
+                    >
+                      <option value="VISIBLE">Visible</option>
+                      <option value="HIDDEN">Hidden</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="brand-label">YouTube URL</span>
+                    <input
+                      className="brand-input"
+                      placeholder="YouTube URL"
+                      value={lessonDraftByModule[module.id]?.youtubeUrl ?? ""}
+                      onChange={(event) => {
+                        const nextYouTubeUrl = event.currentTarget.value;
+                        setLessonDraftByModule((prev) => ({
+                          ...prev,
+                          [module.id]: {
+                            title: prev[module.id]?.title ?? "",
+                            content: prev[module.id]?.content ?? "",
+                            visibility: prev[module.id]?.visibility ?? "VISIBLE",
+                            embedUrl: nextYouTubeUrl,
+                            youtubeUrl: nextYouTubeUrl,
+                            files: prev[module.id]?.files ?? [],
+                          },
+                        }));
+                      }}
+                    />
+                  </label>
                   <label
                     htmlFor={`lesson-files-${module.id}`}
                     className="brand-input inline-flex h-[42px] w-fit cursor-pointer items-center gap-2 px-3 py-2 text-sm font-semibold text-[#1f518f]"
@@ -837,6 +888,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                     id={`lesson-files-${module.id}`}
                     className="hidden"
                     type="file"
+                    aria-label={`Upload lesson files for ${module.title}`}
                     multiple
                     onChange={(event) => {
                       const nextFiles = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];

@@ -250,13 +250,51 @@ async function validateDepartmentHeadIds(departmentHeadIds: string[]) {
     return { ok: true as const, ids: [] as string[] };
   }
 
-  const matched = await prisma.user.findMany({
-    where: { id: { in: normalized }, role: Role.DEPARTMENT_HEAD, status: UserStatus.ACTIVE },
-    select: { id: true },
-  });
+  const findActiveDepartmentHeadIds = async () =>
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "User"
+      WHERE "id" IN (${Prisma.join(normalized)})
+        AND "status" = CAST('ACTIVE' AS "UserStatus")
+        AND "role"::text = 'DEPARTMENT_HEAD'
+    `;
+
+  let matched = await findActiveDepartmentHeadIds();
 
   if (matched.length !== normalized.length) {
-    return { ok: false as const, status: 400, error: "One or more selected department heads are invalid or inactive." };
+    const acceptedInviteUsers = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT DISTINCT u."id"
+      FROM "User" u
+      JOIN "Invitation" i ON lower(i."email") = lower(u."email")
+      WHERE u."id" IN (${Prisma.join(normalized)})
+        AND u."status" = CAST('ACTIVE' AS "UserStatus")
+        AND i."role"::text = 'DEPARTMENT_HEAD'
+        AND i."acceptedAt" IS NOT NULL
+    `;
+
+    if (acceptedInviteUsers.length) {
+      const acceptedIds = acceptedInviteUsers.map((row) => row.id);
+      await prisma.$executeRaw`
+        UPDATE "User"
+        SET "role" = CAST('DEPARTMENT_HEAD' AS "Role"), "updatedAt" = NOW()
+        WHERE "id" IN (${Prisma.join(acceptedIds)})
+      `;
+      matched = await findActiveDepartmentHeadIds();
+    }
+  }
+
+  if (matched.length !== normalized.length) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[courses] department head validation failed", {
+        requestedIds: normalized,
+        matchedIds: matched.map((row) => row.id),
+      });
+    }
+    return {
+      ok: false as const,
+      status: 400,
+      error: "One or more selected department heads are invalid or inactive.",
+    };
   }
 
   return { ok: true as const, ids: normalized };
@@ -427,6 +465,8 @@ export async function GET(request: NextRequest) {
         FROM "DepartmentHeadCourseAssignment" a
         JOIN "User" u ON u."id" = a."departmentHeadId"
         WHERE a."courseId" IN (${Prisma.join(courseIds)})
+          AND u."status" = CAST('ACTIVE' AS "UserStatus")
+          AND u."role"::text = 'DEPARTMENT_HEAD'
       `.catch(() => []);
 
       for (const row of rows) {

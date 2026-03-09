@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { dashboardModules } from "@/lib/dashboard-modules";
+import type { DashboardRole } from "@/lib/dashboard-modules";
 import { RoleOverview } from "@/components/role-overview";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminRole } from "@/lib/permissions";
@@ -64,7 +65,14 @@ export default async function DashboardPage({ searchParams }: Props) {
   }
 
   const roleKey = String(session.user.role ?? "");
-  const moduleRoleKey = roleKey === "ADMIN" ? "SUPER_ADMIN" : roleKey;
+  const moduleRoleKey = (roleKey === "ADMIN" ? "SUPER_ADMIN" : roleKey) as DashboardRole;
+  const roleForModules = (roleKey === "SUPER_ADMIN" ||
+  roleKey === "ADMIN" ||
+  roleKey === "DEPARTMENT_HEAD" ||
+  roleKey === "TEACHER" ||
+  roleKey === "STUDENT"
+    ? roleKey
+    : "STUDENT") as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT";
   const roleLabel =
     roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? "SUPER ADMIN"
@@ -130,7 +138,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     guardianPhone: string | null;
     country: string | null;
     state: string | null;
-    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+    role: string;
     createdAt: Date;
   }> = [];
 
@@ -162,7 +170,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -215,7 +223,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     guardianPhone: string | null;
     country: string | null;
     state: string | null;
-    role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+    role: string;
     createdAt: Date;
   }> = [];
 
@@ -247,7 +255,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             name: string | null;
             email: string;
             status: "ACTIVE" | "DISABLED";
-            role: "TEACHER" | "STUDENT" | "SUPER_ADMIN";
+            role: string;
             phone: string | null;
             guardianName: string | null;
             guardianPhone: string | null;
@@ -790,17 +798,17 @@ export default async function DashboardPage({ searchParams }: Props) {
             {
               title: `${enrolledCoursesCount} Course${enrolledCoursesCount === 1 ? "" : "s"} Under Oversight`,
               detail: "Review instructor timelines and weekly module release cadence.",
-              priority: enrolledCoursesCount > 0 ? "High" : "Low",
+              priority: (enrolledCoursesCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
             },
             {
               title: `${engagementDiscussionCount} Discussion${engagementDiscussionCount === 1 ? "" : "s"} Active`,
               detail: "Ensure participation requirements are being met.",
-              priority: engagementDiscussionCount > 0 ? "Medium" : "Low",
+              priority: (engagementDiscussionCount > 0 ? "Medium" : "Low") as "High" | "Medium" | "Low",
             },
             {
               title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Progress`,
               detail: "Confirm grading pace and late policy adherence.",
-              priority: "Low",
+              priority: "Low" as "High" | "Medium" | "Low",
             },
           ]
         : roleKey === "TEACHER"
@@ -900,11 +908,11 @@ export default async function DashboardPage({ searchParams }: Props) {
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{selectedTitle}</h2>
             </div>
-            <div className="brand-accent-card min-w-[170px] px-5 py-4 text-right">
+            {/* <div className="brand-accent-card min-w-[170px] px-5 py-4 text-right">
               <p className="text-xs uppercase tracking-[0.16em] text-[#3f6fae]">{moduleKpiLabel}</p>
               <p className="mt-2 text-3xl font-bold text-[#916900]">{moduleKpiValue}</p>
               <p className="text-xs text-[#3a689f]">{moduleKpiHint}</p>
-            </div>
+            </div> */}
           </div>
         </section>
 
@@ -935,13 +943,13 @@ export default async function DashboardPage({ searchParams }: Props) {
         ) : selected.slug === "announcements-feed" ? (
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
         ) : selected.slug === "courses" ? (
-          <CoursesModule role={roleKey} viewMode="all" />
+          <CoursesModule role={roleForModules} viewMode="all" />
         ) : selected.slug === "learning" ? (
-          <CoursesModule role={roleKey} viewMode={roleKey === "STUDENT" ? "enrolled" : "all"} />
+          <CoursesModule role={roleForModules} viewMode={roleKey === "STUDENT" ? "enrolled" : "all"} />
         ) : selected.slug === "assessment" ? (
-          <AssignmentsModule role={roleKey} />
+          <AssignmentsModule role={roleForModules} />
         ) : selected.slug === "engagement" ? (
-          <EngagementModule role={roleKey} />
+          <EngagementModule role={roleForModules} />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">

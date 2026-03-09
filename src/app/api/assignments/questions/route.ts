@@ -7,8 +7,11 @@ import { prisma } from "@/lib/prisma";
 type CreateQuestionBody = {
   assignmentId?: string;
   prompt?: string;
+  questionType?: "MCQ" | "SHORT_ANSWER";
   options?: string[];
+  correctOptionIndexes?: number[];
   correctOptionIndex?: number;
+  shortAnswerKey?: string | null;
   points?: number;
 };
 
@@ -26,6 +29,16 @@ function normalizeOptions(input: unknown) {
     .map((item) => (typeof item === "string" ? item.trim() : ""))
     .filter(Boolean)
     .slice(0, 8);
+}
+
+function normalizeCorrectOptionIndexes(input: unknown, fallback: unknown) {
+  const primary = Array.isArray(input) ? input.map((item) => Number(item)) : [];
+  const values = primary.length ? primary : [Number(fallback)];
+  return Array.from(new Set(values.filter((item) => Number.isInteger(item)))).sort((a, b) => a - b);
+}
+
+function parseQuestionType(input: unknown): "MCQ" | "SHORT_ANSWER" {
+  return input === "SHORT_ANSWER" ? "SHORT_ANSWER" : "MCQ";
 }
 
 async function getAssignmentAccess(assignmentId: string, user: { id: string; role: Role | string }) {
@@ -58,8 +71,11 @@ CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
   "id" TEXT NOT NULL,
   "assignmentId" TEXT NOT NULL,
   "prompt" TEXT NOT NULL,
+  "questionType" TEXT NOT NULL DEFAULT 'MCQ',
   "options" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "correctOptionIndexes" JSONB NOT NULL DEFAULT '[0]'::jsonb,
   "correctOptionIndex" INTEGER NOT NULL,
+  "shortAnswerKey" TEXT,
   "points" DOUBLE PRECISION NOT NULL DEFAULT 1,
   "position" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -67,7 +83,35 @@ CREATE TABLE IF NOT EXISTS "AssignmentQuizQuestion" (
   CONSTRAINT "AssignmentQuizQuestion_pkey" PRIMARY KEY ("id")
 );
 CREATE INDEX IF NOT EXISTS "AssignmentQuizQuestion_assignmentId_idx" ON "AssignmentQuizQuestion"("assignmentId");
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "questionType" TEXT;
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "correctOptionIndexes" JSONB;
+ALTER TABLE "AssignmentQuizQuestion" ADD COLUMN IF NOT EXISTS "shortAnswerKey" TEXT;
+UPDATE "AssignmentQuizQuestion"
+SET "questionType" = 'MCQ'
+WHERE "questionType" IS NULL;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "questionType" SET DEFAULT 'MCQ';
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "questionType" SET NOT NULL;
+UPDATE "AssignmentQuizQuestion"
+SET "correctOptionIndexes" = jsonb_build_array("correctOptionIndex")
+WHERE "correctOptionIndexes" IS NULL;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "correctOptionIndexes" SET DEFAULT '[0]'::jsonb;
+ALTER TABLE "AssignmentQuizQuestion" ALTER COLUMN "correctOptionIndexes" SET NOT NULL;
   `);
+}
+
+async function getAssignmentType(assignmentId: string) {
+  const rows = await prisma.$queryRaw<Array<{ assignmentType: string | null }>>`
+    SELECT COALESCE(cfg."assignmentType", 'HOMEWORK') AS "assignmentType"
+    FROM "Assignment" a
+    LEFT JOIN "AssignmentConfig" cfg ON cfg."assignmentId" = a."id"
+    WHERE a."id" = ${assignmentId}
+    LIMIT 1
+  `;
+  const assignmentType = rows[0]?.assignmentType;
+  if (assignmentType === "QUIZ" || assignmentType === "EXAM" || assignmentType === "HOMEWORK") {
+    return assignmentType;
+  }
+  return "HOMEWORK";
 }
 
 export async function GET(request: NextRequest) {
@@ -92,13 +136,16 @@ export async function GET(request: NextRequest) {
         id: string;
         assignmentId: string;
         prompt: string;
+        questionType: string;
         options: unknown;
+        correctOptionIndexes: unknown;
         correctOptionIndex: number;
+        shortAnswerKey: string | null;
         points: number;
         position: number;
       }>
     >`
-      SELECT "id","assignmentId","prompt","options","correctOptionIndex","points","position"
+      SELECT "id","assignmentId","prompt","questionType","options","correctOptionIndexes","correctOptionIndex","shortAnswerKey","points","position"
       FROM "AssignmentQuizQuestion"
       WHERE "assignmentId" = ${assignmentId}
       ORDER BY "position" ASC, "createdAt" ASC
@@ -110,6 +157,7 @@ export async function GET(request: NextRequest) {
           id: item.id,
           assignmentId: item.assignmentId,
           prompt: item.prompt,
+          questionType: parseQuestionType(item.questionType),
           options: Array.isArray(item.options) ? item.options : [],
           points: item.points,
           position: item.position,
@@ -117,9 +165,12 @@ export async function GET(request: NextRequest) {
         if (user.role === Role.STUDENT) {
           return base;
         }
+        const correctOptionIndexes = normalizeCorrectOptionIndexes(item.correctOptionIndexes, item.correctOptionIndex);
         return {
           ...base,
-          correctOptionIndex: item.correctOptionIndex,
+          correctOptionIndexes,
+          correctOptionIndex: correctOptionIndexes[0] ?? item.correctOptionIndex,
+          shortAnswerKey: item.shortAnswerKey,
         };
       }),
     });
@@ -143,15 +194,23 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CreateQuestionBody;
     const assignmentId = body.assignmentId?.trim() ?? "";
     const prompt = body.prompt?.trim() ?? "";
+    const questionType = parseQuestionType(body.questionType);
     const options = normalizeOptions(body.options);
-    const correctOptionIndex = Number(body.correctOptionIndex);
+    const correctOptionIndexes = normalizeCorrectOptionIndexes(body.correctOptionIndexes, body.correctOptionIndex);
+    const shortAnswerKey = typeof body.shortAnswerKey === "string" ? body.shortAnswerKey.trim() || null : null;
     const points = Number(body.points ?? 1);
 
-    if (!assignmentId || !prompt || options.length < 2) {
-      return NextResponse.json({ error: "assignmentId, prompt and at least 2 options are required." }, { status: 400 });
+    if (!assignmentId || !prompt) {
+      return NextResponse.json({ error: "assignmentId and prompt are required." }, { status: 400 });
     }
-    if (!Number.isInteger(correctOptionIndex) || correctOptionIndex < 0 || correctOptionIndex >= options.length) {
-      return NextResponse.json({ error: "Invalid correctOptionIndex." }, { status: 400 });
+    if (questionType === "MCQ" && options.length < 2) {
+      return NextResponse.json({ error: "At least 2 options are required for MCQ." }, { status: 400 });
+    }
+    if (questionType === "MCQ" && !correctOptionIndexes.length) {
+      return NextResponse.json({ error: "At least one correct option is required." }, { status: 400 });
+    }
+    if (questionType === "MCQ" && correctOptionIndexes.some((index) => index < 0 || index >= options.length)) {
+      return NextResponse.json({ error: "Invalid correctOptionIndexes." }, { status: 400 });
     }
     if (!Number.isFinite(points) || points <= 0) {
       return NextResponse.json({ error: "points must be > 0." }, { status: 400 });
@@ -164,6 +223,13 @@ export async function POST(request: NextRequest) {
     if (!access.allowed) {
       return NextResponse.json({ error: "You can only manage quiz questions in your assigned courses." }, { status: 403 });
     }
+    const assignmentType = await getAssignmentType(assignmentId);
+    if (assignmentType !== "QUIZ" && assignmentType !== "EXAM") {
+      return NextResponse.json({ error: "Questions can only be added to quiz or exam assignments." }, { status: 400 });
+    }
+    if (assignmentType === "QUIZ" && questionType !== "MCQ") {
+      return NextResponse.json({ error: "Quiz assignments currently support MCQ questions only." }, { status: 400 });
+    }
 
     const countRows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
       SELECT COUNT(*)::bigint AS count
@@ -172,12 +238,14 @@ export async function POST(request: NextRequest) {
     `;
     const position = Number(countRows[0]?.count ?? 0);
     const id = `aq_${randomUUID()}`;
+    const normalizedCorrectOptionIndexes = questionType === "MCQ" ? correctOptionIndexes : [];
+    const correctOptionIndex = normalizedCorrectOptionIndexes[0] ?? 0;
 
     await prisma.$executeRaw`
       INSERT INTO "AssignmentQuizQuestion"
-      ("id","assignmentId","prompt","options","correctOptionIndex","points","position","createdAt","updatedAt")
+      ("id","assignmentId","prompt","questionType","options","correctOptionIndexes","correctOptionIndex","shortAnswerKey","points","position","createdAt","updatedAt")
       VALUES
-      (${id}, ${assignmentId}, ${prompt}, ${JSON.stringify(options)}::jsonb, ${correctOptionIndex}, ${points}, ${position}, NOW(), NOW())
+      (${id}, ${assignmentId}, ${prompt}, ${questionType}, ${JSON.stringify(options)}::jsonb, ${JSON.stringify(normalizedCorrectOptionIndexes)}::jsonb, ${correctOptionIndex}, ${shortAnswerKey}, ${points}, ${position}, NOW(), NOW())
     `;
 
     return NextResponse.json({ ok: true, questionId: id }, { status: 201 });

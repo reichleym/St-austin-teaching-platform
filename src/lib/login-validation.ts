@@ -35,6 +35,9 @@ export type LoginEvaluation =
 export async function evaluateLoginAttempt(input: LoginInput): Promise<LoginEvaluation> {
   const email = input.email?.toLowerCase().trim() ?? "";
   const password = input.password ?? "";
+  const requestedLoginAs = String(input.loginAs ?? "")
+    .trim()
+    .toUpperCase();
 
   if (!email || !password) {
     return { ok: false, code: "MISSING_CREDENTIALS" };
@@ -64,6 +67,7 @@ export async function evaluateLoginAttempt(input: LoginInput): Promise<LoginEval
   let roleText = String(user.role);
 
   const trySyncDepartmentHeadRole = async () => {
+    let matchedAcceptedDepartmentHeadInvite = false;
     try {
       await prisma.$executeRawUnsafe(`
 DO $$ BEGIN
@@ -72,15 +76,17 @@ EXCEPTION
   WHEN undefined_object THEN NULL;
 END $$;
       `);
-      const inviteRows = await prisma.$queryRaw<Array<{ role: string }>>`
-        SELECT "role"::text AS "role"
+      const inviteRows = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
         FROM "Invitation"
-        WHERE "email" = ${email}
+        WHERE lower("email") = lower(${email})
+          AND "role"::text = 'DEPARTMENT_HEAD'
           AND "acceptedAt" IS NOT NULL
-        ORDER BY "acceptedAt" DESC
+        ORDER BY "acceptedAt" DESC NULLS LAST, "createdAt" DESC
         LIMIT 1
       `;
-      if (inviteRows[0]?.role === "DEPARTMENT_HEAD") {
+      matchedAcceptedDepartmentHeadInvite = Boolean(inviteRows[0]?.id);
+      if (matchedAcceptedDepartmentHeadInvite) {
         await prisma.$executeRaw`
           UPDATE "User"
           SET "role" = CAST('DEPARTMENT_HEAD' AS "Role"), "updatedAt" = NOW()
@@ -90,6 +96,15 @@ END $$;
       }
     } catch {
       // Ignore role sync failures to avoid blocking login.
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("[login-check] department head role sync", {
+        email,
+        requestedLoginAs,
+        matchedAcceptedDepartmentHeadInvite,
+        finalRoleText: roleText,
+      });
     }
   };
 
@@ -108,15 +123,15 @@ END $$;
       return { ok: false, code: "INCORRECT_USER_TYPE" };
     }
 
-    if (input.loginAs) {
-      if (input.loginAs === "DEPARTMENT_HEAD" && roleText !== "DEPARTMENT_HEAD") {
+    if (requestedLoginAs) {
+      if (requestedLoginAs === "DEPARTMENT_HEAD" && roleText !== "DEPARTMENT_HEAD") {
         await trySyncDepartmentHeadRole();
       }
-      if (input.loginAs === "DEPARTMENT_HEAD") {
+      if (requestedLoginAs === "DEPARTMENT_HEAD") {
         if (roleText !== "DEPARTMENT_HEAD") {
           return { ok: false, code: "INCORRECT_USER_TYPE" };
         }
-      } else if (input.loginAs === "TEACHER") {
+      } else if (requestedLoginAs === "TEACHER") {
         if (roleText !== "TEACHER" && roleText !== "DEPARTMENT_HEAD") {
           return { ok: false, code: "INCORRECT_USER_TYPE" };
         }
