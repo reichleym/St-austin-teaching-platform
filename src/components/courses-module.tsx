@@ -223,6 +223,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     setEditVisibility(selected.visibility);
     setEditTeacherId(selected.teacher?.id ?? "");
     setEditStudentIds(selected.enrolledStudents.map((item) => item.id));
+    setEditDepartmentHeadIds(selected.departmentHeads.map((item) => item.id));
   }, [courses, editCourseId]);
 
   const totalEnrollments = useMemo(() => courses.reduce((sum, item) => sum + item.enrollmentCount, 0), [courses]);
@@ -320,6 +321,7 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           visibility: editVisibility,
           teacherId: editTeacherId || null,
           studentIds: editStudentIds,
+          departmentHeadIds: nextDepartmentHeadIds,
         }),
       });
 
@@ -371,8 +373,28 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     setCreateStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
   };
 
+  const toggleCreateDepartmentHead = (departmentHeadId: string) => {
+    setCreateDepartmentHeadIds((prev) =>
+      prev.includes(departmentHeadId) ? prev.filter((id) => id !== departmentHeadId) : [...prev, departmentHeadId]
+    );
+  };
+
   const toggleEditStudent = (studentId: string) => {
     setEditStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
+  };
+
+  const toggleEditDepartmentHead = (departmentHeadId: string) => {
+    setEditDepartmentHeadIds((prev) =>
+      prev.includes(departmentHeadId) ? prev.filter((id) => id !== departmentHeadId) : [...prev, departmentHeadId]
+    );
+  };
+
+  const selectAllEditStudents = () => {
+    setEditStudentIds(students.map((student) => student.id));
+  };
+
+  const clearEditStudents = () => {
+    setEditStudentIds([]);
   };
 
   const onRequestEnrollment = async (courseId: string) => {

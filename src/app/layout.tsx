@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppToastProvider } from "@/components/app-toast-provider";
 import { FormLabelProvider } from "@/components/form-label-provider";
+import { ToastProvider } from "@/components/toast-provider";
 
 export const metadata: Metadata = {
   title: "St. Austin Teaching Platform",
@@ -17,8 +18,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased" suppressHydrationWarning>
         <AppToastProvider>
-          <FormLabelProvider />
-          {children}
+          <ToastProvider>
+            <FormLabelProvider />
+            {children}
+          </ToastProvider>
         </AppToastProvider>
       </body>
     </html>
