@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 
 type Audience = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
 
@@ -28,7 +29,14 @@ function formatDate(value: string | null) {
   if (!value) return "No expiry";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "No expiry";
-  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function toDateTimeLocalValue(value: string | null) {
@@ -202,7 +210,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
             </label>
           </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <ToastMessage type="error" message={error} />
 
           <button className="btn-brand-primary px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={isPending}>
             {isPending ? "Publishing..." : "Publish Announcement"}

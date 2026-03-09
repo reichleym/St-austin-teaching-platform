@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 type GradeBand = {
   min: string;
@@ -142,9 +144,9 @@ export function AcademicPoliciesSettings() {
       </article>
 
       <article className="brand-card p-5">
-        {isLoading ? <p className="brand-muted text-sm">Loading academic policies...</p> : null}
-        {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
-        {success ? <p className="mb-2 text-sm text-green-700">{success}</p> : null}
+        {isLoading ? <LoadingIndicator label="Loading academic policies..." /> : null}
+        <ToastMessage type="error" message={error} />
+        <ToastMessage type="success" message={success} />
 
         {!isLoading ? (
           <form className="grid gap-4" onSubmit={onSave}>

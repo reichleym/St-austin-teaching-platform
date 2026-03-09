@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { ToastMessage } from "@/components/toast-message";
+import { LoadingIndicator } from "@/components/loading-indicator";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -462,8 +464,8 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
         </div>
       ) : null}
 
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      {isLoading ? <p className="brand-muted mt-3 text-sm">Loading course structure...</p> : null}
+      <ToastMessage type="error" message={error} />
+      {isLoading ? <div className="mt-3"><LoadingIndicator label="Loading course structure..." /></div> : null}
 
       {canManage && selectedCourseId ? (
         <form className="mt-4 grid gap-3 rounded-lg border border-[#d4e5fa] bg-white p-4" onSubmit={onCreateModule}>
@@ -524,7 +526,15 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                 <p className="text-lg font-bold text-[#0d3f80]">{module.title}</p>
                 {module.description ? <p className="mt-1 text-sm text-[#345f95]">{module.description}</p> : null}
                 <p className="mt-1 text-xs text-[#3d6da8]">
-                  Release: {module.releaseAt ? new Date(module.releaseAt).toLocaleDateString() : "No schedule"} | Access: {module.accessState}
+                  Release:{" "}
+                  {module.releaseAt
+                    ? new Date(module.releaseAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })
+                    : "No schedule"}{" "}
+                  | Access: {module.accessState}
                 </p>
               </div>
 

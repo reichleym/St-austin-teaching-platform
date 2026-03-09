@@ -4,6 +4,7 @@ import Image from "next/image";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { ToastMessage } from "@/components/toast-message";
 import { PasswordField } from "@/components/password-field";
 
 type LoginFailureCode =
@@ -110,7 +111,7 @@ export default function AdminLoginClient() {
             autoComplete="current-password"
           />
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <ToastMessage type="error" message={error} />
 
           <button
             className="btn-brand-primary px-4 py-2 disabled:opacity-60"

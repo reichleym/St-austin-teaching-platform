@@ -17,12 +17,14 @@ function isUserCountryStateCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `department`") ||
     error.message.includes("Unknown argument `country`") ||
     error.message.includes("Unknown argument `state`") ||
+    error.message.includes("Unknown argument `studentId`") ||
     error.message.includes("Unknown field `phone`") ||
     error.message.includes("Unknown field `guardianName`") ||
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `department`") ||
     error.message.includes("Unknown field `country`") ||
-    error.message.includes("Unknown field `state`")
+    error.message.includes("Unknown field `state`") ||
+    error.message.includes("Unknown field `studentId`")
   );
 }
 
@@ -87,12 +89,31 @@ export async function POST(request: Request) {
     );
   }
 
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!emailOk) {
+    return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
+  }
+
+  const phoneOk = /^\+?\d{7,15}$/.test(phone.replace(/[^\d+]/g, ""));
+  const guardianPhoneOk = /^\+?\d{7,15}$/.test(guardianPhone.replace(/[^\d+]/g, ""));
+  if (!phoneOk) {
+    return NextResponse.json({ error: "Invalid phone number." }, { status: 400 });
+  }
+  if (!guardianPhoneOk) {
+    return NextResponse.json({ error: "Invalid guardian phone number." }, { status: 400 });
+  }
+
+
   if (!(await validateCountryState(country, state))) {
     return NextResponse.json({ error: "Invalid country/state selection." }, { status: 400 });
   }
 
-  if (password.length < 8) {
-    return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+  const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+  if (!passwordPolicy.test(password)) {
+    return NextResponse.json(
+      { error: "Password must be at least 8 characters and include uppercase, lowercase, number, and special character." },
+      { status: 400 }
+    );
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -102,6 +123,7 @@ export async function POST(request: Request) {
   if (existingUser) {
     return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
   }
+
 
   const passwordHash = await bcrypt.hash(password, 10);
 

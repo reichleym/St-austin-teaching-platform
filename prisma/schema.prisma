@@ -92,6 +92,7 @@ model User {
   country                   String?
   state                     String?
   department                String?
+  studentId                 String?                   @unique
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
   accounts                  Account[]
@@ -158,6 +159,7 @@ model Invitation {
   guardianPhone String?
   country     String?
   state       String?
+  studentId   String?
   role        Role
   token       String    @unique
   expiresAt   DateTime

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.ok) {
-      return NextResponse.json({ ok: false, code: result.code }, { status: 401 });
+      return NextResponse.json({ ok: false, code: result.code, email: result.email }, { status: 401 });
     }
 
     return NextResponse.json({ ok: true });

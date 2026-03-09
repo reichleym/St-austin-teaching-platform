@@ -5,6 +5,7 @@ import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
 import { PasswordField } from "@/components/password-field";
+import { ToastMessage } from "@/components/toast-message";
 
 export default function StudentRegistrationPage() {
   type LocationOption = {
@@ -73,6 +74,7 @@ export default function StudentRegistrationPage() {
     const formData = new FormData(form);
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(formData.get("confirmPassword") ?? "");
     const firstName = String(formData.get("firstName") ?? "");
     const lastName = String(formData.get("lastName") ?? "");
     const phone = String(formData.get("phone") ?? "");
@@ -82,18 +84,52 @@ export default function StudentRegistrationPage() {
     const country = String(formData.get("country") ?? "");
     const state = String(formData.get("state") ?? "");
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = phone.replace(/[^\d+]/g, "");
+    const normalizedGuardianPhone = guardianPhone.replace(/[^\d+]/g, "");
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    const phoneOk = /^\+?\d{7,15}$/.test(normalizedPhone);
+    const guardianPhoneOk = /^\+?\d{7,15}$/.test(normalizedGuardianPhone);
+
+    if (!emailOk) {
+      setIsPending(false);
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!phoneOk) {
+      setIsPending(false);
+      setError("Enter a valid phone number (7-15 digits, optional +).");
+      return;
+    }
+    if (!guardianPhoneOk) {
+      setIsPending(false);
+      setError("Enter a valid guardian phone number (7-15 digits, optional +).");
+      return;
+    }
+    const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordPolicy.test(password)) {
+      setIsPending(false);
+      setError("Password must be at least 8 characters and include uppercase, lowercase, number, and special character.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setIsPending(false);
+      setError("Password and confirmation do not match.");
+      return;
+    }
+
     const response = await fetch("/api/register/student", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email,
+        email: normalizedEmail,
         password,
         firstName,
         lastName,
-        phone,
+        phone: normalizedPhone,
         department,
         guardianName,
-        guardianPhone,
+        guardianPhone: normalizedGuardianPhone,
         country,
         state,
       }),
@@ -241,6 +277,14 @@ export default function StudentRegistrationPage() {
               inputClassName="brand-input pr-11"
             />
             <span className="brand-helper -mt-3">Use at least 8 characters.</span>
+            <PasswordField
+              label="Confirm Password"
+              name="confirmPassword"
+              minLength={8}
+              required
+              wrapperClassName="grid gap-1.5"
+              inputClassName="brand-input pr-11"
+            />
 
             <div className="rounded-xl border border-[#bcd8fb] bg-white/75 p-3">
               <p className="brand-helper">
@@ -248,9 +292,9 @@ export default function StudentRegistrationPage() {
               </p>
             </div>
 
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            {warning ? <p className="text-sm text-amber-700">{warning}</p> : null}
-            {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
+            <ToastMessage type="error" message={error} />
+            <ToastMessage type="warning" message={warning} />
+            <ToastMessage type="success" message={info} />
 
             <button className="btn-brand-secondary px-4 py-2.5 disabled:opacity-60" disabled={isPending}>
               {isPending ? "Registering..." : "Create Student Account"}

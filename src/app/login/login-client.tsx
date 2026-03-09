@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
 import { PasswordField } from "@/components/password-field";
+import { ToastMessage } from "@/components/toast-message";
 
 type Props = {
   callbackUrl: string;
@@ -21,7 +22,7 @@ type LoginFailureCode =
 
 function getLoginErrorMessage(code: LoginFailureCode | string | undefined) {
   if (code === "INACTIVE_ACCOUNT") return "This account is inactive. Contact your administrator.";
-  if (code === "INVALID_CREDENTIALS") return "Invalid email or password.";
+  if (code === "INVALID_CREDENTIALS") return "Invalid email or student ID or password.";
   if (code === "INCORRECT_USER_TYPE") return "Incorrect user type selected.";
   if (code === "EMAIL_NOT_VERIFIED") return "Please verify your email before logging in.";
   return "Unable to sign in right now.";
@@ -74,12 +75,14 @@ export default function LoginClient({ callbackUrl }: Props) {
       body: JSON.stringify({ email, password, loginAs, audience: "USER" }),
     });
     const precheckRaw = await precheck.text();
-    const precheckResult = precheckRaw ? (JSON.parse(precheckRaw) as { ok?: boolean; code?: LoginFailureCode }) : {};
+    const precheckResult = precheckRaw
+      ? (JSON.parse(precheckRaw) as { ok?: boolean; code?: LoginFailureCode; email?: string })
+      : {};
     if (!precheck.ok || !precheckResult.ok) {
       setIsPending(false);
       setActiveLoginAs(null);
       if (precheckResult.code === "EMAIL_NOT_VERIFIED") {
-        setPendingVerificationEmail(String(email ?? ""));
+        setPendingVerificationEmail(precheckResult.email ?? String(email ?? ""));
       }
       setError(getLoginErrorMessage(precheckResult.code));
       return;
@@ -147,11 +150,11 @@ export default function LoginClient({ callbackUrl }: Props) {
           <span className="brand-accent-dot" />
           Access Portal
         </span>
-        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">Teacher, Department Head & Student Login</h1>
-        <p className="brand-muted mt-2 text-sm">Sign in as Teacher, Department Head, or Student.</p>
+        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">Teacher & Student Login</h1>
+        <p className="brand-muted mt-2 text-sm">Sign in as Teacher or Student.</p>
         <p className="mt-1 text-xs text-[#3768ac]">Super Admin login is available at /admin/login.</p>
         <p className="brand-muted mt-1 text-xs">
-          Teachers are invite-only. Student self-signup is open until {studentSignupCutoff}.
+          {/* Teachers are invite-only. Student self-signup is open until {studentSignupCutoff}. */}
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-4">
@@ -159,10 +162,10 @@ export default function LoginClient({ callbackUrl }: Props) {
             <span className="text-sm font-medium text-[#0f3a74]">Email</span>
             <input
               className="brand-input"
-              type="email"
+              type="text"
               name="email"
               required
-              autoComplete="email"
+              autoComplete="username"
             />
           </label>
 
@@ -178,7 +181,7 @@ export default function LoginClient({ callbackUrl }: Props) {
             </Link>
           </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <ToastMessage type="error" message={error} />
           {pendingVerificationEmail ? (
             <div className="grid gap-2">
               <button
@@ -189,8 +192,8 @@ export default function LoginClient({ callbackUrl }: Props) {
               >
                 {isResendPending ? "Resending..." : "Resend verification email"}
               </button>
-              {resendError ? <p className="text-sm text-red-600">{resendError}</p> : null}
-              {resendInfo ? <p className="text-sm text-emerald-700">{resendInfo}</p> : null}
+              <ToastMessage type="error" message={resendError} />
+              <ToastMessage type="success" message={resendInfo} />
             </div>
           ) : null}
 

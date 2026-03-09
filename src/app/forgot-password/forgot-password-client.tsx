@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { FormEvent, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 
 export default function ForgotPasswordClient() {
   const [email, setEmail] = useState("");
@@ -59,8 +60,8 @@ export default function ForgotPasswordClient() {
             />
           </label>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {info ? <p className="text-sm text-emerald-700">{info}</p> : null}
+          <ToastMessage type="error" message={error} />
+          <ToastMessage type="success" message={info} />
 
           <button className="btn-brand-primary px-4 py-2 disabled:opacity-60" disabled={isPending}>
             {isPending ? "Sending..." : "Send Reset Link"}

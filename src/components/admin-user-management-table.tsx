@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ToastMessage } from "@/components/toast-message";
 
 type UserStatus = "ACTIVE" | "DISABLED";
 
@@ -48,7 +49,14 @@ type LocationOption = {
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export function AdminUserManagementTable({ title, emptyText, users }: Props) {
@@ -347,7 +355,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               />
             </label>
           </div>
-          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+          <ToastMessage type="error" message={error} />
 
           {totalFiltered ? (
             <table className="mt-3 min-w-full text-left text-sm">
