@@ -42,6 +42,9 @@ function isAnnouncementTableMissingError(error: unknown) {
 }
 
 function isUserCountryStateCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes("Unknown field `phone`") ||
@@ -49,11 +52,13 @@ function isUserCountryStateCompatibilityError(error: unknown) {
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `country`") ||
     error.message.includes("Unknown field `state`") ||
+    error.message.includes("Unknown field `studentId`") ||
     error.message.includes("Unknown argument `phone`") ||
     error.message.includes("Unknown argument `guardianName`") ||
     error.message.includes("Unknown argument `guardianPhone`") ||
     error.message.includes("Unknown argument `country`") ||
-    error.message.includes("Unknown argument `state`")
+    error.message.includes("Unknown argument `state`") ||
+    error.message.includes("Unknown argument `studentId`")
   );
 }
 
@@ -157,7 +162,6 @@ export default async function DashboardPage({ params }: Props) {
           name: true,
           email: true,
           status: true,
-          studentId: true,
           phone: true,
           guardianName: true,
           guardianPhone: true,
@@ -276,28 +280,53 @@ export default async function DashboardPage({ params }: Props) {
         >`SELECT "id","name","email","status"::text AS "status","role"::text AS "role","studentId","phone","guardianName","guardianPhone","country","state","createdAt" FROM "User" WHERE "role" = 'STUDENT' ORDER BY "createdAt" DESC`;
         studentList = rawStudents;
       } catch {
-        const fallbackStudents = await prisma.user.findMany({
-          where: { role: Role.STUDENT },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            status: true,
-            role: true,
-            studentId: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" },
-        });
-        studentList = fallbackStudents.map((item) => ({
-          ...item,
-          studentId: item.studentId ?? null,
-          phone: null,
-          guardianName: null,
-          guardianPhone: null,
-          country: null,
-          state: null,
-        }));
+        try {
+          const fallbackStudents = await prisma.user.findMany({
+            where: { role: Role.STUDENT },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              status: true,
+              role: true,
+              studentId: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+          });
+          studentList = fallbackStudents.map((item) => ({
+            ...item,
+            studentId: item.studentId ?? null,
+            phone: null,
+            guardianName: null,
+            guardianPhone: null,
+            country: null,
+            state: null,
+          }));
+        } catch (fallbackError) {
+          if (!isUserCountryStateCompatibilityError(fallbackError)) throw fallbackError;
+          const minimalStudents = await prisma.user.findMany({
+            where: { role: Role.STUDENT },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              status: true,
+              role: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+          });
+          studentList = minimalStudents.map((item) => ({
+            ...item,
+            studentId: null,
+            phone: null,
+            guardianName: null,
+            guardianPhone: null,
+            country: null,
+            state: null,
+          }));
+        }
       }
     }
   }
