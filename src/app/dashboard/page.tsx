@@ -1,4 +1,3 @@
-import type { PageProps } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { dashboardModules, type DashboardRole } from "@/lib/dashboard-modules";
@@ -7,7 +6,11 @@ type DashboardSearchParams = {
   module?: string;
 };
 
-export default async function DashboardEntryPage({ searchParams }: PageProps) {
+type DashboardEntryPageProps = {
+  searchParams?: Promise<DashboardSearchParams>;
+};
+
+export default async function DashboardEntryPage({ searchParams }: DashboardEntryPageProps) {
   const session = await auth();
 
   if (!session?.user || session.user.status !== "ACTIVE") {

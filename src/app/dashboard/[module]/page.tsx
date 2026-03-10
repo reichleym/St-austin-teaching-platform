@@ -249,6 +249,7 @@ export default async function DashboardPage({ params }: Props) {
           guardianPhone: true,
           country: true,
           state: true,
+          studentId: true,
           role: true,
           createdAt: true,
         },
