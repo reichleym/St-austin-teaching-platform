@@ -176,7 +176,7 @@ async function buildProgress(courseId: string, studentId: string): Promise<Progr
   let totalLessons = 0;
   let completedLessons = 0;
 
-  const moduleProgress = modules.map((module) => {
+  const moduleProgress: ProgressModule[] = modules.map((module) => {
     const moduleLessons = lessonsByModule.get(module.id) ?? [];
     const visibleLessons = moduleLessons.filter((lesson) => lesson.visibility === LESSON_VISIBILITY_VISIBLE);
     const notAssigned =
@@ -190,6 +190,8 @@ async function buildProgress(courseId: string, studentId: string): Promise<Progr
     totalLessons += moduleTotal;
     completedLessons += moduleCompleted;
 
+    const accessState: ProgressModule["accessState"] = locked ? "LOCKED" : "OPEN";
+
     return {
       id: module.id,
       title: module.title,
@@ -197,7 +199,7 @@ async function buildProgress(courseId: string, studentId: string): Promise<Progr
       totalLessons: moduleTotal,
       completedLessons: moduleCompleted,
       progressPercent: moduleTotal ? Math.round((moduleCompleted / moduleTotal) * 100) : 0,
-      accessState: locked ? "LOCKED" : "OPEN",
+      accessState,
     };
   });
 
