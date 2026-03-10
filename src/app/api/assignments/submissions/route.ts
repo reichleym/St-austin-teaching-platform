@@ -1128,10 +1128,6 @@ export async function PATCH(request: NextRequest) {
     if (publishRequested && nextRawScore === null) {
       return NextResponse.json({ error: "Cannot publish grade without rawScore." }, { status: 400 });
     }
-    if ((nextRawScore !== null || publishRequested) && !nextFeedback) {
-      return NextResponse.json({ error: "Feedback is required when saving or publishing a grade." }, { status: 400 });
-    }
-
     const maxPoints = Number(submission.maxPoints);
     const cappedRaw = nextRawScore === null ? null : Math.min(maxPoints, nextRawScore);
     const penalty = Number(submission.latePenaltyPct || 0);

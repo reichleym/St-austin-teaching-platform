@@ -32,9 +32,9 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
       summary: "Governance, staffing, onboarding, and platform reliability across all schools and terms.",
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Announcements", value: 0, delta: "available for your role", href: "/dashboard?module=announcements" },
-          { label: "Courses", value: 0, delta: "institution total", href: "/dashboard?module=courses" },
-          { label: "Grade Edit Requests", value: 0, delta: "pending review", href: "/dashboard?module=assessment" },
+          { label: "Announcements", value: 0, delta: "available for your role", href: "/dashboard/announcements" },
+          { label: "Courses", value: 0, delta: "institution total", href: "/dashboard/courses" },
+          { label: "Grade Edit Requests", value: 0, delta: "pending review", href: "/dashboard/assessment" },
         ],
       focus: [
         {
@@ -70,9 +70,9 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
       summary: "Monitor assigned courses, instructor progress, engagement signals, and academic follow-through.",
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard?module=courses" },
-          { label: "Engagement Flags", value: 0, delta: "students missing participation", href: "/dashboard?module=engagement" },
-          { label: "Assessments", value: 0, delta: "active in assigned courses", href: "/dashboard?module=assessment" },
+          { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard/courses" },
+          { label: "Engagement Flags", value: 0, delta: "students missing participation", href: "/dashboard/engagement" },
+          { label: "Assessments", value: 0, delta: "active in assigned courses", href: "/dashboard/assessment" },
         ],
       focus: [
         {
@@ -108,9 +108,9 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
       summary: "Course delivery, grading throughput, engagement signals, and learner support workflow.",
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Assigned Courses", value: 0, delta: "currently assigned", href: "/dashboard?module=courses" },
-          { label: "Submissions Pending", value: 0, delta: "awaiting grading", href: "/dashboard?module=assessment" },
-          { label: "Assignments", value: 0, delta: "in your courses", href: "/dashboard?module=assessment" },
+          { label: "Assigned Courses", value: 0, delta: "currently assigned", href: "/dashboard/courses" },
+          { label: "Submissions Pending", value: 0, delta: "awaiting grading", href: "/dashboard/assessment" },
+          { label: "Assignments", value: 0, delta: "in your courses", href: "/dashboard/assessment" },
         ],
       focus: [
         {
@@ -145,9 +145,9 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
     summary: "Academic progress, deadlines, attendance performance, and personal learning actions.",
     metrics:
       dynamicOverview?.metrics ?? [
-        { label: "Enrolled Courses", value: 0, delta: "active enrollments", href: "/dashboard?module=courses" },
-        { label: "Assignments", value: 0, delta: "available to submit", href: "/dashboard?module=assessment" },
-        { label: "Announcements", value: 0, delta: "for your role", href: "/dashboard?module=announcements-feed" },
+        { label: "Enrolled Courses", value: 0, delta: "active enrollments", href: "/dashboard/courses" },
+        { label: "Assignments", value: 0, delta: "available to submit", href: "/dashboard/assessment" },
+        { label: "Announcements", value: 0, delta: "for your role", href: "/dashboard/announcements-feed" },
       ],
     focus: [
       {

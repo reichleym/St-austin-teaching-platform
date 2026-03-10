@@ -47,7 +47,7 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
                   : item.title;
             return (
           <Link
-            href={item.href ?? `/dashboard?module=${item.slug}`}
+            href={item.href ?? `/dashboard/${item.slug}`}
             className={
               isTopLevel
                 ? `brand-nav-link ${active ? "brand-nav-link-active !text-white" : ""}`

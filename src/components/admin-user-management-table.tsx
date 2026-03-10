@@ -14,6 +14,7 @@ type ManagedUser = {
   id: string;
   name: string | null;
   email: string;
+  studentId?: string | null;
   status: UserStatus;
   phone: string | null;
   guardianName: string | null;
@@ -33,6 +34,7 @@ type Props = {
 type Draft = {
   name: string;
   email: string;
+  studentId: string;
   status: UserStatus;
   phone: string;
   guardianName: string;
@@ -65,6 +67,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const [quickDraft, setQuickDraft] = useState<Draft>({
     name: "",
     email: "",
+    studentId: "",
     status: USER_STATUS.ACTIVE,
     phone: "",
     guardianName: "",
@@ -76,6 +79,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const [fullDraft, setFullDraft] = useState<Draft>({
     name: "",
     email: "",
+    studentId: "",
     status: USER_STATUS.ACTIVE,
     phone: "",
     guardianName: "",
@@ -116,7 +120,8 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
       const name = (item.name ?? "").toLowerCase();
       const email = item.email.toLowerCase();
       const phone = (item.phone ?? "").toLowerCase();
-      return name.includes(query) || email.includes(query) || phone.includes(query);
+      const studentId = (item.studentId ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query) || phone.includes(query) || studentId.includes(query);
     });
   }, [rows, searchTerm]);
   const totalFiltered = filteredRows.length;
@@ -165,6 +170,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setQuickDraft({
       name: user.name ?? "",
       email: user.email,
+      studentId: user.studentId ?? "",
       status: user.status,
       phone: user.phone ?? "",
       guardianName: user.guardianName ?? "",
@@ -180,6 +186,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setQuickDraft({
       name: "",
       email: "",
+      studentId: "",
       status: USER_STATUS.ACTIVE,
       phone: "",
       guardianName: "",
@@ -233,6 +240,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setFullDraft({
       name: user.name ?? "",
       email: user.email,
+      studentId: user.studentId ?? "",
       status: user.status,
       phone: user.phone ?? "",
       guardianName: user.guardianName ?? "",
@@ -253,6 +261,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setFullDraft({
       name: "",
       email: "",
+      studentId: "",
       status: USER_STATUS.ACTIVE,
       phone: "",
       guardianName: "",
@@ -263,23 +272,28 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
     setFullStates([]);
   };
 
-  const saveUser = async (userId: string, draft: Draft) => {
+  const saveUser = async (userId: string, draft: Draft, includeStudentId: boolean) => {
     setError("");
 
     try {
+      const payload: Record<string, unknown> = {
+        name: draft.name,
+        email: draft.email,
+        status: draft.status,
+        phone: draft.phone,
+        guardianName: draft.guardianName,
+        guardianPhone: draft.guardianPhone,
+        country: draft.country,
+        state: draft.state,
+      };
+      if (includeStudentId) {
+        payload.studentId = draft.studentId;
+      }
+
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: draft.name,
-          email: draft.email,
-          status: draft.status,
-          phone: draft.phone,
-          guardianName: draft.guardianName,
-          guardianPhone: draft.guardianPhone,
-          country: draft.country,
-          state: draft.state,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const raw = await response.text();
@@ -300,7 +314,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
 
   const onQuickSave = async (userId: string) => {
     setIsQuickSaving(true);
-    const ok = await saveUser(userId, quickDraft);
+    const ok = await saveUser(userId, quickDraft, false);
     if (ok) {
       onQuickCancel();
     }
@@ -310,7 +324,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const onFullSave = async () => {
     if (!fullEditUserId) return;
     setIsFullSaving(true);
-    const ok = await saveUser(fullEditUserId, fullDraft);
+    const ok = await saveUser(fullEditUserId, fullDraft, fullEditUser?.role === "STUDENT");
     if (ok) {
       onFullCancel();
     }
@@ -320,12 +334,16 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
   const isStudentFullEdit = fullEditUser?.role === "STUDENT";
   const isTeacherFullEdit = fullEditUser?.role === "TEACHER" || fullEditUser?.role === "DEPARTMENT_HEAD";
   const viewTitle = title.toLowerCase();
+  const isStudentView = viewTitle.includes("student");
   const isDepartmentHeadView = viewTitle.includes("department");
   const isTeacherView = viewTitle.includes("teacher");
   const isAdminView = viewTitle.includes("admin");
   const entityLabel = isDepartmentHeadView ? "Department Heads" : isTeacherView ? "Teachers" : isAdminView ? "Admins" : "Students";
   const totalLabel = `Total ${entityLabel}`;
   const activeLabel = `Active ${entityLabel}`;
+  const searchPlaceholder = isStudentView
+    ? "Search by name, email, phone, or student ID"
+    : "Search by name, email, or phone";
 
   return (
     <section className="grid gap-4">
@@ -349,7 +367,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               <input
                 className="brand-input w-[220px] max-w-full"
                 type="search"
-                placeholder="Search by name, email, or phone"
+                placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.currentTarget.value)}
               />
@@ -362,6 +380,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               <thead>
                 <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
                   <th className="px-3 py-2 font-semibold">Name</th>
+                  {isStudentView ? <th className="px-3 py-2 font-semibold">Student ID</th> : null}
                   <th className="px-3 py-2 font-semibold">Email</th>
                   <th className="px-3 py-2 font-semibold">Status</th>
                   <th className="px-3 py-2 font-semibold">Created</th>
@@ -388,6 +407,9 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                           user.name?.trim() || "No name"
                         )}
                       </td>
+                      {isStudentView ? (
+                        <td className="px-3 py-2">{user.studentId || "-"}</td>
+                      ) : null}
                       <td className="px-3 py-2">
                         {quickEditing ? (
                           <input
@@ -541,6 +563,21 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                 }}
               />
             </label>
+            {isStudentFullEdit ? (
+              <label className="grid gap-1.5">
+                <span className="brand-label">Student ID</span>
+                <input
+                  className="brand-input"
+                  value={fullDraft.studentId}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setFullDraft((prev) => ({ ...prev, studentId: value }));
+                  }}
+                  placeholder="STU-0001"
+                />
+                <span className="text-xs text-[#3a689f]">Assigned by admin during registration.</span>
+              </label>
+            ) : null}
             <label className="grid gap-1.5">
               <span className="brand-label">Status</span>
               <select

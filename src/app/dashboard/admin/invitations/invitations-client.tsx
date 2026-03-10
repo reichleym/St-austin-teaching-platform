@@ -84,6 +84,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
       const guardianPhone = String(formData.get("guardianPhone") ?? "");
       const country = String(formData.get("country") ?? "");
       const state = String(formData.get("state") ?? "");
+      const studentId = String(formData.get("studentId") ?? "");
 
       const response = await fetch("/api/admin/invitations", {
         method: "POST",
@@ -101,6 +102,7 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
           guardianPhone,
           country,
           state,
+          studentId,
         }),
       });
 
@@ -254,6 +256,19 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
           <div className="brand-panel p-4">
             <p className="brand-section-title">Student Profile</p>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <label className="grid gap-1.5 md:col-span-2">
+                <span className="brand-label">Student ID</span>
+                <input
+                  className="brand-input"
+                  type="text"
+                  name="studentId"
+                  required
+                  placeholder="STU-0001"
+                />
+                <span className="text-xs text-[#3a689f]">
+                  Student ID is manually assigned by admin on student registration.
+                </span>
+              </label>
               <label className="grid gap-1.5">
                 <span className="brand-label">Department</span>
                 <input className="brand-input" type="text" name="department" required placeholder="Science" />

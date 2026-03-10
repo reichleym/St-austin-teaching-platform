@@ -217,6 +217,11 @@ input[type="reset"]:disabled {
   transform: translateY(-1px);
 }
 
+body.modal-open .brand-card:hover,
+body.modal-open .brand-glass:hover {
+  transform: none;
+}
+
 @keyframes brandRise {
   from {
     opacity: 0;

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "@/lib/toast";
@@ -209,6 +211,13 @@ const formatMinutes = (minutes: number) => {
   return `${hours}h ${minutes % 60}m`;
 };
 
+const normalizeRubricText = (value: string) =>
+  value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join("\n");
+
 const plagiarismBand = (score: number | null | undefined) => {
   if (score === null || score === undefined) return "N/A";
   if (score >= 70) return "High";
@@ -224,17 +233,19 @@ const isPublishedOrLockedState = (state: string) =>
   state === "PUBLISHED";
 
 export function AssignmentsModule({ role }: Props) {
+  const router = useRouter();
   const canManage = role === "TEACHER";
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN" || role === "DEPARTMENT_HEAD";
+  const showInlineDetails = false;
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeMenu, setActiveMenu] = useState<"ALL" | "SUBMITTED">("ALL");
+  const [activeMenu, setActiveMenu] = useState<"ALL" | "SUBMITTED" | "DUE">("ALL");
 
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
@@ -256,6 +267,7 @@ export function AssignmentsModule({ role }: Props) {
   const [createAttemptScoringStrategy, setCreateAttemptScoringStrategy] = useState<"LATEST" | "HIGHEST">("LATEST");
   const [createTimerMinutes, setCreateTimerMinutes] = useState("");
   const [createRubric, setCreateRubric] = useState("");
+  const [createRubricFileName, setCreateRubricFileName] = useState("");
   const [createModuleId, setCreateModuleId] = useState("");
   const [createLessonId, setCreateLessonId] = useState("");
   const [createPending, setCreatePending] = useState(false);
@@ -287,6 +299,7 @@ export function AssignmentsModule({ role }: Props) {
   const [editAttemptScoringStrategy, setEditAttemptScoringStrategy] = useState<"LATEST" | "HIGHEST">("LATEST");
   const [editTimerMinutes, setEditTimerMinutes] = useState("");
   const [editRubric, setEditRubric] = useState("");
+  const [editRubricFileName, setEditRubricFileName] = useState("");
   const [editModuleId, setEditModuleId] = useState("");
   const [editLessonId, setEditLessonId] = useState("");
   const [editPending, setEditPending] = useState(false);
@@ -348,8 +361,16 @@ export function AssignmentsModule({ role }: Props) {
     if (activeMenu === "SUBMITTED") {
       return assignments.filter((item) => (item.submissionCount ?? 0) > 0);
     }
+    if (activeMenu === "DUE") {
+      return assignments.filter((item) => {
+        const dueAt = item.dueAt ?? item.endAt ?? item.startAt ?? item.config.startAt ?? null;
+        if (!dueAt) return false;
+        const dueMs = new Date(dueAt).getTime();
+        return Number.isFinite(dueMs) && dueMs >= nowTick;
+      });
+    }
     return assignments;
-  }, [activeMenu, assignments]);
+  }, [activeMenu, assignments, nowTick]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -373,7 +394,9 @@ export function AssignmentsModule({ role }: Props) {
       setCourses(nextCourses);
       setAssignments(nextAssignments);
       setCreateCourseId((prev) => prev || nextCourses[0]?.id || "");
-      setSelectedAssignmentId((prev) => prev || nextAssignments[0]?.id || "");
+      setSelectedAssignmentId((prev) =>
+        prev && nextAssignments.some((item) => item.id === prev) ? prev : ""
+      );
     } catch {
       setError("Unable to load assignments.");
       setCourses([]);
@@ -574,6 +597,7 @@ export function AssignmentsModule({ role }: Props) {
     setEditAttemptScoringStrategy(selected.config.attemptScoringStrategy ?? "LATEST");
     setEditTimerMinutes(selected.config.timerMinutes ? String(selected.config.timerMinutes) : "");
     setEditRubric(selected.config.rubricSteps.join("\n"));
+    setEditRubricFileName("");
     setEditModuleId(selected.config.moduleId ?? "");
     setEditLessonId(selected.config.lessonId ?? "");
     void loadCourseStructure(selected.courseId);
@@ -747,6 +771,7 @@ export function AssignmentsModule({ role }: Props) {
       setCreateAttemptScoringStrategy("LATEST");
       setCreateTimerMinutes("");
       setCreateRubric("");
+      setCreateRubricFileName("");
       setCreateModuleId("");
       setCreateLessonId("");
       setCreateAllowedText(true);
@@ -834,6 +859,7 @@ export function AssignmentsModule({ role }: Props) {
         return;
       }
       setEditId("");
+      setEditRubricFileName("");
       await load();
     } catch {
       setError("Unable to update assignment.");
@@ -1290,21 +1316,19 @@ export function AssignmentsModule({ role }: Props) {
       <section className="brand-card min-w-0 overflow-hidden p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="brand-section-title">Assignment List</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${activeMenu === "ALL" ? "border-[#2d6fbf] bg-[#edf5ff] text-[#114b8d]" : "border-[#9bbfed] text-[#1f518f]"}`}
-              onClick={() => setActiveMenu("ALL")}
-            >
-              All Assignments
-            </button>
-            <button
-              type="button"
-              className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${activeMenu === "SUBMITTED" ? "border-[#2d6fbf] bg-[#edf5ff] text-[#114b8d]" : "border-[#9bbfed] text-[#1f518f]"}`}
-              onClick={() => setActiveMenu("SUBMITTED")}
-            >
-              Submitted Only
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="grid gap-1.5">
+              <span className="brand-label">Filter</span>
+              <select
+                className="brand-input min-w-[200px]"
+                value={activeMenu}
+                onChange={(event) => setActiveMenu(event.currentTarget.value as "ALL" | "SUBMITTED" | "DUE")}
+              >
+                <option value="ALL">All Assignments</option>
+                <option value="SUBMITTED">Submitted Only</option>
+                <option value="DUE">Due Assignments</option>
+              </select>
+            </label>
             {canManage ? (
               <button type="button" className="btn-brand-primary px-3 py-1.5 text-xs font-semibold" onClick={() => setShowCreateModal(true)}>
                 Create Assignment
@@ -1335,7 +1359,7 @@ export function AssignmentsModule({ role }: Props) {
                 <tr
                   key={item.id}
                   className={`border-b border-[#e7f0fc] text-[#0d3f80] transition ${selectedAssignmentId === item.id ? "bg-[#f4f9ff]" : "hover:bg-[#f8fbff]"} ${canManage || isStudent || isAdminReadOnly ? "cursor-pointer" : ""}`}
-                  onClick={() => setSelectedAssignmentId(item.id)}
+                  onClick={() => router.push(`/dashboard/assessment/${item.id}`)}
                 >
                   <td className="px-3 py-2">{item.course.code} - {item.course.title}</td>
                   <td className="px-3 py-2">
@@ -1356,6 +1380,13 @@ export function AssignmentsModule({ role }: Props) {
                   <td className="px-3 py-2">{item.submissionCount ?? 0}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/assessment/${item.id}`}
+                        className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Manage
+                      </Link>
                       {canManage ? (
                         <>
                           <button
@@ -1391,11 +1422,17 @@ export function AssignmentsModule({ role }: Props) {
         ) : null}
 
         {!loading && !filteredAssignments.length ? (
-          <p className="brand-muted mt-3 text-sm">{activeMenu === "SUBMITTED" ? "No submitted assignments yet." : "No assignments found."}</p>
+          <p className="brand-muted mt-3 text-sm">
+            {activeMenu === "SUBMITTED"
+              ? "No submitted assignments yet."
+              : activeMenu === "DUE"
+                ? "No due assignments right now."
+                : "No assignments found."}
+          </p>
         ) : null}
       </section>
 
-      {selectedAssignment ? (
+      {selectedAssignment && showInlineDetails ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
           <p className="brand-muted mt-2 break-words text-sm">
@@ -1861,6 +1898,31 @@ export function AssignmentsModule({ role }: Props) {
               <span className="brand-label">Rubric Steps</span>
               <textarea className="brand-input min-h-[84px]" placeholder="Rubric steps (one per line)" aria-label="Rubric steps" value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
             </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Rubric File</span>
+              <input
+                className="brand-input"
+                type="file"
+                accept=".txt,.csv"
+                aria-label="Upload rubric file"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (!file) {
+                    setCreateRubricFileName("");
+                    return;
+                  }
+                  setCreateRubricFileName(file.name);
+                  void file.text().then((text) => {
+                    setCreateRubric(normalizeRubricText(text));
+                  });
+                }}
+              />
+              {createRubricFileName ? (
+                <span className="text-xs text-[#3a689f]">Loaded: {createRubricFileName}</span>
+              ) : (
+                <span className="text-xs text-[#3a689f]">Upload a text file with one rubric step per line.</span>
+              )}
+            </label>
             <div className="grid gap-3 md:grid-cols-3">
               {createType !== "HOMEWORK" ? (
                 <label className="grid gap-1.5">
@@ -2173,6 +2235,31 @@ export function AssignmentsModule({ role }: Props) {
             <label className="grid gap-1.5">
               <span className="brand-label">Rubric Steps</span>
               <textarea className="brand-input min-h-[84px]" aria-label="Rubric steps" value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Rubric File</span>
+              <input
+                className="brand-input"
+                type="file"
+                accept=".txt,.csv"
+                aria-label="Upload rubric file"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (!file) {
+                    setEditRubricFileName("");
+                    return;
+                  }
+                  setEditRubricFileName(file.name);
+                  void file.text().then((text) => {
+                    setEditRubric(normalizeRubricText(text));
+                  });
+                }}
+              />
+              {editRubricFileName ? (
+                <span className="text-xs text-[#3a689f]">Loaded: {editRubricFileName}</span>
+              ) : (
+                <span className="text-xs text-[#3a689f]">Upload a text file with one rubric step per line.</span>
+              )}
             </label>
             
             <div className="grid gap-3 md:grid-cols-3">

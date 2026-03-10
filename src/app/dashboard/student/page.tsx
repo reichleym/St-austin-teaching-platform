@@ -23,5 +23,5 @@ export default async function StudentDashboardEntryPage() {
     redirect("/dashboard/teacher");
   }
 
-  redirect("/dashboard?module=overview");
+  redirect("/dashboard/overview");
 }
