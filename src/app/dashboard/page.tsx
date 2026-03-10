@@ -1,19 +1,23 @@
+import type { PageProps } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { dashboardModules, type DashboardRole } from "@/lib/dashboard-modules";
 
-type Props = {
-  searchParams?: { module?: string };
+type DashboardSearchParams = {
+  module?: string;
 };
 
-export default async function DashboardEntryPage({ searchParams }: Props) {
+export default async function DashboardEntryPage({ searchParams }: PageProps) {
   const session = await auth();
 
   if (!session?.user || session.user.status !== "ACTIVE") {
     redirect("/login");
   }
 
-  const moduleParam = searchParams?.module?.trim();
+  const resolvedSearchParams = (searchParams ? await searchParams : undefined) as
+    | DashboardSearchParams
+    | undefined;
+  const moduleParam = resolvedSearchParams?.module?.trim();
   if (moduleParam) {
     redirect(`/dashboard/${moduleParam}`);
   }
