@@ -1,4 +1,4 @@
-import { AdminActionType, Role } from "@prisma/client";
+import { AdminActionType, Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { validateCountryState } from "@/lib/csc-locations";
 import { generateInviteToken, getInviteExpiry } from "@/lib/invitations";
@@ -24,6 +24,9 @@ function parseInvitableRole(value: unknown): InvitableRole | null {
 }
 
 function isInvitationPhoneCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes("Unknown argument `phone`") ||
@@ -41,7 +44,9 @@ function isInvitationPhoneCompatibilityError(error: unknown) {
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `country`") ||
     error.message.includes("Unknown field `state`") ||
-    error.message.includes("Unknown field `studentId`")
+    error.message.includes("Unknown field `studentId`") ||
+    error.message.includes("The column") ||
+    error.message.includes("does not exist in the current database")
   );
 }
 
@@ -179,6 +184,9 @@ async function createInvitationRaw(params: {
 export async function POST(request: NextRequest) {
   try {
     const superAdmin = await requireSuperAdminUser();
+    await ensureRoleEnum();
+    await ensureInvitationRoleConstraint();
+    await ensureInvitationSchema();
     const body = (await request.json()) as {
       email?: string;
       role?: Role;
@@ -408,7 +416,7 @@ export async function POST(request: NextRequest) {
 
       // Do this outside the transaction because a failed statement aborts the tx.
       try {
-        await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === Role.STUDENT ? guardianName || null : null}, "guardianPhone" = ${role === Role.STUDENT ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null} WHERE "id" = ${invitation.id}`;
+        await prisma.$executeRaw`UPDATE "Invitation" SET "name" = ${fullName || null}, "phone" = ${phone || null}, "department" = ${department || null}, "guardianName" = ${role === Role.STUDENT ? guardianName || null : null}, "guardianPhone" = ${role === Role.STUDENT ? guardianPhone || null : null}, "country" = ${country || null}, "state" = ${state || null}, "studentId" = ${normalizedStudentId} WHERE "id" = ${invitation.id}`;
       } catch {
         // Ignore if DB column is not available yet.
       }
