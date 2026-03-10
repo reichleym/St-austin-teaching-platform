@@ -1,8 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
-import { CourseStructurePanel } from "@/components/course-structure-panel";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
 
@@ -52,18 +52,7 @@ type PersonOption = {
 type Props = {
   role: AppRole;
   viewMode?: "all" | "enrolled";
-};
-
-type EnrollmentRequestItem = {
-  id: string;
-  courseId: string;
-  studentId: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  createdAt: string;
-  courseCode: string;
-  courseTitle: string;
-  studentName: string | null;
-  studentEmail: string;
+  showModuleManagement?: boolean;
 };
 
 const toDateInputValue = (input: string | null) => {
@@ -110,10 +99,11 @@ function PersonLabel({ person }: { person: PersonOption }) {
   return <>{(person.name || "Unnamed") + " - " + person.email}</>;
 }
 
-export function CoursesModule({ role, viewMode = "all" }: Props) {
+export function CoursesModule({ role, viewMode = "all", showModuleManagement = true }: Props) {
   const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
   const isDepartmentHead = role === "DEPARTMENT_HEAD";
   const isStudent = role === "STUDENT";
+  const isTeacher = role === "TEACHER";
   const canManage = isSuperAdmin;
   const studentSimpleView = isStudent;
 
@@ -126,8 +116,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [editCourseId, setEditCourseId] = useState("");
-  const [expandedCourseId, setExpandedCourseId] = useState("");
-
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
@@ -155,8 +143,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
   const [filterStudentId, setFilterStudentId] = useState("");
-  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestItem[]>([]);
-  const [requestActionId, setRequestActionId] = useState("");
   const [enrollPendingCourseId, setEnrollPendingCourseId] = useState("");
   const availableDepartmentHeadIds = useMemo(
     () => new Set(departmentHeads.map((head) => head.id)),
@@ -188,14 +174,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
       setTeachers(result.teachers ?? []);
       setStudents(result.students ?? []);
       setDepartmentHeads(result.departmentHeads ?? []);
-      if (isSuperAdmin) {
-        const requestResponse = await fetch("/api/courses/enrollment-requests", { method: "GET" });
-        const requestRaw = await requestResponse.text();
-        const requestResult = requestRaw ? (JSON.parse(requestRaw) as { requests?: EnrollmentRequestItem[] }) : {};
-        setEnrollmentRequests(requestResult.requests ?? []);
-      } else {
-        setEnrollmentRequests([]);
-      }
     } catch {
       setError("Unable to load courses.");
       setCourses([]);
@@ -420,29 +398,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
     }
   };
 
-  const onReviewEnrollmentRequest = async (requestId: string, decision: "APPROVE" | "REJECT") => {
-    setRequestActionId(requestId);
-    setError("");
-    try {
-      const response = await fetch("/api/courses/enrollment-requests", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, decision }),
-      });
-      const raw = await response.text();
-      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
-      if (!response.ok) {
-        setError(result.error ?? "Unable to review enrollment request.");
-        return;
-      }
-      await loadData();
-    } catch {
-      setError("Unable to review enrollment request.");
-    } finally {
-      setRequestActionId("");
-    }
-  };
-
   return (
     <section className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-3">
@@ -459,56 +414,21 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
           <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{role}</p>
         </article>
       </div>
-      {canManage ? (
-        <section className="brand-card p-5">
-          <p className="brand-section-title">Course Enrollment Requests</p>
-          {!enrollmentRequests.length ? (
-            <p className="brand-muted mt-3 text-sm">No enrollment requests yet.</p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {enrollmentRequests.map((request) => (
-                <article key={request.id} className="rounded-md border border-[#dbe9fb] bg-white p-3">
-                  <p className="text-sm font-semibold text-[#0d3f80]">
-                    {request.courseCode} - {request.courseTitle}
-                  </p>
-                  <p className="mt-1 text-xs text-[#3a689f]">
-                    Student: {(request.studentName || "Unnamed Student") + " - " + request.studentEmail}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-[#285f9f]">Status: {request.status}</p>
-                  {request.status === "PENDING" ? (
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="btn-brand-primary px-3 py-1.5 text-xs font-semibold"
-                        disabled={requestActionId === request.id}
-                        onClick={() => void onReviewEnrollmentRequest(request.id, "APPROVE")}
-                      >
-                        {requestActionId === request.id ? "Processing..." : "Approve"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
-                        disabled={requestActionId === request.id}
-                        onClick={() => void onReviewEnrollmentRequest(request.id, "REJECT")}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
-
       <section className="brand-card overflow-x-auto p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="brand-section-title">Course List</p>
           {canManage ? (
-            <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={() => setShowCreate(true)}>
-              Create Course
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/dashboard/courses/enrollment-requests"
+                className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
+              >
+                Enrollment Requests
+              </Link>
+              <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={() => setShowCreate(true)}>
+                Create Course
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -615,40 +535,6 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                       ) : null}
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                            onClick={() => setExpandedCourseId((prev) => (prev === course.id ? "" : course.id))}
-                          >
-                            {expandedCourseId === course.id ? "Hide Modules" : "Modules"}
-                          </button>
-                          {canManage ? (
-                            <>
-                              <button
-                                type="button"
-                                className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                                onClick={() => {
-                                  setEditCourseId(course.id);
-                                  setShowCreate(false);
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setConfirmDeleteCourse({
-                                    id: course.id,
-                                    label: `${course.code} - ${course.title}`,
-                                  })
-                                }
-                                disabled={deletePendingCourseId === course.id}
-                                className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
-                              >
-                                {deletePendingCourseId === course.id ? "Deleting..." : "Delete"}
-                              </button>
-                            </>
-                          ) : null}
                           {isStudent && viewMode === "all" ? (
                             <button
                               type="button"
@@ -668,31 +554,42 @@ export function CoursesModule({ role, viewMode = "all" }: Props) {
                                     ? "Requesting..."
                                     : "Enroll Now"}
                             </button>
-                          ) : null}
+                          ) : (
+                            <>
+                              <Link
+                                href={`/dashboard/${viewMode === "enrolled" ? "learning" : "courses"}/${course.id}`}
+                                className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                              >
+                                {canManage ? "Manage Courses" : "Manage Courses"}
+                              </Link>
+                              {showModuleManagement && canManage ? (
+                                <Link
+                                  href={`/dashboard/courses/${course.id}/structure`}
+                                  className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                                >
+                                  Manage Modules
+                                </Link>
+                              ) : null}
+                              {canManage ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteCourse({
+                                      id: course.id,
+                                      label: `${course.code} - ${course.title}`,
+                                    })
+                                  }
+                                  disabled={deletePendingCourseId === course.id}
+                                  className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
+                                >
+                                  {deletePendingCourseId === course.id ? "Deleting..." : "Delete"}
+                                </button>
+                              ) : null}
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
-                    {expandedCourseId === course.id ? (
-                      <tr className="border-b border-[#e7f0fc]">
-                        <td
-                          className="px-3 py-3"
-                          colSpan={
-                            studentSimpleView
-                              ? viewMode === "enrolled"
-                                ? 6
-                                : 5
-                              : 9
-                          }
-                        >
-                          <CourseStructurePanel
-                            role={role}
-                            courses={[{ id: course.id, code: course.code, title: course.title }]}
-                            initialCourseId={course.id}
-                            showCourseSelector={false}
-                          />
-                        </td>
-                      </tr>
-                    ) : null}
                   </Fragment>
                 ))}
               </tbody>

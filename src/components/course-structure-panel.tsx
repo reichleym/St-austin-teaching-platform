@@ -91,7 +91,6 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
   const [createModuleTitle, setCreateModuleTitle] = useState("");
   const [createModuleDescription, setCreateModuleDescription] = useState("");
   const [createModuleReleaseAt, setCreateModuleReleaseAt] = useState("");
-  const [createModuleVisibilityRule, setCreateModuleVisibilityRule] = useState<"ALL_VISIBLE" | "LIMITED_ACCESS">("ALL_VISIBLE");
   const [createModulePending, setCreateModulePending] = useState(false);
 
   const [lessonDraftByModule, setLessonDraftByModule] = useState<
@@ -184,7 +183,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
           title: createModuleTitle,
           description: createModuleDescription,
           releaseAt: createModuleReleaseAt || null,
-          visibilityRule: createModuleVisibilityRule,
+          visibilityRule: "ALL_VISIBLE",
         }),
       });
 
@@ -198,7 +197,6 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
       setCreateModuleTitle("");
       setCreateModuleDescription("");
       setCreateModuleReleaseAt("");
-      setCreateModuleVisibilityRule("ALL_VISIBLE");
       await loadModules(selectedCourseId);
     } catch {
       setError("Unable to create module.");
@@ -499,17 +497,6 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                 onChange={(event) => setCreateModuleReleaseAt(event.currentTarget.value)}
               />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Visibility Rule</span>
-              <select
-                className="brand-input"
-                value={createModuleVisibilityRule}
-                onChange={(event) => setCreateModuleVisibilityRule(event.currentTarget.value as "ALL_VISIBLE" | "LIMITED_ACCESS")}
-              >
-                <option value="ALL_VISIBLE">All visible</option>
-                <option value="LIMITED_ACCESS">Limited access</option>
-              </select>
-            </label>
           </div>
           <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createModulePending}>
             {createModulePending ? "Creating..." : "Create Module"}
@@ -577,14 +564,11 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                   const title = (new FormData(form).get("title") as string) || "";
                   const description = (new FormData(form).get("description") as string) || "";
                   const releaseAt = (new FormData(form).get("releaseAt") as string) || "";
-                  const visibilityRule = ((new FormData(form).get("visibilityRule") as string) || "ALL_VISIBLE") as
-                    | "ALL_VISIBLE"
-                    | "LIMITED_ACCESS";
                   void patchModule(module.id, {
                     title,
                     description,
                     releaseAt: releaseAt || null,
-                    visibilityRule,
+                    visibilityRule: "ALL_VISIBLE",
                   });
                 }}
               >
@@ -600,13 +584,6 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                   <label className="grid gap-1.5">
                     <span className="brand-label">Release Date</span>
                     <input className="brand-input" type="date" name="releaseAt" defaultValue={toDateInput(module.releaseAt)} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="brand-label">Visibility Rule</span>
-                    <select className="brand-input" name="visibilityRule" defaultValue={module.visibilityRule}>
-                      <option value="ALL_VISIBLE">All visible</option>
-                      <option value="LIMITED_ACCESS">Limited access</option>
-                    </select>
                   </label>
                 </div>
                 <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={pendingModuleId === module.id}>

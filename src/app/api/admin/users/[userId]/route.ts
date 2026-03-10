@@ -13,6 +13,7 @@ type RequestBody = {
   guardianPhone?: string | null;
   country?: string;
   state?: string;
+  studentId?: string | null;
 };
 
 function isUserCountryStateCompatibilityError(error: unknown) {
@@ -23,11 +24,13 @@ function isUserCountryStateCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `guardianPhone`") ||
     error.message.includes("Unknown argument `country`") ||
     error.message.includes("Unknown argument `state`") ||
+    error.message.includes("Unknown argument `studentId`") ||
     error.message.includes("Unknown field `phone`") ||
     error.message.includes("Unknown field `guardianName`") ||
     error.message.includes("Unknown field `guardianPhone`") ||
     error.message.includes("Unknown field `country`") ||
-    error.message.includes("Unknown field `state`")
+    error.message.includes("Unknown field `state`") ||
+    error.message.includes("Unknown field `studentId`")
   );
 }
 
@@ -45,6 +48,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const guardianPhone = typeof body.guardianPhone === "string" ? body.guardianPhone.trim() : undefined;
     const country = typeof body.country === "string" ? body.country.trim() : undefined;
     const state = typeof body.state === "string" ? body.state.trim() : undefined;
+    const studentId = typeof body.studentId === "string" ? body.studentId.trim() : undefined;
 
     if (status !== undefined && status !== UserStatus.ACTIVE && status !== UserStatus.DISABLED) {
       return NextResponse.json({ error: "Invalid status value." }, { status: 400 });
@@ -92,6 +96,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.country = country;
       data.state = state;
     }
+    if (studentId !== undefined) {
+      if (target.role !== Role.STUDENT) {
+        return NextResponse.json({ error: "Student ID can only be assigned to students." }, { status: 400 });
+      }
+      const normalizedStudentId = studentId ? studentId : null;
+      if (normalizedStudentId) {
+        const existing = await prisma.user.findFirst({
+          where: { studentId: normalizedStudentId, NOT: { id: userId } },
+          select: { id: true },
+        });
+        if (existing) {
+          return NextResponse.json({ error: "Student ID is already in use." }, { status: 409 });
+        }
+      }
+      data.studentId = normalizedStudentId;
+    }
 
     if (!Object.keys(data).length) {
       return NextResponse.json({ error: "At least one field is required." }, { status: 400 });
@@ -113,6 +133,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             guardianPhone: true,
             country: true,
             state: true,
+            studentId: true,
             role: true,
             createdAt: true,
           },
@@ -144,6 +165,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       delete fallbackData.phone;
       delete fallbackData.guardianName;
       delete fallbackData.guardianPhone;
+      delete fallbackData.studentId;
 
       updated = await prisma.$transaction(async (tx) => {
         const user = await tx.user.update({
@@ -177,6 +199,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         let patchedPhone: string | null = null;
         let patchedGuardianName: string | null = null;
         let patchedGuardianPhone: string | null = null;
+        let patchedStudentId: string | null = null;
 
         if (country !== undefined && state !== undefined) {
           try {
@@ -205,6 +228,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           }
         }
 
+        if (studentId !== undefined) {
+          try {
+            await tx.$executeRaw`UPDATE "User" SET "studentId" = ${studentId || null} WHERE "id" = ${user.id}`;
+            const rows = await tx.$queryRaw<Array<{ studentId: string | null }>>`
+              SELECT "studentId" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+            `;
+            patchedStudentId = rows[0]?.studentId ?? null;
+          } catch {
+            // Ignore when DB still lacks columns.
+          }
+        }
+
         return {
           ...user,
           country: patchedCountry,
@@ -212,6 +247,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           phone: patchedPhone,
           guardianName: patchedGuardianName,
           guardianPhone: patchedGuardianPhone,
+          studentId: patchedStudentId,
         };
       });
     }

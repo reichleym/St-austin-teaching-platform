@@ -20,7 +20,7 @@ export default async function Home() {
               Dashboard
             </Link>
             {session.user.role === Role.SUPER_ADMIN ? (
-              <Link href="/dashboard?module=overview" className="underline">
+              <Link href="/dashboard/overview" className="underline">
                 Super Admin
               </Link>
             ) : null}

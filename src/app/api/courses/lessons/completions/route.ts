@@ -59,19 +59,28 @@ async function getLessonContext(lessonId: string, studentId: string) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser();
-    if (!isSuperAdminRole(user.role) && user.role !== Role.TEACHER) {
-      return NextResponse.json({ error: "Only admin/teacher can update lesson completion." }, { status: 403 });
-    }
-
     await ensureLessonCompletionSchema();
 
     const body = (await request.json()) as CompletionBody;
     const lessonId = body.lessonId?.trim() ?? "";
-    const studentId = body.studentId?.trim() ?? "";
+    const providedStudentId = body.studentId?.trim() ?? "";
     const completed = body.completed ?? true;
 
-    if (!lessonId || !studentId) {
-      return NextResponse.json({ error: "lessonId and studentId are required." }, { status: 400 });
+    if (!lessonId) {
+      return NextResponse.json({ error: "lessonId is required." }, { status: 400 });
+    }
+
+    const isStudent = user.role === Role.STUDENT;
+    if (!isSuperAdminRole(user.role) && user.role !== Role.TEACHER && !isStudent) {
+      return NextResponse.json({ error: "Only admin/teacher can update lesson completion." }, { status: 403 });
+    }
+
+    const studentId = isStudent ? user.id : providedStudentId;
+    if (!studentId) {
+      return NextResponse.json({ error: "studentId is required." }, { status: 400 });
+    }
+    if (isStudent && providedStudentId && providedStudentId !== user.id) {
+      return NextResponse.json({ error: "Students can only update their own completion." }, { status: 403 });
     }
 
     const ctx = await getLessonContext(lessonId, studentId);

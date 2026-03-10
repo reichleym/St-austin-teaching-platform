@@ -19,5 +19,5 @@ export default async function DepartmentHeadDashboardEntryPage() {
     redirect("/dashboard");
   }
 
-  redirect("/dashboard?module=overview");
+  redirect("/dashboard/overview");
 }
