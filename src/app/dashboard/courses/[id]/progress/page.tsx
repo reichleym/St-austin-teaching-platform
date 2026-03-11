@@ -25,12 +25,20 @@ export default async function CourseProgressPage({ params }: Props) {
 
   const isSuperAdmin = isSuperAdminRole(roleKey);
   const isTeacher = isTeacherRole(roleKey);
-  if (!isSuperAdmin && !isTeacher) {
+  const isStudent = roleKey === "STUDENT";
+  if (!isSuperAdmin && !isTeacher && !isStudent) {
     redirect(`/dashboard/courses/${courseId}`);
   }
 
   const course = await prisma.course.findFirst({
-    where: isSuperAdmin ? { id: courseId } : { id: courseId, teacherId: session.user.id },
+    where: isSuperAdmin
+      ? { id: courseId }
+      : isTeacher
+        ? { id: courseId, teacherId: session.user.id }
+        : {
+            id: courseId,
+            enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } },
+          },
     select: { id: true, code: true, title: true },
   });
 

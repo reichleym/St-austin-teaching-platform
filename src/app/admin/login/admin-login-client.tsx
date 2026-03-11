@@ -4,6 +4,7 @@ import Image from "next/image";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/lib/toast";
 import { ToastMessage } from "@/components/toast-message";
 import { PasswordField } from "@/components/password-field";
 
@@ -67,9 +68,12 @@ export default function AdminLoginClient() {
         return;
       }
 
+      toast.success("Logged in successfully.");
       router.replace(adminDashboardUrl);
       router.refresh();
-      window.location.assign(adminDashboardUrl);
+      window.setTimeout(() => {
+        window.location.assign(adminDashboardUrl);
+      }, 150);
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
       console.error("Login error:", err);

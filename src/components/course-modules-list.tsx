@@ -49,7 +49,7 @@ const formatDate = (value?: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 };
 
 export function CourseModulesList({
@@ -60,13 +60,10 @@ export function CourseModulesList({
   showAssignmentsLink = true,
   showViewAllLink = false,
 }: Props) {
-  const isStudent = role === "STUDENT";
   const canManage = role === "SUPER_ADMIN" || role === "ADMIN" || role === "TEACHER";
   const [modules, setModules] = useState<ModuleItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pendingLessonId, setPendingLessonId] = useState("");
-  const [pendingModuleId, setPendingModuleId] = useState("");
   const [showCreateModule, setShowCreateModule] = useState(false);
   const [showCreateLesson, setShowCreateLesson] = useState(false);
   const [createModuleTitle, setCreateModuleTitle] = useState("");
@@ -110,58 +107,6 @@ export function CourseModulesList({
     void loadModules();
   }, [courseId, loadModules]);
 
-  const onMarkLesson = async (lessonId: string) => {
-    if (!isStudent) return;
-    setPendingLessonId(lessonId);
-    setError("");
-    try {
-      const response = await fetch("/api/courses/lessons/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId, completed: true }),
-      });
-      const raw = await response.text();
-      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
-      if (!response.ok) {
-        setError(result.error ?? "Unable to mark lesson complete.");
-        return;
-      }
-      await loadModules();
-    } catch {
-      setError("Unable to mark lesson complete.");
-    } finally {
-      setPendingLessonId("");
-    }
-  };
-
-  const onMarkModule = async (moduleItem: ModuleItem) => {
-    if (!isStudent || moduleItem.accessState === "LOCKED") return;
-    const targetLessons = moduleItem.lessons.filter(
-      (lesson) => lesson.visibility === "VISIBLE" && !lesson.completedByViewer
-    );
-    if (!targetLessons.length) return;
-    setPendingModuleId(moduleItem.id);
-    setError("");
-    try {
-      for (const lesson of targetLessons) {
-        const response = await fetch("/api/courses/lessons/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lessonId: lesson.id, completed: true }),
-        });
-        if (!response.ok) {
-          const raw = await response.text();
-          const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
-          throw new Error(result.error ?? "Unable to mark lessons complete.");
-        }
-      }
-      await loadModules();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to mark lessons complete.");
-    } finally {
-      setPendingModuleId("");
-    }
-  };
 
   const hasModules = useMemo(() => modules.length > 0, [modules]);
   const moduleOptions = useMemo(
@@ -344,11 +289,7 @@ export function CourseModulesList({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="brand-section-title">Modules & Lessons</p>
-          <p className="brand-muted mt-1 text-xs">
-            {isStudent
-              ? "Mark lessons complete as you progress."
-              : "Review modules and lessons for this course."}
-          </p>
+          <p className="brand-muted mt-1 text-xs">Review modules and lessons for this course.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {showViewAllLink && canManage ? (
@@ -405,8 +346,6 @@ export function CourseModulesList({
         <div className="mt-4 space-y-4">
           {modules.map((moduleItem) => {
             const hasLessons = moduleItem.lessons.length > 0;
-            const moduleComplete = moduleItem.completedLessons >= moduleItem.lessonCount && moduleItem.lessonCount > 0;
-            const canMarkModule = isStudent && moduleItem.accessState === "OPEN" && !moduleComplete;
 
             return (
               <div key={moduleItem.id} className="rounded-lg border border-[#d6e7fb] bg-white/80 p-3">
@@ -416,7 +355,7 @@ export function CourseModulesList({
                       {moduleItem.position + 1}. {moduleItem.title}
                     </p>
                     <p className="brand-muted mt-1 text-xs">
-                      Release: {formatDate(moduleItem.releaseAt)} | Access: {moduleItem.accessState}
+                      Release: {formatDate(moduleItem.releaseAt)}
                     </p>
                     {moduleItem.description ? (
                       <p className="mt-2 text-xs text-[#2f5d96]">{moduleItem.description}</p>
@@ -435,24 +374,10 @@ export function CourseModulesList({
                         Edit
                       </button>
                     ) : null}
-                    {isStudent ? (
-                      <button
-                        type="button"
-                        className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
-                        disabled={!canMarkModule || pendingModuleId === moduleItem.id}
-                        onClick={() => void onMarkModule(moduleItem)}
-                      >
-                        {pendingModuleId === moduleItem.id ? "Marking..." : moduleComplete ? "Completed" : "Mark All Complete"}
-                      </button>
-                    ) : null}
                   </div>
                 </div>
 
-                {moduleItem.accessState === "LOCKED" ? (
-                  <p className="mt-3 text-xs font-semibold text-[#9b1c1c]">
-                    This module is locked for the selected learner.
-                  </p>
-                ) : hasLessons ? (
+                {hasLessons ? (
                   <div className="mt-3 space-y-2">
                     {moduleItem.lessons.map((lesson) => (
                       <div key={lesson.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#dbe9fb] bg-white px-3 py-2 text-xs text-[#2f5d96]">
@@ -464,16 +389,6 @@ export function CourseModulesList({
                             ({lesson.visibility}{lesson.isRequired ? ", required" : ""})
                           </span>
                         </div>
-                        {isStudent ? (
-                          <button
-                            type="button"
-                            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
-                            disabled={lesson.completedByViewer || pendingLessonId === lesson.id}
-                            onClick={() => void onMarkLesson(lesson.id)}
-                          >
-                            {lesson.completedByViewer ? "Completed" : pendingLessonId === lesson.id ? "Saving..." : "Mark Complete"}
-                          </button>
-                        ) : null}
                       </div>
                     ))}
                   </div>

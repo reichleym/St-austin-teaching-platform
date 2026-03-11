@@ -287,52 +287,30 @@ async function listModulesRaw(courseId: string, user: { id: string; role: Role |
     `
     : [];
 
-  const assignedModuleSet =
-    user.role === Role.STUDENT && moduleIds.length
-      ? new Set(
-          (
-            await prisma.$queryRaw<RawModuleAssignment[]>`
-              SELECT "moduleId"
-              FROM "ModuleAssignment"
-              WHERE "studentId" = ${user.id} AND "moduleId" IN (${Prisma.join(moduleIds)})
-            `
-          ).map((item) => item.moduleId)
-        )
-      : null;
-
-  const now = new Date();
   let totalLessons = 0;
   let completedLessons = 0;
 
   const payload = modules.map((module) => {
     const moduleLessons = lessons.filter((item) => item.moduleId === module.id);
-    const visibleLessons = moduleLessons.filter((item) => canManage || item.visibility === "VISIBLE");
+    const visibleLessons =
+      user.role === Role.STUDENT ? moduleLessons : moduleLessons.filter((item) => canManage || item.visibility === "VISIBLE");
 
-    const notAssignedForStudent = user.role === Role.STUDENT && !(assignedModuleSet?.has(module.id) ?? false);
-    const lockedForStudent =
-      !canManage &&
-      user.role === Role.STUDENT &&
-      (notAssignedForStudent ||
-        (module.visibilityRule === MODULE_VISIBILITY_LIMITED && !!module.releaseAt && now < module.releaseAt));
-
-    const lessonsForResponse = lockedForStudent
-      ? []
-      : visibleLessons.map((lesson) => {
-          const lessonAttachments = attachments.filter((item) => item.lessonId === lesson.id);
-          const completion = completions.find((item) => item.lessonId === lesson.id);
-          return {
-            id: lesson.id,
-            title: lesson.title,
-            content: lesson.content,
-            position: lesson.position,
-            visibility: lesson.visibility,
-            isRequired: lesson.isRequired,
-            embedUrl: lesson.embedUrl,
-            attachments: lessonAttachments,
-            completedByViewer: !!completion,
-            completedAt: completion ? completion.completedAt.toISOString() : null,
-          };
-        });
+    const lessonsForResponse = visibleLessons.map((lesson) => {
+      const lessonAttachments = attachments.filter((item) => item.lessonId === lesson.id);
+      const completion = completions.find((item) => item.lessonId === lesson.id);
+      return {
+        id: lesson.id,
+        title: lesson.title,
+        content: lesson.content,
+        position: lesson.position,
+        visibility: lesson.visibility,
+        isRequired: lesson.isRequired,
+        embedUrl: lesson.embedUrl,
+        attachments: lessonAttachments,
+        completedByViewer: !!completion,
+        completedAt: completion ? completion.completedAt.toISOString() : null,
+      };
+    });
 
     if (user.role === Role.STUDENT) {
       totalLessons += visibleLessons.length;
@@ -351,7 +329,7 @@ async function listModulesRaw(courseId: string, user: { id: string; role: Role |
       position: module.position,
       releaseAt: module.releaseAt?.toISOString() ?? null,
       visibilityRule: module.visibilityRule,
-      accessState: lockedForStudent ? "LOCKED" : "OPEN",
+      accessState: "OPEN",
       lessonCount: visibleLessons.length,
       completedLessons: moduleCompleted,
       progressPercent: visibleLessons.length ? Math.round((moduleCompleted / visibleLessons.length) * 100) : 0,
@@ -414,47 +392,25 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const now = new Date();
-    const moduleIds = modules.map((module) => module.id);
-    const assignedModuleSet =
-      user.role === Role.STUDENT && moduleIds.length
-        ? new Set(
-            (
-              await prisma.$queryRaw<RawModuleAssignment[]>`
-                SELECT "moduleId"
-                FROM "ModuleAssignment"
-                WHERE "studentId" = ${user.id} AND "moduleId" IN (${Prisma.join(moduleIds)})
-              `
-            ).map((item) => item.moduleId)
-          )
-        : null;
     let totalLessons = 0;
     let completedLessons = 0;
 
     const payload = modules.map((module) => {
-      const notAssignedForStudent = user.role === Role.STUDENT && !(assignedModuleSet?.has(module.id) ?? false);
-      const lockedForStudent =
-        !access.canManage &&
-        user.role === Role.STUDENT &&
-        (notAssignedForStudent ||
-          (module.visibilityRule === MODULE_VISIBILITY_LIMITED && !!module.releaseAt && now < module.releaseAt));
-
-      const visibleLessons = module.lessons.filter((lesson) => access.canManage || lesson.visibility === "VISIBLE");
-      const lessonsForResponse = lockedForStudent
-        ? []
-        : visibleLessons.map((lesson) => ({
-            id: lesson.id,
-            title: lesson.title,
-            content: lesson.content,
-            position: lesson.position,
-            visibility: lesson.visibility,
-            isRequired: lesson.isRequired,
-            embedUrl: lesson.embedUrl,
-            attachments: lesson.attachments,
-            completedByViewer: user.role === Role.STUDENT ? lesson.completions.length > 0 : false,
-            completedAt:
-              user.role === Role.STUDENT && lesson.completions.length ? lesson.completions[0].completedAt.toISOString() : null,
-          }));
+      const visibleLessons =
+        user.role === Role.STUDENT ? module.lessons : module.lessons.filter((lesson) => access.canManage || lesson.visibility === "VISIBLE");
+      const lessonsForResponse = visibleLessons.map((lesson) => ({
+        id: lesson.id,
+        title: lesson.title,
+        content: lesson.content,
+        position: lesson.position,
+        visibility: lesson.visibility,
+        isRequired: lesson.isRequired,
+        embedUrl: lesson.embedUrl,
+        attachments: lesson.attachments,
+        completedByViewer: user.role === Role.STUDENT ? lesson.completions.length > 0 : false,
+        completedAt:
+          user.role === Role.STUDENT && lesson.completions.length ? lesson.completions[0].completedAt.toISOString() : null,
+      }));
 
       if (user.role === Role.STUDENT) {
         totalLessons += visibleLessons.length;
@@ -472,7 +428,7 @@ export async function GET(request: NextRequest) {
         position: module.position,
         releaseAt: module.releaseAt?.toISOString() ?? null,
         visibilityRule: module.visibilityRule,
-        accessState: lockedForStudent ? "LOCKED" : "OPEN",
+        accessState: "OPEN",
         lessonCount: moduleTotal,
         completedLessons: moduleCompleted,
         progressPercent: moduleTotal ? Math.round((moduleCompleted / moduleTotal) * 100) : 0,

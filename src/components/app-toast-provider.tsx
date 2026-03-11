@@ -12,6 +12,7 @@ type ToastItem = ToastPayload;
 type MutationMethod = "POST" | "PATCH" | "PUT" | "DELETE";
 
 const MUTATION_METHODS: MutationMethod[] = ["POST", "PATCH", "PUT", "DELETE"];
+const TOAST_SUPPRESSED_PATHS = ["/api/auth/"];
 
 function parsePayloadMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
@@ -33,6 +34,26 @@ function getRequestUrl(input: RequestInfo | URL): string {
   if (input instanceof URL) return input.toString();
   if (typeof Request !== "undefined" && input instanceof Request) return input.url;
   return "";
+}
+
+function isToastSuppressed(rawUrl: string): boolean {
+  if (!rawUrl) return false;
+
+  if (rawUrl.startsWith("/")) {
+    return TOAST_SUPPRESSED_PATHS.some((path) => rawUrl.startsWith(path));
+  }
+
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.origin !== window.location.origin) return false;
+      return TOAST_SUPPRESSED_PATHS.some((path) => parsed.pathname.startsWith(path));
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 function isApiMutation(method: string, rawUrl: string): method is MutationMethod {
@@ -94,7 +115,7 @@ export function AppToastProvider({ children }: Props) {
     const wrappedFetch: typeof window.fetch = async (input, init) => {
       const method = getMutationMethod(input, init);
       const url = getRequestUrl(input);
-      const shouldToast = isApiMutation(method, url);
+      const shouldToast = isApiMutation(method, url) && !isToastSuppressed(url);
 
       try {
         const response = await originalFetch(input, init);

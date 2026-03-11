@@ -233,7 +233,7 @@ async function validateStudentIds(studentIds: string[]) {
   }
 
   const matched = await prisma.user.findMany({
-    where: { id: { in: normalized }, role: Role.STUDENT, status: UserStatus.ACTIVE },
+    where: { id: { in: normalized }, role: Role.STUDENT },
     select: { id: true },
   });
 
@@ -348,24 +348,24 @@ export async function GET(request: NextRequest) {
 
     const teachers = isSuperAdminRole(role)
       ? await prisma.user.findMany({
-          where: { role: Role.TEACHER, status: UserStatus.ACTIVE },
+          where: { role: Role.TEACHER },
           orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: { id: true, name: true, email: true, phone: true },
+          select: { id: true, name: true, email: true, phone: true, status: true },
         })
       : [];
 
     const students = isSuperAdminRole(role)
       ? await prisma.user.findMany({
-          where: { role: Role.STUDENT, status: UserStatus.ACTIVE },
+          where: { role: Role.STUDENT },
           orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: { id: true, name: true, email: true, phone: true },
+          select: { id: true, name: true, email: true, phone: true, status: true, studentId: true },
         })
       : [];
     const departmentHeads = isSuperAdminRole(role)
       ? await prisma.user.findMany({
-          where: { role: Role.DEPARTMENT_HEAD, status: UserStatus.ACTIVE },
+          where: { role: Role.DEPARTMENT_HEAD },
           orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: { id: true, name: true, email: true, phone: true },
+          select: { id: true, name: true, email: true, phone: true, status: true },
         })
       : [];
 

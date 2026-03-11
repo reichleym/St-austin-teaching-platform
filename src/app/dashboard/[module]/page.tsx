@@ -17,6 +17,7 @@ import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
+import { StudentProgressModule } from "@/components/student-progress-module";
 
 type Props = {
   params: Promise<{ module: string }>;
@@ -900,6 +901,10 @@ export default async function DashboardPage({ params }: Props) {
     moduleKpiLabel = "My Learning";
     moduleKpiValue = enrolledCoursesCount;
     moduleKpiHint = "in this module";
+  } else if (selected.slug === "progress") {
+    moduleKpiLabel = "Courses";
+    moduleKpiValue = roleKey === "STUDENT" ? enrolledCoursesCount : availableCoursesCount;
+    moduleKpiHint = "available for progress";
   } else if (selected.slug === "assessment") {
     moduleKpiLabel = "Assignments";
     moduleKpiValue = assignmentCount;
@@ -991,6 +996,8 @@ export default async function DashboardPage({ params }: Props) {
             viewMode={roleKey === "STUDENT" ? "enrolled" : "all"}
             showModuleManagement={false}
           />
+        ) : selected.slug === "progress" ? (
+          <StudentProgressModule role={roleForModules} />
         ) : selected.slug === "assessment" ? (
           <AssignmentsModule role={roleForModules} />
         ) : selected.slug === "engagement" ? (

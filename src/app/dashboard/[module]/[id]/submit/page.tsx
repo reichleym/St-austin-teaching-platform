@@ -30,10 +30,11 @@ const parseAssignmentType = (input: unknown): AssignmentType => {
   return "HOMEWORK";
 };
 
-const parseSubmissionTypes = (input: unknown): Array<"TEXT" | "FILE"> => {
-  if (!Array.isArray(input)) return ["TEXT", "FILE"];
+const parseSubmissionTypes = (input: unknown, options?: { allowEmpty?: boolean }): Array<"TEXT" | "FILE"> => {
+  if (!Array.isArray(input)) return options?.allowEmpty ? [] : ["TEXT", "FILE"];
   const values = Array.from(new Set(input.filter((item) => item === "TEXT" || item === "FILE")));
-  return values.length ? (values as Array<"TEXT" | "FILE">) : ["TEXT"];
+  if (values.length) return values as Array<"TEXT" | "FILE">;
+  return options?.allowEmpty ? [] : ["TEXT"];
 };
 
 const parseMaxAttempts = (input: unknown, assignmentType: AssignmentType) => {
@@ -87,7 +88,9 @@ async function getAssignmentConfig(assignmentId: string) {
   return {
     assignmentId,
     assignmentType,
-    allowedSubmissionTypes: parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
+    allowedSubmissionTypes: assignmentType === "QUIZ"
+      ? parseSubmissionTypes(row.allowedSubmissionTypes as unknown[], { allowEmpty: true })
+      : parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
     maxAttempts: parseMaxAttempts(row.maxAttempts, assignmentType),
     allowLateSubmissions: row.allowLateSubmissions !== false,
     timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,

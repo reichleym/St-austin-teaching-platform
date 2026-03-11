@@ -47,6 +47,8 @@ type PersonOption = {
   name: string | null;
   email: string;
   phone?: string | null;
+  status?: "ACTIVE" | "DISABLED";
+  studentId?: string | null;
 };
 
 type Props = {
@@ -54,6 +56,8 @@ type Props = {
   viewMode?: "all" | "enrolled";
   showModuleManagement?: boolean;
 };
+
+const formatRoleLabel = (value: string) => value.replace(/_/g, " ");
 
 const toDateInputValue = (input: string | null) => {
   if (!input) return "";
@@ -96,7 +100,7 @@ const formatDurationYmd = (startIso: string | null, endIso: string | null) => {
 };
 
 function PersonLabel({ person }: { person: PersonOption }) {
-  return <>{(person.name || "Unnamed") + " - " + person.email}</>;
+  return <>{(person.name || "Unnamed") + " - " + person.email + (person.status === "DISABLED" ? " (DISABLED)" : "")}</>;
 }
 
 export function CoursesModule({ role, viewMode = "all", showModuleManagement = true }: Props) {
@@ -224,7 +228,8 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
       const name = (student.name ?? "").toLowerCase();
       const email = (student.email ?? "").toLowerCase();
       const phone = (student.phone ?? "").toLowerCase();
-      return name.includes(query) || email.includes(query) || phone.includes(query);
+      const studentId = (student.studentId ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query) || phone.includes(query) || studentId.includes(query);
     });
   }, [createStudentSearch, students]);
 
@@ -411,7 +416,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         </article>
         <article className="brand-card p-5">
           <p className="brand-section-title">Role</p>
-          <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{role}</p>
+          <p className="mt-2 text-2xl font-bold text-[#0b3e81]">{formatRoleLabel(role)}</p>
         </article>
       </div>
       <section className="brand-card overflow-x-auto p-5">
@@ -451,7 +456,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <option value="">All teachers</option>
                 {teachers.map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
-                    {(teacher.name || "Unnamed Teacher") + " - " + teacher.email}
+                    {(teacher.name || "Unnamed Teacher") + " - " + teacher.email + (teacher.status === "DISABLED" ? " (DISABLED)" : "")}
                   </option>
                 ))}
               </select>
@@ -462,7 +467,11 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <option value="">All students</option>
                 {students.map((student) => (
                   <option key={student.id} value={student.id}>
-                    {(student.name || "Unnamed Student") + " - " + student.email}
+                    {(student.name || "Unnamed Student") +
+                      " - " +
+                      (student.studentId ? `${student.studentId} - ` : "") +
+                      student.email +
+                      (student.status === "DISABLED" ? " (DISABLED)" : "")}
                   </option>
                 ))}
               </select>
@@ -484,7 +493,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                   <th className="px-3 py-2 font-semibold">Teacher</th>
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Department Heads</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
-                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrolled Students</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
                   {isStudent && viewMode === "enrolled" ? <th className="px-3 py-2 font-semibold">Progress</th> : null}
                   <th className="px-3 py-2 font-semibold">Actions</th>
@@ -511,24 +519,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                         </td>
                       ) : null}
                       {!studentSimpleView ? <td className="px-3 py-2">{course.visibility}</td> : null}
-                      {!studentSimpleView ? (
-                        <td className="px-3 py-2">
-                          {course.enrolledStudents.length ? (
-                            <div className="max-w-[280px] space-y-1">
-                              {course.enrolledStudents.slice(0, 5).map((student) => (
-                                <p key={student.id} className="truncate text-xs text-[#2f5d96]">
-                                  {(student.name || "Unnamed Student") + " - " + student.email}
-                                </p>
-                              ))}
-                              {course.enrolledStudents.length > 5 ? (
-                                <p className="text-xs text-[#3f70ae]">+{course.enrolledStudents.length - 5} more</p>
-                              ) : null}
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      ) : null}
                       {!studentSimpleView ? <td className="px-3 py-2">{course.enrollmentCount}</td> : null}
                       {isStudent && viewMode === "enrolled" ? (
                         <td className="px-3 py-2">{course.courseProgressPercent ?? 0}%</td>
@@ -560,7 +550,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                                 href={`/dashboard/${viewMode === "enrolled" ? "learning" : "courses"}/${course.id}`}
                                 className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
                               >
-                                {canManage ? "Manage Courses" : "Manage Courses"}
+                                {canManage ? "Manage Course" : "Manage Course"}
                               </Link>
                               {showModuleManagement && canManage ? (
                                 <Link
@@ -650,17 +640,17 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <div className="max-h-40 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
                   {departmentHeads.length ? (
                     departmentHeads.map((head) => (
-                      <label key={head.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
-                        <input
-                          type="checkbox"
-                          checked={createDepartmentHeadIds.includes(head.id)}
-                          onChange={() => toggleCreateDepartmentHead(head.id)}
-                        />
-                        <span>{(head.name || "Unnamed") + " - " + head.email}</span>
-                      </label>
-                    ))
+                    <label key={head.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
+                      <input
+                        type="checkbox"
+                        checked={createDepartmentHeadIds.includes(head.id)}
+                        onChange={() => toggleCreateDepartmentHead(head.id)}
+                      />
+                      <span>{(head.name || "Unnamed") + " - " + head.email + (head.status === "DISABLED" ? " (DISABLED)" : "")}</span>
+                    </label>
+                  ))
                   ) : (
-                    <p className="text-sm text-[#3f70ae]">No active department heads found.</p>
+                    <p className="text-sm text-[#3f70ae]">No department heads found.</p>
                   )}
                 </div>
               </div>
@@ -672,7 +662,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <span className="brand-label">Enroll Students During Creation</span>
                 <input
                   className="brand-input"
-                  placeholder="Search by name, phone, or email"
+                  placeholder="Search by name, student ID, phone, or email"
                   value={createStudentSearch}
                   onChange={(event) => setCreateStudentSearch(event.currentTarget.value)}
                 />
@@ -685,12 +675,19 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                           checked={createStudentIds.includes(student.id)}
                           onChange={() => toggleCreateStudent(student.id)}
                         />
-                        <span>{(student.name || "Unnamed Student") + " - " + (student.phone ? `${student.phone} - ` : "") + student.email}</span>
+                        <span>
+                          {(student.name || "Unnamed Student") +
+                            " - " +
+                            (student.studentId ? `${student.studentId} - ` : "") +
+                            (student.phone ? `${student.phone} - ` : "") +
+                            student.email +
+                            (student.status === "DISABLED" ? " (DISABLED)" : "")}
+                        </span>
                       </label>
                     ))
                   ) : (
                     <p className="text-sm text-[#3f70ae]">
-                      {students.length ? "No students match the search." : "No active students found."}
+                      {students.length ? "No students match the search." : "No students found."}
                     </p>
                   )}
                 </div>
@@ -763,11 +760,11 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                         checked={editDepartmentHeadIds.includes(head.id)}
                         onChange={() => toggleEditDepartmentHead(head.id)}
                       />
-                      <span>{(head.name || "Unnamed") + " - " + head.email}</span>
+                      <span>{(head.name || "Unnamed") + " - " + head.email + (head.status === "DISABLED" ? " (DISABLED)" : "")}</span>
                     </label>
                   ))
                 ) : (
-                  <p className="text-sm text-[#3f70ae]">No active department heads found.</p>
+                  <p className="text-sm text-[#3f70ae]">No department heads found.</p>
                 )}
               </div>
             </div>
@@ -776,7 +773,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
               <textarea className="brand-input min-h-[90px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} maxLength={2000} />
             </label>
             <div className="grid gap-1.5">
-              <span className="brand-label">Enrolled Students</span>
+              <span className="brand-label">Manage Students</span>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <button
                   type="button"
@@ -803,11 +800,17 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                         checked={editStudentIds.includes(student.id)}
                         onChange={() => toggleEditStudent(student.id)}
                       />
-                      <span>{(student.name || "Unnamed Student") + " - " + student.email}</span>
+                      <span>
+                        {(student.name || "Unnamed Student") +
+                          " - " +
+                          (student.studentId ? `${student.studentId} - ` : "") +
+                          student.email +
+                          (student.status === "DISABLED" ? " (DISABLED)" : "")}
+                      </span>
                     </label>
                   ))
                 ) : (
-                  <p className="text-sm text-[#3f70ae]">No active students found.</p>
+                  <p className="text-sm text-[#3f70ae]">No students found.</p>
                 )}
               </div>
             </div>

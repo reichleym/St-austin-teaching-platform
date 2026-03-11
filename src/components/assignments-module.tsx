@@ -131,7 +131,7 @@ const formatDate = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const formatTime = (value: string | null) => {
@@ -199,6 +199,18 @@ const formatOptionIndexes = (indexes: number[]) =>
   indexes
     .map((index) => `Option ${String.fromCharCode(65 + index)}`)
     .join(", ");
+
+const formatEnumLabel = (value: string | null | undefined) => {
+  if (!value) return "-";
+  return value
+    .split("_")
+    .map((segment) => {
+      if (!segment) return "";
+      if (segment.toUpperCase() === segment && segment.length <= 3) return segment;
+      return `${segment[0]}${segment.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+};
 
 const isQuestionAssignment = (assignmentType: "HOMEWORK" | "QUIZ" | "EXAM") =>
   assignmentType === "QUIZ" || assignmentType === "EXAM";
@@ -333,6 +345,17 @@ export function AssignmentsModule({ role }: Props) {
   const [newQuestionPoints, setNewQuestionPoints] = useState("1");
   const [createQuestionPending, setCreateQuestionPending] = useState(false);
   const [deleteQuestionPendingId, setDeleteQuestionPendingId] = useState("");
+  const [editQuestionId, setEditQuestionId] = useState("");
+  const [editQuestionPrompt, setEditQuestionPrompt] = useState("");
+  const [editQuestionOptionA, setEditQuestionOptionA] = useState("");
+  const [editQuestionOptionB, setEditQuestionOptionB] = useState("");
+  const [editQuestionOptionC, setEditQuestionOptionC] = useState("");
+  const [editQuestionOptionD, setEditQuestionOptionD] = useState("");
+  const [editQuestionType, setEditQuestionType] = useState<"MCQ" | "SHORT_ANSWER">("MCQ");
+  const [editQuestionCorrectIndexes, setEditQuestionCorrectIndexes] = useState<number[]>([0]);
+  const [editQuestionShortAnswerKey, setEditQuestionShortAnswerKey] = useState("");
+  const [editQuestionPoints, setEditQuestionPoints] = useState("1");
+  const [editQuestionPendingId, setEditQuestionPendingId] = useState("");
   const [gradeEditRequests, setGradeEditRequests] = useState<GradeEditRequestItem[]>([]);
   const [gradeEditRequestsLoading, setGradeEditRequestsLoading] = useState(false);
   const [requestEditForSubmissionId, setRequestEditForSubmissionId] = useState("");
@@ -357,6 +380,13 @@ export function AssignmentsModule({ role }: Props) {
     () => assignments.find((item) => item.id === editId) ?? null,
     [assignments, editId]
   );
+  const studentAttemptCount = isStudent
+    ? submissions.filter((submission) => submission.status !== "ATTEMPT_CANCELLED").length
+    : 0;
+  const studentCurrentAttemptNumber = studentAttemptCount + 1;
+  const studentTimerKey = selectedAssignment
+    ? `assignmentTimer:${selectedAssignment.id}:attempt:${studentCurrentAttemptNumber}`
+    : "";
   const filteredAssignments = useMemo(() => {
     if (activeMenu === "SUBMITTED") {
       return assignments.filter((item) => (item.submissionCount ?? 0) > 0);
@@ -544,14 +574,27 @@ export function AssignmentsModule({ role }: Props) {
       setStudentQuizAnswers({});
       setStudentShortAnswers({});
     }
-    if (isStudent && selectedAssignment?.config.timerMinutes && !studentQuizStartedAt) {
-      setStudentQuizStartedAt(new Date().toISOString());
-    }
-  }, [isStudent, loadQuizQuestions, selectedAssignment?.config.assignmentType, selectedAssignment?.config.timerMinutes, selectedAssignmentId, studentQuizStartedAt]);
+  }, [loadQuizQuestions, selectedAssignment?.config.assignmentType, selectedAssignmentId]);
 
   useEffect(() => {
-    setStudentQuizStartedAt(null);
-  }, [selectedAssignmentId]);
+    if (!isStudent || !selectedAssignment?.config.timerMinutes || !selectedAssignmentId) {
+      setStudentQuizStartedAt(null);
+      return;
+    }
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem(studentTimerKey) : null;
+    setStudentQuizStartedAt(stored || null);
+  }, [isStudent, selectedAssignment?.config.timerMinutes, selectedAssignmentId, studentTimerKey]);
+
+  const startStudentQuizTimerIfNeeded = useCallback(() => {
+    if (!isStudent || !selectedAssignment?.config.timerMinutes || studentQuizStartedAt || !studentTimerKey) {
+      return;
+    }
+    const now = new Date().toISOString();
+    setStudentQuizStartedAt(now);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(studentTimerKey, now);
+    }
+  }, [isStudent, selectedAssignment?.config.timerMinutes, studentQuizStartedAt, studentTimerKey]);
 
   useEffect(() => {
     if (selectedAssignment?.config.assignmentType !== "EXAM" && newQuestionType === "SHORT_ANSWER") {
@@ -603,7 +646,8 @@ export function AssignmentsModule({ role }: Props) {
     void loadCourseStructure(selected.courseId);
   }, [assignments, editId, loadCourseStructure]);
 
-  const buildAllowedTypes = (allowText: boolean, allowFile: boolean) => {
+  const buildAllowedTypes = (assignmentType: "HOMEWORK" | "QUIZ" | "EXAM", allowText: boolean, allowFile: boolean) => {
+    if (assignmentType === "QUIZ") return [] as Array<"TEXT" | "FILE">;
     const allowed: Array<"TEXT" | "FILE"> = [];
     if (allowText) allowed.push("TEXT");
     if (allowFile) allowed.push("FILE");
@@ -666,6 +710,105 @@ export function AssignmentsModule({ role }: Props) {
     setCreateQuestionPoints("1");
   };
 
+  const resetEditQuestion = () => {
+    setEditQuestionId("");
+    setEditQuestionPrompt("");
+    setEditQuestionOptionA("");
+    setEditQuestionOptionB("");
+    setEditQuestionOptionC("");
+    setEditQuestionOptionD("");
+    setEditQuestionType("MCQ");
+    setEditQuestionCorrectIndexes([0]);
+    setEditQuestionShortAnswerKey("");
+    setEditQuestionPoints("1");
+    setEditQuestionPendingId("");
+  };
+
+  const startEditQuestion = (question: QuizQuestion) => {
+    const resolvedType = selectedAssignment?.config.assignmentType === "QUIZ" ? "MCQ" : (question.questionType ?? "MCQ");
+    setEditQuestionId(question.id);
+    setEditQuestionPrompt(question.prompt);
+    setEditQuestionType(resolvedType);
+    setEditQuestionOptionA(question.options[0] ?? "");
+    setEditQuestionOptionB(question.options[1] ?? "");
+    setEditQuestionOptionC(question.options[2] ?? "");
+    setEditQuestionOptionD(question.options[3] ?? "");
+    setEditQuestionCorrectIndexes(question.correctOptionIndexes ?? [0]);
+    setEditQuestionShortAnswerKey(question.shortAnswerKey ?? "");
+    setEditQuestionPoints(String(question.points ?? 1));
+  };
+
+  const onUpdateQuestion = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editQuestionId || !selectedAssignment) return;
+    setEditQuestionPendingId(editQuestionId);
+    setError("");
+    try {
+      const prompt = editQuestionPrompt.trim();
+      const options = [editQuestionOptionA, editQuestionOptionB, editQuestionOptionC, editQuestionOptionD]
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const correctOptionIndexes = Array.from(
+        new Set(
+          editQuestionCorrectIndexes.filter((index) => Number.isInteger(index) && index >= 0 && index < options.length)
+        )
+      ).sort((a, b) => a - b);
+      const shortAnswerKey = editQuestionShortAnswerKey.trim() || null;
+      const points = Number(editQuestionPoints);
+
+      if (!prompt) {
+        setError("Question prompt is required.");
+        return;
+      }
+      if (selectedAssignment.config.assignmentType === "QUIZ" && editQuestionType !== "MCQ") {
+        setError("Quiz supports MCQ questions only.");
+        return;
+      }
+      if (editQuestionType === "MCQ") {
+        if (options.length < 2) {
+          setError("MCQ question needs at least two options.");
+          return;
+        }
+        if (!correctOptionIndexes.length) {
+          setError("Select at least one valid correct option for the quiz question.");
+          return;
+        }
+      }
+      if (!Number.isFinite(points) || points <= 0) {
+        setError("Question points must be greater than zero.");
+        return;
+      }
+
+      const response = await fetch("/api/assignments/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId: editQuestionId,
+          prompt,
+          questionType: editQuestionType,
+          options: editQuestionType === "MCQ" ? options : [],
+          correctOptionIndexes: editQuestionType === "MCQ" ? correctOptionIndexes : [],
+          shortAnswerKey: editQuestionType === "SHORT_ANSWER" ? shortAnswerKey : null,
+          points,
+        }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+
+      if (!response.ok) {
+        setError(result.error ?? "Unable to update quiz question.");
+        return;
+      }
+
+      await loadQuizQuestions(selectedAssignment.id);
+      resetEditQuestion();
+    } catch {
+      setError("Unable to update quiz question.");
+    } finally {
+      setEditQuestionPendingId("");
+    }
+  };
+
   const onCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreatePending(true);
@@ -715,7 +858,7 @@ export function AssignmentsModule({ role }: Props) {
           endAt: createEndIso,
           maxPoints: createMaxPoints,
           assignmentType: createType,
-          allowedSubmissionTypes: buildAllowedTypes(createAllowedText, createAllowedFile),
+          allowedSubmissionTypes: buildAllowedTypes(createType, createAllowedText, createAllowedFile),
           maxAttempts: Number(createAttempts),
           allowLateSubmissions: createAllowLateSubmissions,
           attemptScoringStrategy: createAttemptScoringStrategy,
@@ -841,7 +984,7 @@ export function AssignmentsModule({ role }: Props) {
           endAt: editEndIso,
           maxPoints: editMaxPoints,
           assignmentType: editType,
-          allowedSubmissionTypes: buildAllowedTypes(editAllowedText, editAllowedFile),
+          allowedSubmissionTypes: buildAllowedTypes(editType, editAllowedText, editAllowedFile),
           maxAttempts: Number(editAttempts),
           allowLateSubmissions: editAllowLateSubmissions,
           attemptScoringStrategy: editAttemptScoringStrategy,
@@ -1064,6 +1207,15 @@ export function AssignmentsModule({ role }: Props) {
         mimeType = uploadResult.file.mimeType;
       }
 
+      const resolvedQuizStartedAt =
+        selectedAssignment.config.timerMinutes && !studentQuizStartedAt ? new Date().toISOString() : studentQuizStartedAt;
+      if (selectedAssignment.config.timerMinutes && !studentQuizStartedAt) {
+        setStudentQuizStartedAt(resolvedQuizStartedAt);
+        if (typeof window !== "undefined" && studentTimerKey) {
+          window.localStorage.setItem(studentTimerKey, resolvedQuizStartedAt as string);
+        }
+      }
+
       const response = await fetch("/api/assignments/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1073,7 +1225,7 @@ export function AssignmentsModule({ role }: Props) {
           fileUrl,
           fileName,
           mimeType,
-          quizStartedAt: selectedAssignment.config.timerMinutes ? studentQuizStartedAt : null,
+          quizStartedAt: selectedAssignment.config.timerMinutes ? resolvedQuizStartedAt : null,
           quizAnswers:
             isQuestionBased
               ? quizQuestions.map((question) => {
@@ -1099,7 +1251,10 @@ export function AssignmentsModule({ role }: Props) {
       setStudentFile(null);
       setStudentQuizAnswers({});
       setStudentShortAnswers({});
-      setStudentQuizStartedAt(new Date().toISOString());
+      if (typeof window !== "undefined" && studentTimerKey) {
+        window.localStorage.removeItem(studentTimerKey);
+      }
+      setStudentQuizStartedAt(null);
       await loadSubmissions(selectedAssignment.id);
     } catch {
       setError("Unable to submit assignment.");
@@ -1112,12 +1267,26 @@ export function AssignmentsModule({ role }: Props) {
     setGradePendingId(submissionId);
     setError("");
     try {
+      const maxPoints = selectedAssignment?.maxPoints ?? null;
+      const rawScoreInput = gradeRawScoreBySubmission[submissionId];
+      if (rawScoreInput !== undefined && rawScoreInput !== "") {
+        const parsed = Number(rawScoreInput);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          setError("Raw score must be a non-negative number.");
+          return;
+        }
+        if (maxPoints !== null && parsed > maxPoints) {
+          setError(`Raw score cannot exceed max points (${maxPoints}).`);
+          return;
+        }
+      }
+
       const response = await fetch("/api/assignments/submissions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           submissionId,
-          rawScore: gradeRawScoreBySubmission[submissionId] ?? undefined,
+          rawScore: rawScoreInput ?? undefined,
           feedback: gradeFeedbackBySubmission[submissionId] ?? undefined,
           publish,
         }),
@@ -1231,15 +1400,12 @@ export function AssignmentsModule({ role }: Props) {
     isStudent && selectedAssignmentEndAt ? Number.isFinite(selectedEndAtMs) && nowTick > selectedEndAtMs : false;
   const isSubmissionBlockedByWindow = isSubmissionBeforeWindow || (isSubmissionAfterWindow && !selectedAssignment?.config.allowLateSubmissions);
 
-  const studentAttemptCount = isStudent ? submissions.length : 0;
   const studentCanSubmit = useMemo(() => {
     if (!isStudent || !selectedAssignment) return false;
     if (isSubmissionBlockedByWindow) return false;
-    if (isQuestionAssignment(selectedAssignment.config.assignmentType)) {
-      return studentAttemptCount < selectedAssignment.config.maxAttempts;
-    }
-    return studentAttemptCount === 0;
+    return studentAttemptCount < selectedAssignment.config.maxAttempts;
   }, [isStudent, isSubmissionBlockedByWindow, selectedAssignment, studentAttemptCount]);
+  const hasStartedTimedAttempt = !!studentQuizStartedAt;
 
   return (
     <section className="grid min-w-0 gap-4">
@@ -1271,9 +1437,10 @@ export function AssignmentsModule({ role }: Props) {
                       placeholder="Approved points (optional)"
                       aria-label={`Approved points for ${request.assignment?.title ?? "assignment"}`}
                       value={reviewApprovedPointsByRequest[request.id] ?? ""}
-                      onChange={(event) =>
-                        setReviewApprovedPointsByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
-                      }
+                      onChange={(event) => {
+                        const value = (event.target as HTMLInputElement | null)?.value ?? "";
+                        setReviewApprovedPointsByRequest((prev) => ({ ...prev, [request.id]: value }));
+                      }}
                     />
                   </label>
                   <label className="grid gap-1.5">
@@ -1283,9 +1450,10 @@ export function AssignmentsModule({ role }: Props) {
                       placeholder="Review note (optional)"
                       aria-label={`Review note for ${request.assignment?.title ?? "assignment"}`}
                       value={reviewNoteByRequest[request.id] ?? ""}
-                      onChange={(event) =>
-                        setReviewNoteByRequest((prev) => ({ ...prev, [request.id]: event.currentTarget.value }))
-                      }
+                      onChange={(event) => {
+                        const value = (event.target as HTMLInputElement | null)?.value ?? "";
+                        setReviewNoteByRequest((prev) => ({ ...prev, [request.id]: value }));
+                      }}
                     />
                   </label>
                 </div>
@@ -1436,7 +1604,12 @@ export function AssignmentsModule({ role }: Props) {
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
           <p className="brand-muted mt-2 break-words text-sm">
-            Submission Types: {selectedAssignment.config.allowedSubmissionTypes.join(", ")} | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
+            Submission Types: {selectedAssignment.config.allowedSubmissionTypes.length
+              ? selectedAssignment.config.allowedSubmissionTypes.join(", ")
+              : selectedAssignment.config.assignmentType === "QUIZ"
+                ? "Quiz Questions"
+                : "N/A"}{" "}
+            | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
             {` | Window: ${formatAssignmentWindow(selectedAssignment.config.assignmentType, selectedAssignmentStartAt, selectedAssignmentEndAt)}`}
             {selectedAssignment.config.timerMinutes
               ? ` | Time Frame: ${selectedAssignment.config.timerMinutes} min`
@@ -1444,7 +1617,7 @@ export function AssignmentsModule({ role }: Props) {
           </p>
 
           {isStudent ? (
-            <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit}>
+            <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit} onFocusCapture={startStudentQuizTimerIfNeeded}>
               {submissionsLoading ? <p className="brand-muted text-sm">Checking your submission status...</p> : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
@@ -1452,9 +1625,7 @@ export function AssignmentsModule({ role }: Props) {
                     ? `Submission opens on ${formatDate(selectedAssignmentStartAt)}.`
                     : isSubmissionAfterWindow && !selectedAssignment.config.allowLateSubmissions
                       ? "Submission window has ended. Late submissions are blocked."
-                      : isQuestionAssignment(selectedAssignment.config.assignmentType)
-                        ? `You have reached the maximum ${selectedAssignment.config.assignmentType.toLowerCase()} attempts.`
-                        : "You already submitted this assignment. Resubmission is not allowed."}
+                      : `You have reached the maximum ${selectedAssignment.config.assignmentType.toLowerCase()} attempts.`}
                 </p>
               ) : null}
               {!submissionsLoading && studentCanSubmit && isSubmissionAfterWindow && selectedAssignment.config.allowLateSubmissions ? (
@@ -1462,10 +1633,23 @@ export function AssignmentsModule({ role }: Props) {
                   Submission window ended on {formatDate(selectedAssignmentEndAt)}. Late penalties may apply.
                 </p>
               ) : null}
-              {selectedAssignment.config.timerMinutes && quizRemainingSeconds !== null ? (
+              {selectedAssignment.config.timerMinutes ? (
                 <p className="text-sm font-semibold text-[#1f518f]">
-                  Time Remaining: {Math.floor(quizRemainingSeconds / 60)}m {quizRemainingSeconds % 60}s
+                  Time Remaining:{" "}
+                  {quizRemainingSeconds !== null
+                    ? `${Math.floor(quizRemainingSeconds / 60)}m ${quizRemainingSeconds % 60}s`
+                    : `${selectedAssignment.config.timerMinutes}m 0s`}
+                  {!hasStartedTimedAttempt ? " (starts when you begin)" : null}
                 </p>
+              ) : null}
+              {selectedAssignment.config.timerMinutes && !hasStartedTimedAttempt && studentCanSubmit ? (
+                <button
+                  type="button"
+                  className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
+                  onClick={startStudentQuizTimerIfNeeded}
+                >
+                  Start Attempt
+                </button>
               ) : null}
               {isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
                 <>
@@ -1482,9 +1666,10 @@ export function AssignmentsModule({ role }: Props) {
                             className="brand-input min-h-[90px]"
                             placeholder="Type your answer"
                             value={studentShortAnswers[question.id] ?? ""}
-                            onChange={(event) =>
-                              setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }))
-                            }
+                            onChange={(event) => {
+                              startStudentQuizTimerIfNeeded();
+                              setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }));
+                            }}
                           />
                         </label>
                       ) : (
@@ -1494,12 +1679,13 @@ export function AssignmentsModule({ role }: Props) {
                               <input
                                 type="checkbox"
                                 checked={studentQuizAnswers[question.id]?.includes(optionIndex) ?? false}
-                                onChange={() =>
+                                onChange={() => {
+                                  startStudentQuizTimerIfNeeded();
                                   setStudentQuizAnswers((prev) => ({
                                     ...prev,
                                     [question.id]: toggleOptionSelection(prev[question.id] ?? [], optionIndex),
-                                  }))
-                                }
+                                  }));
+                                }}
                               />
                               <span>{option}</span>
                             </label>
@@ -1518,14 +1704,25 @@ export function AssignmentsModule({ role }: Props) {
                     placeholder="Text response"
                     aria-label="Text response"
                     value={studentTextResponse}
-                    onChange={(event) => setStudentTextResponse(event.currentTarget.value)}
+                    onChange={(event) => {
+                      startStudentQuizTimerIfNeeded();
+                      setStudentTextResponse(event.currentTarget.value);
+                    }}
                   />
                 </label>
               ) : null}
               {!isQuestionAssignment(selectedAssignment.config.assignmentType) && selectedAssignment.config.allowedSubmissionTypes.includes("FILE") ? (
                 <label className="grid gap-1.5">
                   <span className="brand-label">Upload File</span>
-                  <input type="file" className="brand-input" aria-label="Upload assignment file" onChange={(event) => setStudentFile(event.currentTarget.files?.[0] ?? null)} />
+                  <input
+                    type="file"
+                    className="brand-input"
+                    aria-label="Upload assignment file"
+                    onChange={(event) => {
+                      startStudentQuizTimerIfNeeded();
+                      setStudentFile(event.currentTarget.files?.[0] ?? null);
+                    }}
+                  />
                 </label>
               ) : null}
               {studentCanSubmit ? (
@@ -1533,7 +1730,7 @@ export function AssignmentsModule({ role }: Props) {
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
                   disabled={studentPending || submissionsLoading || (!!selectedAssignment.config.timerMinutes && quizRemainingSeconds === 0)}
                 >
-                  {studentPending ? "Submitting..." : "Submit Attempt"}
+                  {studentPending ? "Submitting..." : `Submit Attempt ${studentCurrentAttemptNumber}`}
                 </button>
               ) : null}
             </form>
@@ -1646,20 +1843,142 @@ export function AssignmentsModule({ role }: Props) {
                   <div key={question.id} className="rounded-md border border-[#e7f0fc] p-2">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-[#0d3f80]">Q{index + 1}. {question.prompt}</p>
-                      <button
-                        type="button"
-                        className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
-                        disabled={deleteQuestionPendingId === question.id}
-                        onClick={() => void onDeleteQuestion(question.id)}
-                      >
-                        {deleteQuestionPendingId === question.id ? "Deleting..." : "Delete"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                          disabled={editQuestionPendingId === question.id}
+                          onClick={() => startEditQuestion(question)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-700"
+                          disabled={deleteQuestionPendingId === question.id || editQuestionId === question.id}
+                          onClick={() => void onDeleteQuestion(question.id)}
+                        >
+                          {deleteQuestionPendingId === question.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
-                    <p className="mt-1 text-xs text-[#3768ac]">Type: {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
-                    {(question.questionType ?? "MCQ") === "MCQ" && question.correctOptionIndexes?.length ? (
-                      <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
-                    ) : null}
+                    {editQuestionId === question.id ? (
+                      <form className="mt-2 grid gap-2" onSubmit={onUpdateQuestion}>
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">Question Prompt</span>
+                          <input
+                            className="brand-input"
+                            placeholder="Question prompt"
+                            aria-label="Edit question prompt"
+                            value={editQuestionPrompt}
+                            onChange={(event) => setEditQuestionPrompt(event.currentTarget.value)}
+                            required
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="brand-label">Question Type</span>
+                          <select
+                            className="brand-input"
+                            value={editQuestionType}
+                            onChange={(event) => setEditQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
+                          >
+                            <option value="MCQ">Multiple Choice (MCQ)</option>
+                            {selectedAssignment?.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
+                          </select>
+                        </label>
+                        {editQuestionType === "MCQ" ? (
+                          <>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Option A</span>
+                                <input className="brand-input" placeholder="Option A" aria-label="Edit option A" value={editQuestionOptionA} onChange={(event) => setEditQuestionOptionA(event.currentTarget.value)} required />
+                              </label>
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Option B</span>
+                                <input className="brand-input" placeholder="Option B" aria-label="Edit option B" value={editQuestionOptionB} onChange={(event) => setEditQuestionOptionB(event.currentTarget.value)} required />
+                              </label>
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Option C</span>
+                                <input className="brand-input" placeholder="Option C (optional)" aria-label="Edit option C" value={editQuestionOptionC} onChange={(event) => setEditQuestionOptionC(event.currentTarget.value)} />
+                              </label>
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Option D</span>
+                                <input className="brand-input" placeholder="Option D (optional)" aria-label="Edit option D" value={editQuestionOptionD} onChange={(event) => setEditQuestionOptionD(event.currentTarget.value)} />
+                              </label>
+                            </div>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <div className="grid gap-1.5">
+                                <span className="brand-label">Correct Options</span>
+                                <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
+                                  {[
+                                    { label: "Option A", value: editQuestionOptionA, index: 0 },
+                                    { label: "Option B", value: editQuestionOptionB, index: 1 },
+                                    { label: "Option C", value: editQuestionOptionC, index: 2 },
+                                    { label: "Option D", value: editQuestionOptionD, index: 3 },
+                                  ].map((option) => (
+                                    <label key={`edit_correct_${option.index}`} className="inline-flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={editQuestionCorrectIndexes.includes(option.index)}
+                                        disabled={!option.value.trim()}
+                                        onChange={() =>
+                                          setEditQuestionCorrectIndexes((prev) => toggleOptionSelection(prev, option.index))
+                                        }
+                                      />
+                                      <span>{option.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">Points</span>
+                                <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Edit question points" value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
+                              </label>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <label className="grid gap-1.5">
+                              <span className="brand-label">Reference Answer (Optional)</span>
+                              <input
+                                className="brand-input"
+                                placeholder="Reference answer for teacher"
+                                value={editQuestionShortAnswerKey}
+                                onChange={(event) => setEditQuestionShortAnswerKey(event.currentTarget.value)}
+                              />
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className="brand-label">Points</span>
+                              <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Edit question points" value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
+                            </label>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
+                            onClick={resetEditQuestion}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="btn-brand-secondary px-3 py-1.5 text-xs font-semibold"
+                            disabled={editQuestionPendingId === question.id}
+                          >
+                            {editQuestionPendingId === question.id ? "Saving..." : "Save Changes"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">Type: {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
+                        {(question.questionType ?? "MCQ") === "MCQ" && question.correctOptionIndexes?.length ? (
+                          <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1700,11 +2019,11 @@ export function AssignmentsModule({ role }: Props) {
                           <td className="px-3 py-2">{submission.attemptNumber}</td>
                           <td className="px-3 py-2">{submission.finalScore ?? "-"}</td>
                           <td className="px-3 py-2">{submission.letterGrade ?? "-"}</td>
-                          <td className="px-3 py-2">{submission.status}</td>
+                          <td className="px-3 py-2">{formatEnumLabel(submission.status)}</td>
                           <td className="px-3 py-2">
                             {submission.plagiarismStatus === "COMPLETED"
                               ? `${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)`
-                              : submission.plagiarismStatus ?? "-"}
+                              : formatEnumLabel(submission.plagiarismStatus)}
                           </td>
                           <td className="px-3 py-2">{formatDate(submission.submittedAt)}</td>
                         </tr>
@@ -1735,7 +2054,7 @@ export function AssignmentsModule({ role }: Props) {
                   ) : null}
                   {canManage ? (
                     <p className="mt-1 text-xs text-[#3a689f]">
-                      Plagiarism: {submission.plagiarismStatus ?? "PENDING"}
+                      Plagiarism: {formatEnumLabel(submission.plagiarismStatus ?? "PENDING")}
                       {submission.plagiarismStatus === "COMPLETED" ? ` | ${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)` : ""}
                       {submission.plagiarismSummary ? ` | ${submission.plagiarismSummary}` : ""}
                     </p>
@@ -1751,19 +2070,30 @@ export function AssignmentsModule({ role }: Props) {
                     <div className="mt-3 grid gap-2">
                       <label className="grid gap-1.5">
                         <span className="brand-label">Raw Score</span>
-                        <input
-                          className="brand-input"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Raw score"
-                          aria-label={`Raw score for attempt ${submission.attemptNumber}`}
-                          value={gradeRawScoreBySubmission[submission.id] ?? (submission.rawScore?.toString() ?? "")}
-                          onChange={(event) => {
-                            const nextValue = event.currentTarget.value;
-                            setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: nextValue }));
-                          }}
-                        />
+                      <input
+                        className="brand-input"
+                        type="number"
+                        min="0"
+                        max={selectedAssignment?.maxPoints ?? undefined}
+                        step="0.01"
+                        placeholder="Raw score"
+                        aria-label={`Raw score for attempt ${submission.attemptNumber}`}
+                        value={gradeRawScoreBySubmission[submission.id] ?? (submission.rawScore?.toString() ?? "")}
+                        onChange={(event) => {
+                          const rawValue = event.currentTarget.value;
+                          const maxPoints = selectedAssignment?.maxPoints ?? null;
+                          if (!rawValue.trim()) {
+                            setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: "" }));
+                            return;
+                          }
+                          const nextNumber = Number(rawValue);
+                          if (Number.isFinite(nextNumber) && maxPoints !== null && nextNumber > maxPoints) {
+                            setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: String(maxPoints) }));
+                            return;
+                          }
+                          setGradeRawScoreBySubmission((prev) => ({ ...prev, [submission.id]: rawValue }));
+                        }}
+                      />
                       </label>
                       <label className="grid gap-1.5">
                         <span className="brand-label">Feedback</span>
@@ -1960,7 +2290,7 @@ export function AssignmentsModule({ role }: Props) {
               />
               Allow late submissions
             </label>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className={`grid gap-3 ${createType === "QUIZ" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
               <label className="grid gap-1.5">
                 <span className="brand-label">Assignment Type</span>
                 <select className="brand-input" aria-label="Assignment type" value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
@@ -1969,14 +2299,18 @@ export function AssignmentsModule({ role }: Props) {
                   <option value="EXAM">EXAM</option>
                 </select>
               </label>
-              <div className="grid gap-1.5">
-                <span className="brand-label">Allow Text Submissions</span>
-                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
-              </div>
-              <div className="grid gap-1.5">
-                <span className="brand-label">Allow File Submissions</span>
-                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
-              </div>
+              {createType !== "QUIZ" ? (
+                <>
+                  <div className="grid gap-1.5">
+                    <span className="brand-label">Allow Text Submissions</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <span className="brand-label">Allow File Submissions</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
+                  </div>
+                </>
+              ) : null}
             </div>
             {isQuestionAssignment(createType) ? (
               <div className="grid gap-3">
@@ -2299,7 +2633,7 @@ export function AssignmentsModule({ role }: Props) {
               />
               Allow late submissions
             </label>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className={`grid gap-3 ${editType === "QUIZ" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
               <label className="grid gap-1.5">
                 <span className="brand-label">Assignment Type</span>
                 <select className="brand-input" aria-label="Assignment type" value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
@@ -2308,14 +2642,18 @@ export function AssignmentsModule({ role }: Props) {
                   <option value="EXAM">EXAM</option>
                 </select>
               </label>
-              <div className="grid gap-1.5">
-                <span className="brand-label">Allow Text Submissions</span>
-                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
-              </div>
-              <div className="grid gap-1.5">
-                <span className="brand-label">Allow File Submissions</span>
-                <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
-              </div>
+              {editType !== "QUIZ" ? (
+                <>
+                  <div className="grid gap-1.5">
+                    <span className="brand-label">Allow Text Submissions</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <span className="brand-label">Allow File Submissions</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
+                  </div>
+                </>
+              ) : null}
             </div>
             <div className={`grid gap-3 ${editType === "HOMEWORK" ? "md:grid-cols-6" : "md:grid-cols-4"}`}>
               <label className="grid gap-1.5">

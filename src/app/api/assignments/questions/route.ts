@@ -15,6 +15,17 @@ type CreateQuestionBody = {
   points?: number;
 };
 
+type UpdateQuestionBody = {
+  questionId?: string;
+  prompt?: string;
+  questionType?: "MCQ" | "SHORT_ANSWER";
+  options?: string[];
+  correctOptionIndexes?: number[];
+  correctOptionIndex?: number;
+  shortAnswerKey?: string | null;
+  points?: number;
+};
+
 type DeleteQuestionBody = {
   questionId?: string;
 };
@@ -254,6 +265,92 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     const message = error instanceof Error ? error.message : "Unable to create quiz question.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    await ensureQuizQuestionSchema();
+    const user = await requireAuthenticatedUser();
+    if (!canManage(user.role)) {
+      return NextResponse.json({ error: "Only admin/teacher can update quiz questions." }, { status: 403 });
+    }
+
+    const body = (await request.json()) as UpdateQuestionBody;
+    const questionId = body.questionId?.trim() ?? "";
+    const prompt = body.prompt?.trim() ?? "";
+    const questionType = parseQuestionType(body.questionType);
+    const options = normalizeOptions(body.options);
+    const correctOptionIndexes = normalizeCorrectOptionIndexes(body.correctOptionIndexes, body.correctOptionIndex);
+    const shortAnswerKey = typeof body.shortAnswerKey === "string" ? body.shortAnswerKey.trim() || null : null;
+    const points = Number(body.points ?? 1);
+
+    if (!questionId || !prompt) {
+      return NextResponse.json({ error: "questionId and prompt are required." }, { status: 400 });
+    }
+    if (questionType === "MCQ" && options.length < 2) {
+      return NextResponse.json({ error: "At least 2 options are required for MCQ." }, { status: 400 });
+    }
+    if (questionType === "MCQ" && !correctOptionIndexes.length) {
+      return NextResponse.json({ error: "At least one correct option is required." }, { status: 400 });
+    }
+    if (questionType === "MCQ" && correctOptionIndexes.some((index) => index < 0 || index >= options.length)) {
+      return NextResponse.json({ error: "Invalid correctOptionIndexes." }, { status: 400 });
+    }
+    if (!Number.isFinite(points) || points <= 0) {
+      return NextResponse.json({ error: "points must be > 0." }, { status: 400 });
+    }
+
+    const rows = await prisma.$queryRaw<
+      Array<{ id: string; assignmentId: string; teacherId: string | null }>
+    >`
+      SELECT q."id", q."assignmentId", c."teacherId"
+      FROM "AssignmentQuizQuestion" q
+      JOIN "Assignment" a ON a."id" = q."assignmentId"
+      JOIN "Course" c ON c."id" = a."courseId"
+      WHERE q."id" = ${questionId}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) {
+      return NextResponse.json({ error: "Question not found." }, { status: 404 });
+    }
+    if (user.role === Role.TEACHER && row.teacherId !== user.id) {
+      return NextResponse.json({ error: "You can only update quiz questions in your assigned courses." }, { status: 403 });
+    }
+
+    const assignmentType = await getAssignmentType(row.assignmentId);
+    if (assignmentType !== "QUIZ" && assignmentType !== "EXAM") {
+      return NextResponse.json({ error: "Questions can only be updated for quiz or exam assignments." }, { status: 400 });
+    }
+    if (assignmentType === "QUIZ" && questionType !== "MCQ") {
+      return NextResponse.json({ error: "Quiz assignments currently support MCQ questions only." }, { status: 400 });
+    }
+
+    const normalizedCorrectOptionIndexes = questionType === "MCQ" ? correctOptionIndexes : [];
+    const correctOptionIndex = normalizedCorrectOptionIndexes[0] ?? 0;
+
+    await prisma.$executeRaw`
+      UPDATE "AssignmentQuizQuestion"
+      SET
+        "prompt" = ${prompt},
+        "questionType" = ${questionType},
+        "options" = ${JSON.stringify(questionType === "MCQ" ? options : [])}::jsonb,
+        "correctOptionIndexes" = ${JSON.stringify(normalizedCorrectOptionIndexes)}::jsonb,
+        "correctOptionIndex" = ${correctOptionIndex},
+        "shortAnswerKey" = ${questionType === "SHORT_ANSWER" ? shortAnswerKey : null},
+        "points" = ${points},
+        "updatedAt" = NOW()
+      WHERE "id" = ${questionId}
+    `;
+
+    return NextResponse.json({ ok: true, questionId });
+  } catch (error) {
+    if (error instanceof PermissionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const message = error instanceof Error ? error.message : "Unable to update quiz question.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

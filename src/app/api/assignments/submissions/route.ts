@@ -220,10 +220,14 @@ async function getAssignmentConfig(assignmentId: string) {
 
   const allowedRaw = Array.isArray(row.allowedSubmissionTypes) ? row.allowedSubmissionTypes : ["TEXT", "FILE"];
   const allowedSubmissionTypes = Array.from(new Set(allowedRaw.filter((item) => item === "TEXT" || item === "FILE"))) as Array<"TEXT" | "FILE">;
+  const isQuizAssignment = row.assignmentType === "QUIZ";
+  const resolvedSubmissionTypes = isQuizAssignment ? [] : allowedSubmissionTypes;
 
   return {
     assignmentType: row.assignmentType,
-    allowedSubmissionTypes: allowedSubmissionTypes.length ? allowedSubmissionTypes : (["TEXT"] as Array<"TEXT" | "FILE">),
+    allowedSubmissionTypes: resolvedSubmissionTypes.length
+      ? resolvedSubmissionTypes
+      : (isQuizAssignment ? ([] as Array<"TEXT" | "FILE">) : (["TEXT"] as Array<"TEXT" | "FILE">)),
     maxAttempts: Math.max(1, Number(row.maxAttempts || 1)),
     completionRule: row.completionRule,
     attemptScoringStrategy: (row.attemptScoringStrategy === "HIGHEST" ? "HIGHEST" : "LATEST") as AttemptScoringStrategy,
@@ -792,13 +796,6 @@ export async function POST(request: NextRequest) {
         AND "status" <> ${ATTEMPT_CANCELLED}
     `;
     const attemptCount = Number(countRows[0]?.count ?? 0);
-
-    if (config.assignmentType !== "QUIZ" && attemptCount >= 1) {
-      return NextResponse.json(
-        { error: "This assignment already has a submission. Only one submission is allowed." },
-        { status: 400 }
-      );
-    }
 
     if (attemptCount >= config.maxAttempts) {
       return NextResponse.json({ error: `Maximum attempts reached (${config.maxAttempts}).` }, { status: 400 });

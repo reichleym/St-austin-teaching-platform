@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
+import { toast } from "@/lib/toast";
 import { PasswordField } from "@/components/password-field";
 import { ToastMessage } from "@/components/toast-message";
 
@@ -104,6 +105,7 @@ export default function LoginClient({ callbackUrl }: Props) {
       return;
     }
 
+    toast.success("Logged in successfully.");
     router.push(result.url ?? targetCallbackUrl);
     router.refresh();
   };

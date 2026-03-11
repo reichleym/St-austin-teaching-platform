@@ -1,6 +1,6 @@
 import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { COURSE_VISIBILITY_PUBLISHED, LESSON_VISIBILITY_VISIBLE, MODULE_VISIBILITY_LIMITED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
@@ -151,20 +151,6 @@ async function buildProgress(courseId: string, studentId: string): Promise<Progr
     completionSet = new Set(completions.map((item) => item.lessonId));
   }
 
-  let assignedModuleSet: Set<string> | null = null;
-  if (await tableExists("ModuleAssignment")) {
-    try {
-      const assignedRows = await prisma.$queryRaw<Array<{ moduleId: string }>>`
-        SELECT "moduleId"
-        FROM "ModuleAssignment"
-        WHERE "studentId" = ${studentId} AND "moduleId" IN (${Prisma.join(moduleIds)})
-      `;
-      assignedModuleSet = new Set(assignedRows.map((row) => row.moduleId));
-    } catch {
-      assignedModuleSet = null;
-    }
-  }
-
   const lessonsByModule = new Map<string, Array<{ id: string; visibility: string }>>();
   for (const lesson of lessons) {
     const group = lessonsByModule.get(lesson.moduleId) ?? [];
@@ -172,25 +158,19 @@ async function buildProgress(courseId: string, studentId: string): Promise<Progr
     lessonsByModule.set(lesson.moduleId, group);
   }
 
-  const now = new Date();
   let totalLessons = 0;
   let completedLessons = 0;
 
   const moduleProgress: ProgressModule[] = modules.map((module) => {
     const moduleLessons = lessonsByModule.get(module.id) ?? [];
-    const visibleLessons = moduleLessons.filter((lesson) => lesson.visibility === LESSON_VISIBILITY_VISIBLE);
-    const notAssigned =
-      module.visibilityRule === MODULE_VISIBILITY_LIMITED && assignedModuleSet !== null && !assignedModuleSet.has(module.id);
-    const releaseLocked = module.visibilityRule === MODULE_VISIBILITY_LIMITED && !!module.releaseAt && now < module.releaseAt;
-    const locked = notAssigned || releaseLocked;
-    const activeLessons = locked ? [] : visibleLessons;
+    const activeLessons = moduleLessons;
 
     const moduleTotal = activeLessons.length;
     const moduleCompleted = activeLessons.filter((lesson) => completionSet.has(lesson.id)).length;
     totalLessons += moduleTotal;
     completedLessons += moduleCompleted;
 
-    const accessState: ProgressModule["accessState"] = locked ? "LOCKED" : "OPEN";
+    const accessState: ProgressModule["accessState"] = "OPEN";
 
     return {
       id: module.id,

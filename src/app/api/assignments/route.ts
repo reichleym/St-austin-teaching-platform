@@ -95,10 +95,18 @@ function parseAssignmentType(input: unknown): AssignmentType {
   return "HOMEWORK";
 }
 
-function parseSubmissionTypes(input: unknown): SubmissionType[] {
-  if (!Array.isArray(input)) return ["TEXT", "FILE"];
+function parseSubmissionTypes(input: unknown, options?: { allowEmpty?: boolean }): SubmissionType[] {
+  if (!Array.isArray(input)) return options?.allowEmpty ? [] : ["TEXT", "FILE"];
   const values = Array.from(new Set(input.filter((item) => item === "TEXT" || item === "FILE")));
-  return values.length ? (values as SubmissionType[]) : ["TEXT"];
+  if (values.length) return values as SubmissionType[];
+  return options?.allowEmpty ? [] : ["TEXT"];
+}
+
+function resolveSubmissionTypes(assignmentType: AssignmentType, input: unknown): SubmissionType[] {
+  if (assignmentType === "QUIZ") {
+    return parseSubmissionTypes(input, { allowEmpty: true });
+  }
+  return parseSubmissionTypes(input);
 }
 
 function parseRubricSteps(input: unknown): string[] {
@@ -259,12 +267,13 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
 
   const map = new Map<string, AssignmentConfigRecord>();
   for (const row of rows) {
+    const assignmentType = parseAssignmentType(row.assignmentType);
     map.set(row.assignmentId, {
       assignmentId: row.assignmentId,
-      assignmentType: parseAssignmentType(row.assignmentType),
+      assignmentType,
       rubricSteps: parseRubricSteps(row.rubricSteps as unknown[]),
-      allowedSubmissionTypes: parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
-      maxAttempts: parseMaxAttempts(row.maxAttempts, parseAssignmentType(row.assignmentType)),
+      allowedSubmissionTypes: resolveSubmissionTypes(assignmentType, row.allowedSubmissionTypes as unknown[]),
+      maxAttempts: parseMaxAttempts(row.maxAttempts, assignmentType),
       autoGrade: !!row.autoGrade,
       allowLateSubmissions: row.allowLateSubmissions !== false,
       attemptScoringStrategy: parseAttemptScoringStrategy(row.attemptScoringStrategy),
@@ -281,7 +290,7 @@ async function loadAssignmentConfigs(assignmentIds: string[]) {
 async function upsertAssignmentConfig(assignmentId: string, input: CreateAssignmentBody | UpdateAssignmentBody) {
   const assignmentType = parseAssignmentType(input.assignmentType);
   const rubricSteps = parseRubricSteps(input.rubricSteps);
-  const allowedSubmissionTypes = parseSubmissionTypes(input.allowedSubmissionTypes);
+  const allowedSubmissionTypes = resolveSubmissionTypes(assignmentType, input.allowedSubmissionTypes);
   const maxAttempts = parseMaxAttempts(input.maxAttempts, assignmentType);
   const autoGrade = assignmentType === "QUIZ" ? !!input.autoGrade : false;
   const allowLateSubmissions = input.allowLateSubmissions !== false;

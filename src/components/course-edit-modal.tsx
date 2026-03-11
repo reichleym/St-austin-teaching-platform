@@ -10,6 +10,8 @@ type PersonOption = {
   name: string | null;
   email: string;
   phone?: string | null;
+  status?: "ACTIVE" | "DISABLED";
+  studentId?: string | null;
 };
 
 type CourseSnapshot = {
@@ -89,7 +91,8 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
       const name = (student.name ?? "").toLowerCase();
       const email = (student.email ?? "").toLowerCase();
       const phone = (student.phone ?? "").toLowerCase();
-      return name.includes(query) || email.includes(query) || phone.includes(query);
+      const studentId = (student.studentId ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query) || phone.includes(query) || studentId.includes(query);
     });
   }, [studentSearch, students]);
 
@@ -205,7 +208,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                       <option value="">No teacher assigned</option>
                       {teachers.map((teacher) => (
                         <option key={teacher.id} value={teacher.id}>
-                          {(teacher.name || "Unnamed") + " - " + teacher.email}
+                          {(teacher.name || "Unnamed") + " - " + teacher.email + (teacher.status === "DISABLED" ? " (DISABLED)" : "")}
                         </option>
                       ))}
                     </select>
@@ -226,11 +229,11 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                               checked={departmentHeadIds.includes(head.id)}
                               onChange={() => toggleDepartmentHead(head.id)}
                             />
-                            <span>{(head.name || "Unnamed") + " - " + head.email}</span>
+                            <span>{(head.name || "Unnamed") + " - " + head.email + (head.status === "DISABLED" ? " (DISABLED)" : "")}</span>
                           </label>
                         ))
                       ) : (
-                        <p className="text-sm text-[#3f70ae]">No active department heads found.</p>
+                        <p className="text-sm text-[#3f70ae]">No department heads found.</p>
                       )}
                     </div>
                   </div>
@@ -256,7 +259,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                     </div>
                     <input
                       className="brand-input"
-                      placeholder="Search by name, phone, or email"
+                      placeholder="Search by name, student ID, phone, or email"
                       value={studentSearch}
                       onChange={(event) => setStudentSearch(event.currentTarget.value)}
                     />
@@ -269,12 +272,19 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                               checked={studentIds.includes(student.id)}
                               onChange={() => toggleStudent(student.id)}
                             />
-                            <span>{(student.name || "Unnamed Student") + " - " + (student.phone ? `${student.phone} - ` : "") + student.email}</span>
+                            <span>
+                              {(student.name || "Unnamed Student") +
+                                " - " +
+                                (student.studentId ? `${student.studentId} - ` : "") +
+                                (student.phone ? `${student.phone} - ` : "") +
+                                student.email +
+                                (student.status === "DISABLED" ? " (DISABLED)" : "")}
+                            </span>
                           </label>
                         ))
                       ) : (
                         <p className="text-sm text-[#3f70ae]">
-                          {students.length ? "No students match the search." : "No active students found."}
+                          {students.length ? "No students match the search." : "No students found."}
                         </p>
                       )}
                     </div>

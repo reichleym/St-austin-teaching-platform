@@ -109,6 +109,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
 
   const [pendingModuleId, setPendingModuleId] = useState("");
   const [pendingLessonId, setPendingLessonId] = useState("");
+  const [pendingCompletionKey, setPendingCompletionKey] = useState("");
   const [moduleStudentsById, setModuleStudentsById] = useState<Record<string, ModuleStudent[]>>({});
   const [pendingAssignmentKey, setPendingAssignmentKey] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<
@@ -408,6 +409,32 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
     }
   };
 
+  const setModuleCompletionForStudent = async (moduleItem: ModuleItem, studentId: string, completed: boolean) => {
+    if (!selectedCourseId) return;
+    const key = `${moduleItem.id}:${studentId}`;
+    setPendingCompletionKey(key);
+    setError("");
+    try {
+      for (const lesson of moduleItem.lessons) {
+        const response = await fetch("/api/courses/lessons/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lessonId: lesson.id, studentId, completed }),
+        });
+        if (!response.ok) {
+          const raw = await response.text();
+          const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+          throw new Error(result.error ?? "Unable to update module completion.");
+        }
+      }
+      await loadModules(selectedCourseId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update module completion.");
+    } finally {
+      setPendingCompletionKey("");
+    }
+  };
+
   const deleteLesson = async (lessonId: string) => {
     setPendingLessonId(lessonId);
     setError("");
@@ -611,6 +638,32 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                   ))}
                   {!moduleStudentsById[module.id]?.length ? (
                     <p className="text-xs text-[#3a689f]">No enrolled students found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {canManage ? (
+              <div className="mt-3 rounded-md border border-[#d9e8fb] bg-[#f8fbff] p-3">
+                <p className="brand-label">Module Completion Controls</p>
+                <div className="mt-2 grid gap-2">
+                  {(moduleStudentsById[module.id] ?? [])
+                    .filter((student) => student.assigned)
+                    .map((student) => (
+                      <div key={`${module.id}-${student.id}`} className="flex items-center justify-between gap-3 rounded border border-[#e3eefc] bg-white px-3 py-2">
+                        <p className="text-xs text-[#1c4f8f]">{(student.name || "Unnamed Student") + " - " + student.email}</p>
+                        <button
+                          type="button"
+                          className="rounded border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                          disabled={pendingCompletionKey === `${module.id}:${student.id}`}
+                          onClick={() => void setModuleCompletionForStudent(module, student.id, true)}
+                        >
+                          {pendingCompletionKey === `${module.id}:${student.id}` ? "Saving..." : "Mark Module Complete"}
+                        </button>
+                      </div>
+                    ))}
+                  {(moduleStudentsById[module.id] ?? []).filter((student) => student.assigned).length === 0 ? (
+                    <p className="text-xs text-[#3a689f]">Assign students to this module first.</p>
                   ) : null}
                 </div>
               </div>

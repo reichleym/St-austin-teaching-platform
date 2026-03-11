@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getRoleHomePath } from "@/lib/role-routing";
 
+const formatRoleLabel = (role: string) => role.replace(/_/g, " ");
+
 export default async function Home() {
   const session = await auth();
 
@@ -13,7 +15,7 @@ export default async function Home() {
       {session?.user ? (
         <div className="mt-4 space-y-3">
           <p>
-            Signed in as {session.user.email} ({session.user.role})
+            Signed in as {session.user.email} ({formatRoleLabel(session.user.role)})
           </p>
           <div className="space-x-4">
             <Link href={getRoleHomePath(session.user.role)} className="underline">
@@ -25,7 +27,7 @@ export default async function Home() {
               </Link>
             ) : null}
           </div>
-          <LogoutButton />
+          <LogoutButton role={session.user.role} />
         </div>
       ) : (
         <div className="mt-4 space-x-4">

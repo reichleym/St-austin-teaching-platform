@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
@@ -57,6 +58,9 @@ export function StudentProgressModule({ role, courseId }: Props) {
   const canSelectStudent = role === "TEACHER" || role === "SUPER_ADMIN" || role === "ADMIN";
   const isStudent = role === "STUDENT";
   const canPickCourse = !courseId;
+  const searchParams = useSearchParams();
+  const queryStudentId = searchParams.get("studentId")?.trim() ?? "";
+  const queryCourseId = searchParams.get("courseId")?.trim() ?? "";
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -80,13 +84,15 @@ export function StudentProgressModule({ role, courseId }: Props) {
       setCourses(nextCourses);
       if (isStudent && nextCourses.length) {
         setSelectedCourseId((prev) => prev || nextCourses[0].id);
+      } else if (!courseId && queryCourseId && nextCourses.some((item) => item.id === queryCourseId)) {
+        setSelectedCourseId((prev) => prev || queryCourseId);
       }
     } catch {
       setError("Unable to load progress data.");
     } finally {
       setLoading(false);
     }
-  }, [isStudent]);
+  }, [courseId, isStudent, queryCourseId]);
 
   const loadCourse = useCallback(async (courseId: string) => {
     if (!courseId) return;
@@ -109,6 +115,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
       if (canSelectStudent) {
         setSelectedStudentId((prev) => {
           if (!courseStudents.length) return "";
+          if (queryStudentId && courseStudents.some((student) => student.id === queryStudentId)) return queryStudentId;
           if (prev && courseStudents.some((student) => student.id === prev)) return prev;
           return courseStudents[0].id;
         });
@@ -118,7 +125,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [canSelectStudent, isStudent]);
+  }, [canSelectStudent, isStudent, queryStudentId]);
 
   const loadStudentProgress = useCallback(async (courseId: string, studentId: string) => {
     if (!courseId || !studentId) return;

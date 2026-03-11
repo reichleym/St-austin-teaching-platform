@@ -39,14 +39,14 @@ const formatDate = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const formatDateTime = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
 const isQuestionAssignment = (assignmentType: AssignmentType) => assignmentType === "QUIZ" || assignmentType === "EXAM";
@@ -87,7 +87,8 @@ export function AssignmentStudentSubmission(props: Props) {
   const questionBased = isQuestionAssignment(assignmentType);
   const allowText = allowedSubmissionTypes.includes("TEXT");
   const allowFile = allowedSubmissionTypes.includes("FILE");
-  const timerKey = `assignmentTimer:${assignmentId}`;
+  const attemptCount = submissions.filter((submission) => submission.status !== "ATTEMPT_CANCELLED").length;
+  const timerKey = `assignmentTimer:${assignmentId}:attempt:${attemptCount + 1}`;
 
   const loadSubmissions = async () => {
     setSubmissionsLoading(true);
@@ -135,18 +136,22 @@ export function AssignmentStudentSubmission(props: Props) {
   }, [assignmentId, questionBased]);
 
   useEffect(() => {
-    if (!timerMinutes) return;
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem(timerKey) : null;
-    if (stored) {
-      setQuizStartedAt(stored);
+    if (!timerMinutes) {
+      setQuizStartedAt(null);
       return;
     }
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem(timerKey) : null;
+    setQuizStartedAt(stored || null);
+  }, [timerMinutes, timerKey]);
+
+  const startQuizTimerIfNeeded = () => {
+    if (!timerMinutes || quizStartedAt) return;
     const now = new Date().toISOString();
     setQuizStartedAt(now);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(timerKey, now);
     }
-  }, [timerMinutes, timerKey]);
+  };
 
   useEffect(() => {
     const intervalMs = timerMinutes ? 1000 : 30000;
@@ -169,21 +174,16 @@ export function AssignmentStudentSubmission(props: Props) {
   const isSubmissionAfterWindow = endAt ? Number.isFinite(endAtMs) && nowTick > endAtMs : false;
   const isSubmissionBlockedByWindow = isSubmissionBeforeWindow || (isSubmissionAfterWindow && !allowLateSubmissions);
 
-  const attemptCount = submissions.length;
   const timerExpired = timerMinutes ? quizRemainingSeconds === 0 : false;
-  const hasSubmittedOnce = !questionBased && attemptCount > 0;
-  const reachedAttemptLimit = questionBased && attemptCount >= maxAttempts;
+  const hasStartedAttempt = !!quizStartedAt;
+  const reachedAttemptLimit = attemptCount >= maxAttempts;
   const canSubmit = useMemo(() => {
     if (isSubmissionBlockedByWindow || timerExpired) return false;
-    if (questionBased) return attemptCount < maxAttempts;
-    return attemptCount === 0;
-  }, [attemptCount, isSubmissionBlockedByWindow, maxAttempts, questionBased, timerExpired]);
-  const showBlockedMessage = !canSubmit && !hasSubmittedOnce;
-  const submitTooltip = hasSubmittedOnce
-    ? "You have already submitted the assignment."
-    : reachedAttemptLimit
-      ? "You have reached the maximum attempts."
-      : "";
+    return attemptCount < maxAttempts;
+  }, [attemptCount, isSubmissionBlockedByWindow, maxAttempts, timerExpired]);
+  const showBlockedMessage = !canSubmit;
+  const submitTooltip = reachedAttemptLimit ? "You have reached the maximum attempts." : "";
+  const nextAttemptNumber = attemptCount + 1;
 
   const onStudentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -245,6 +245,14 @@ export function AssignmentStudentSubmission(props: Props) {
         mimeType = uploadResult.file.mimeType;
       }
 
+      const resolvedQuizStartedAt = timerMinutes && !quizStartedAt ? new Date().toISOString() : quizStartedAt;
+      if (timerMinutes && !quizStartedAt) {
+        setQuizStartedAt(resolvedQuizStartedAt);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(timerKey, resolvedQuizStartedAt as string);
+        }
+      }
+
       const response = await fetch("/api/assignments/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -254,7 +262,7 @@ export function AssignmentStudentSubmission(props: Props) {
           fileUrl,
           fileName,
           mimeType,
-          quizStartedAt: timerMinutes ? quizStartedAt : null,
+          quizStartedAt: timerMinutes ? resolvedQuizStartedAt : null,
           quizAnswers: questionBased
             ? quizQuestions.map((question) => {
                 const questionType = question.questionType ?? "MCQ";
@@ -280,14 +288,6 @@ export function AssignmentStudentSubmission(props: Props) {
       setStudentQuizAnswers({});
       setStudentShortAnswers({});
 
-      if (timerMinutes) {
-        const nextStart = new Date().toISOString();
-        setQuizStartedAt(nextStart);
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(timerKey, nextStart);
-        }
-      }
-
       await loadSubmissions();
     } catch {
       setError("Unable to submit assignment.");
@@ -305,7 +305,8 @@ export function AssignmentStudentSubmission(props: Props) {
       <div className="mt-2 text-sm text-[#1f518f]">
         {timerMinutes ? (
           <p>
-            Timer: {quizRemainingSeconds !== null ? `${Math.floor(quizRemainingSeconds / 60)}m ${quizRemainingSeconds % 60}s` : "-"}
+            Timer: {quizRemainingSeconds !== null ? `${Math.floor(quizRemainingSeconds / 60)}m ${quizRemainingSeconds % 60}s` : `${timerMinutes}m 0s`}
+            {!hasStartedAttempt ? " (starts when you begin)" : null}
           </p>
         ) : null}
         {isSubmissionBeforeWindow ? <p>Submission opens on {formatDate(startAt)}.</p> : null}
@@ -317,7 +318,21 @@ export function AssignmentStudentSubmission(props: Props) {
         ) : null}
       </div>
 
-      <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit}>
+      {timerMinutes && !hasStartedAttempt && canSubmit ? (
+        <button
+          type="button"
+          className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
+          onClick={startQuizTimerIfNeeded}
+        >
+          Start Attempt
+        </button>
+      ) : null}
+
+      <form
+        className="mt-3 grid gap-3"
+        onSubmit={onStudentSubmit}
+        onFocusCapture={startQuizTimerIfNeeded}
+      >
         {questionBased ? (
           <>
             {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
@@ -333,9 +348,10 @@ export function AssignmentStudentSubmission(props: Props) {
                       className="brand-input min-h-[90px]"
                       placeholder="Type your answer"
                       value={studentShortAnswers[question.id] ?? ""}
-                      onChange={(event) =>
-                        setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }))
-                      }
+                      onChange={(event) => {
+                        startQuizTimerIfNeeded();
+                        setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }));
+                      }}
                     />
                   </label>
                 ) : (
@@ -345,12 +361,13 @@ export function AssignmentStudentSubmission(props: Props) {
                         <input
                           type="checkbox"
                           checked={studentQuizAnswers[question.id]?.includes(optionIndex) ?? false}
-                          onChange={() =>
+                          onChange={() => {
+                            startQuizTimerIfNeeded();
                             setStudentQuizAnswers((prev) => ({
                               ...prev,
                               [question.id]: toggleOptionSelection(prev[question.id] ?? [], optionIndex),
-                            }))
-                          }
+                            }));
+                          }}
                         />
                         <span>{option}</span>
                       </label>
@@ -370,7 +387,10 @@ export function AssignmentStudentSubmission(props: Props) {
                   placeholder="Text response"
                   aria-label="Text response"
                   value={studentTextResponse}
-                  onChange={(event) => setStudentTextResponse(event.currentTarget.value)}
+                  onChange={(event) => {
+                    startQuizTimerIfNeeded();
+                    setStudentTextResponse(event.currentTarget.value);
+                  }}
                 />
               </label>
             ) : null}
@@ -381,7 +401,10 @@ export function AssignmentStudentSubmission(props: Props) {
                   type="file"
                   className="brand-input"
                   aria-label="Upload assignment file"
-                  onChange={(event) => setStudentFile(event.currentTarget.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    startQuizTimerIfNeeded();
+                    setStudentFile(event.currentTarget.files?.[0] ?? null);
+                  }}
                 />
               </label>
             ) : null}
@@ -393,7 +416,7 @@ export function AssignmentStudentSubmission(props: Props) {
             className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!canSubmit || studentPending}
           >
-            {studentPending ? "Submitting..." : hasSubmittedOnce ? "Submitted" : "Submit Attempt"}
+            {studentPending ? "Submitting..." : canSubmit ? `Submit Attempt ${nextAttemptNumber}` : "Submission Locked"}
           </button>
         </span>
       </form>
@@ -406,9 +429,9 @@ export function AssignmentStudentSubmission(props: Props) {
             ? `Submission opens on ${formatDate(startAt)}.`
             : isSubmissionAfterWindow && !allowLateSubmissions
               ? "Submission window has ended. Late submissions are blocked."
-              : questionBased
+              : reachedAttemptLimit
                 ? `You have reached the maximum ${assignmentType.toLowerCase()} attempts.`
-                : "You already submitted this assignment. Resubmission is not allowed."}
+                : "Submission is currently unavailable."}
         </p>
       ) : null}
     </section>

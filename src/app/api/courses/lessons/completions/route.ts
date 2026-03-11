@@ -70,17 +70,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "lessonId is required." }, { status: 400 });
     }
 
-    const isStudent = user.role === Role.STUDENT;
-    if (!isSuperAdminRole(user.role) && user.role !== Role.TEACHER && !isStudent) {
+    if (!isSuperAdminRole(user.role) && user.role !== Role.TEACHER) {
       return NextResponse.json({ error: "Only admin/teacher can update lesson completion." }, { status: 403 });
     }
 
-    const studentId = isStudent ? user.id : providedStudentId;
+    const studentId = providedStudentId;
     if (!studentId) {
       return NextResponse.json({ error: "studentId is required." }, { status: 400 });
-    }
-    if (isStudent && providedStudentId && providedStudentId !== user.id) {
-      return NextResponse.json({ error: "Students can only update their own completion." }, { status: 403 });
     }
 
     const ctx = await getLessonContext(lessonId, studentId);

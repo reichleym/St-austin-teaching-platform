@@ -46,7 +46,7 @@ export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
               </div>
             </div>
           </div>
-          <LogoutButton />
+          <LogoutButton role={role} />
         </div>
       </section>
     </header>

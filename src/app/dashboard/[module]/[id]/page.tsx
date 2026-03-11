@@ -53,14 +53,14 @@ const formatDate = (value?: Date | string | null) => {
   if (!value) return "-";
   const parsed = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const formatDateTime = (value?: Date | string | null) => {
   if (!value) return "-";
   const parsed = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
 const formatRange = (start?: Date | null, end?: Date | null) => {
@@ -68,15 +68,28 @@ const formatRange = (start?: Date | null, end?: Date | null) => {
   return `${formatDateTime(start)} to ${formatDateTime(end)}`;
 };
 
+const formatEnumLabel = (value: string | null | undefined) => {
+  if (!value) return "-";
+  return value
+    .split("_")
+    .map((segment) => {
+      if (!segment) return "";
+      if (segment.toUpperCase() === segment && segment.length <= 3) return segment;
+      return `${segment[0]}${segment.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+};
+
 const parseAssignmentType = (input: unknown): AssignmentType => {
   if (input === "QUIZ" || input === "EXAM" || input === "HOMEWORK") return input;
   return "HOMEWORK";
 };
 
-const parseSubmissionTypes = (input: unknown): Array<"TEXT" | "FILE"> => {
-  if (!Array.isArray(input)) return ["TEXT", "FILE"];
+const parseSubmissionTypes = (input: unknown, options?: { allowEmpty?: boolean }): Array<"TEXT" | "FILE"> => {
+  if (!Array.isArray(input)) return options?.allowEmpty ? [] : ["TEXT", "FILE"];
   const values = Array.from(new Set(input.filter((item) => item === "TEXT" || item === "FILE")));
-  return values.length ? (values as Array<"TEXT" | "FILE">) : ["TEXT"];
+  if (values.length) return values as Array<"TEXT" | "FILE">;
+  return options?.allowEmpty ? [] : ["TEXT"];
 };
 
 const parseRubricSteps = (input: unknown): string[] => {
@@ -220,7 +233,9 @@ async function getAssignmentConfig(assignmentId: string) {
       assignmentId: row.assignmentId,
       assignmentType,
       rubricSteps: parseRubricSteps(row.rubricSteps as unknown[]),
-      allowedSubmissionTypes: parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
+      allowedSubmissionTypes: assignmentType === "QUIZ"
+        ? parseSubmissionTypes(row.allowedSubmissionTypes as unknown[], { allowEmpty: true })
+        : parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
       maxAttempts: parseMaxAttempts(row.maxAttempts, assignmentType),
       autoGrade: !!row.autoGrade,
       allowLateSubmissions: row.allowLateSubmissions !== false,
@@ -551,15 +566,31 @@ export default async function DashboardDetailPage({ params }: Props) {
                     Manage Modules & Lessons
                   </Link>
                 ) : null}
+                {isTeacher ? (
+                  <Link
+                    href={`/dashboard/courses/${course.id}/progress`}
+                    className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    Student Progress
+                  </Link>
+                ) : null}
+                {isSuperAdmin || isTeacher ? (
+                  <Link
+                    href={`/dashboard/courses/${course.id}/students`}
+                    className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    Enrolled Students
+                  </Link>
+                ) : null}
                 {isSuperAdmin ? (
                   <Link
                     href="/dashboard/courses/enrollment-requests"
                     className="flex items-center justify-between rounded-lg border border-[#f3b8b8] bg-[#fff1f1] px-3 py-2 text-xs font-semibold text-[#9b1c1c] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
                   >
                     Enrollment Requests
-                    <span className="rounded-full bg-[#d92d20] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    {/* <span className="rounded-full bg-[#d92d20] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                       Hot
-                    </span>
+                    </span> */}
                   </Link>
                 ) : null}
                 {isSuperAdmin ? (
@@ -568,6 +599,14 @@ export default async function DashboardDetailPage({ params }: Props) {
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
                   >
                     Manage Students
+                  </Link>
+                ) : null}
+                {isStudent ? (
+                  <Link
+                    href={`/dashboard/courses/${course.id}/progress`}
+                    className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    View Progress
                   </Link>
                 ) : null}
               </div>
@@ -726,7 +765,7 @@ export default async function DashboardDetailPage({ params }: Props) {
             <article className="brand-card p-5">
               <p className="brand-section-title">Assignment Summary</p>
               <div className="mt-3 space-y-2 text-sm text-[#0b3e81]">
-                <p><span className="font-semibold">Type:</span> {config.assignmentType}</p>
+                <p><span className="font-semibold">Type:</span> {formatEnumLabel(config.assignmentType)}</p>
                 <p><span className="font-semibold">Max Points:</span> {Number(assignment.maxPoints)}</p>
                 <p><span className="font-semibold">Attempts:</span> {config.maxAttempts}</p>
                 <p><span className="font-semibold">Window:</span> {formatRange(config.startAt, assignment.dueAt)}</p>
@@ -736,10 +775,17 @@ export default async function DashboardDetailPage({ params }: Props) {
             <article className="brand-card p-5">
               <p className="brand-section-title">Delivery Settings</p>
               <div className="mt-3 space-y-2 text-sm text-[#0b3e81]">
-                <p><span className="font-semibold">Submission Types:</span> {config.allowedSubmissionTypes.join(", ")}</p>
+                <p>
+                  <span className="font-semibold">Submission Types:</span>{" "}
+                  {config.allowedSubmissionTypes.length
+                    ? config.allowedSubmissionTypes.join(", ")
+                    : config.assignmentType === "QUIZ"
+                      ? "Quiz Questions"
+                      : "N/A"}
+                </p>
                 <p><span className="font-semibold">Auto Grade:</span> {config.autoGrade ? "Enabled" : "Disabled"}</p>
                 <p><span className="font-semibold">Late Submissions:</span> {config.allowLateSubmissions ? "Allowed" : "Not allowed"}</p>
-                <p><span className="font-semibold">Scoring Strategy:</span> {config.attemptScoringStrategy}</p>
+                <p><span className="font-semibold">Scoring Strategy:</span> {formatEnumLabel(config.attemptScoringStrategy)}</p>
                 <p><span className="font-semibold">Timer:</span> {config.timerMinutes ? `${config.timerMinutes} min` : "No timer"}</p>
               </div>
             </article>
@@ -750,7 +796,7 @@ export default async function DashboardDetailPage({ params }: Props) {
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-[#0b3e81]">Completion Rule</p>
-                <p className="brand-muted mt-1 text-sm">{config.completionRule}</p>
+                <p className="brand-muted mt-1 text-sm">{formatEnumLabel(config.completionRule)}</p>
               </div>
               <div>
                 <p className="text-sm font-semibold text-[#0b3e81]">Rubric Steps</p>

@@ -37,7 +37,19 @@ const formatDateTime = (value: string | null) => {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+const formatEnumLabel = (value: string | null | undefined) => {
+  if (!value) return "-";
+  return value
+    .split("_")
+    .map((segment) => {
+      if (!segment) return "";
+      if (segment.toUpperCase() === segment && segment.length <= 3) return segment;
+      return `${segment[0]}${segment.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
 };
 
 export function AssignmentSubmissionsTable({ module, assignmentId, submissions, canGrade, canViewAttempt = false }: Props) {
@@ -209,7 +221,7 @@ export function AssignmentSubmissionsTable({ module, assignmentId, submissions, 
                         : "Your submission"}
                       </td>
                       <td className="px-3 py-2">{formatDateTime(row.submittedAt)}</td>
-                      <td className="px-3 py-2">{row.status}</td>
+                    <td className="px-3 py-2">{formatEnumLabel(row.status)}</td>
                       <td className="px-3 py-2">{row.finalScore !== null ? row.finalScore : "Ungraded"}</td>
                       <td className="px-3 py-2">{row.isLate ? `${row.lateByMinutes}m` : "No"}</td>
                     {hasActions ? (

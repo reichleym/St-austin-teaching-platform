@@ -26,7 +26,13 @@ export const dashboardModules: DashboardModule[] = [
     slug: "learning",
     title: "Learning",
     description: "Track content delivery, progress, and learning plans.",
-    roles: ["TEACHER", "STUDENT"],
+    roles: ["STUDENT"],
+  },
+  {
+    slug: "progress",
+    title: "Student Progress",
+    description: "Monitor course completion and lesson progress.",
+    roles: ["SUPER_ADMIN", "STUDENT"],
   },
   {
     slug: "engagement",
@@ -42,7 +48,7 @@ export const dashboardModules: DashboardModule[] = [
   },
   {
     slug: "assessment",
-    title: "Assessment",
+    title: "Assignments",
     description: "Assignments, grading, and performance evaluation.",
     roles: ["SUPER_ADMIN", "DEPARTMENT_HEAD", "TEACHER", "STUDENT"],
   },

@@ -21,6 +21,13 @@ export default function AcceptInviteClient({ token }: Props) {
     const formData = new FormData(event.currentTarget);
     const name = String(formData.get("name") ?? "");
     const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+    if (password !== confirmPassword) {
+      setIsPending(false);
+      setError("Passwords do not match.");
+      return;
+    }
 
     const response = await fetch("/api/invitations/accept", {
       method: "POST",
@@ -91,6 +98,15 @@ export default function AcceptInviteClient({ token }: Props) {
               name="password"
               minLength={8}
               required
+              wrapperClassName="grid gap-1.5"
+              inputClassName="brand-input pr-11"
+            />
+            <PasswordField
+              label="Confirm Password"
+              name="confirmPassword"
+              minLength={8}
+              required
+              autoComplete="new-password"
               wrapperClassName="grid gap-1.5"
               inputClassName="brand-input pr-11"
             />

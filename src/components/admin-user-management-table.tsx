@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 
@@ -53,12 +54,16 @@ function formatDate(value: string) {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("en-GB", {
     day: "2-digit",
-    month: "2-digit",
+    month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function formatRoleLabel(value: string) {
+  return value.replace(/_/g, " ");
 }
 
 export function AdminUserManagementTable({ title, emptyText, users }: Props) {
@@ -465,6 +470,14 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
+                            {isStudentView ? (
+                              <Link
+                                href={`/dashboard/progress?studentId=${encodeURIComponent(user.id)}`}
+                                className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
+                              >
+                                Progress
+                              </Link>
+                            ) : null}
                             <button
                               className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                               onClick={() => onQuickEdit(user)}
@@ -675,7 +688,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
             </label>
             <label className="grid gap-1.5">
               <span className="brand-label">Role</span>
-              <input className="brand-input" value={fullEditUser.role} disabled />
+              <input className="brand-input" value={formatRoleLabel(fullEditUser.role)} disabled />
             </label>
             <label className="grid gap-1.5 md:col-span-2">
               <span className="brand-label">User ID</span>

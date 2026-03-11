@@ -72,7 +72,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
         dynamicOverview?.metrics ?? [
           { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard/courses" },
           { label: "Engagement Flags", value: 0, delta: "students missing participation", href: "/dashboard/engagement" },
-          { label: "Assessments", value: 0, delta: "active in assigned courses", href: "/dashboard/assessment" },
+          { label: "Assignments", value: 0, delta: "active in assigned courses", href: "/dashboard/assessment" },
         ],
       focus: [
         {
@@ -86,7 +86,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
           priority: "Medium",
         },
         {
-          title: "Assessment pacing",
+          title: "Assignment pacing",
           detail: "Verify grading cadence matches academic calendar.",
           priority: "Low",
         },
@@ -133,7 +133,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
         "08:30 Grade 10 Algebra",
         "10:15 Grade 9 Science",
         "13:00 Office hours and parent queries",
-        "15:30 Assessment moderation",
+        "15:30 Assignment moderation",
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
       ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
