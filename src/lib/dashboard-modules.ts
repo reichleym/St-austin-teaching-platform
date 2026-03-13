@@ -41,6 +41,20 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["DEPARTMENT_HEAD", "TEACHER", "STUDENT"],
   },
   {
+    slug: "instructions",
+    title: "Ask My Teacher",
+    description: "Post questions to your teacher and get answers.",
+    roles: ["STUDENT"] as DashboardRole[],
+  },
+
+  // For TEACHERS — shows inbox across all their courses
+  {
+    slug: "instructions",
+    title: "Student Questions",
+    description: "View and reply to student questions.",
+    roles: ["TEACHER", "DEPARTMENT_HEAD"] as DashboardRole[],
+  },
+  {
     slug: "announcements-feed",
     title: "Announcements",
     description: "Read institution announcements and updates.",

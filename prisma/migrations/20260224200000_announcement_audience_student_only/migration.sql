@@ -1,1 +1,0 @@
-ALTER TYPE "AnnouncementAudience" ADD VALUE IF NOT EXISTS 'STUDENT_ONLY';

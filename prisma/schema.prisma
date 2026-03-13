@@ -77,6 +77,17 @@ enum AnnouncementAudience {
   STUDENT_ONLY
 }
 
+enum InstructionThreadStatus {
+  OPEN // student submitted, waiting for teacher
+  ANSWERED // teacher has replied
+  CLOSED // resolved, no more replies allowed
+}
+
+enum InstructionThreadScope {
+  COURSE // question is about the course in general
+  MODULE // question is about a specific module
+}
+
 model User {
   id                        String                    @id @default(cuid())
   name                      String?
@@ -112,6 +123,8 @@ model User {
   adminActions              AdminActionLog[]          @relation("AdminActionActor")
   targetedAdminActions      AdminActionLog[]          @relation("AdminActionTargetUser")
   settingsUpdates           SystemSettings[]          @relation("SystemSettingsUpdatedBy")
+  instructionThreads        InstructionThread[]       @relation("ThreadStudent")
+  instructionMessages       InstructionMessage[]      @relation("MessageAuthor")
 }
 
 model Account {
@@ -150,24 +163,24 @@ model VerificationToken {
 }
 
 model Invitation {
-  id          String    @id @default(cuid())
-  email       String
-  name        String?
-  phone       String?
-  department  String?
-  guardianName String?
+  id            String    @id @default(cuid())
+  email         String
+  name          String?
+  phone         String?
+  department    String?
+  guardianName  String?
   guardianPhone String?
-  country     String?
-  state       String?
-  studentId   String?
-  role        Role
-  token       String    @unique
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  createdBy   User      @relation("InvitationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  createdById String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  country       String?
+  state         String?
+  studentId     String?
+  role          Role
+  token         String    @unique
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  createdBy     User      @relation("InvitationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([email])
   @@index([role, expiresAt])
@@ -187,98 +200,100 @@ model SystemSettings {
 }
 
 model Announcement {
-  id          String    @id @default(cuid())
+  id          String               @id @default(cuid())
   title       String
   content     String
-  isGlobal    Boolean   @default(true)
+  isGlobal    Boolean              @default(true)
   audience    AnnouncementAudience @default(BOTH)
   expiresAt   DateTime?
   createdById String
-  createdBy   User      @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User                 @relation("AnnouncementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedById String?
-  updatedBy   User?     @relation("AnnouncementUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedBy   User?                @relation("AnnouncementUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   @@index([isGlobal, expiresAt])
   @@index([audience, expiresAt])
 }
 
 model Course {
-  id          String       @id @default(cuid())
-  code        String       @unique
-  title       String
-  description String?
-  startDate   DateTime?
-  endDate     DateTime?
-  visibility  CourseVisibility @default(DRAFT)
-  teacherId   String?
-  teacher     User?        @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
-  assignments Assignment[]
-  discussions Discussion[]
-  enrollments Enrollment[]
-  modules     CourseModule[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  title              String
+  description        String?
+  startDate          DateTime?
+  endDate            DateTime?
+  visibility         CourseVisibility    @default(DRAFT)
+  teacherId          String?
+  teacher            User?               @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  assignments        Assignment[]
+  discussions        Discussion[]
+  enrollments        Enrollment[]
+  modules            CourseModule[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  instructionThreads InstructionThread[]
 }
 
 model CourseModule {
-  id             String               @id @default(cuid())
-  courseId       String
-  course         Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  title          String
-  description    String?
-  position       Int                  @default(0)
-  releaseAt      DateTime?
-  visibilityRule ModuleVisibilityRule @default(ALL_VISIBLE)
-  lessons        Lesson[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                 String               @id @default(cuid())
+  courseId           String
+  course             Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  position           Int                  @default(0)
+  releaseAt          DateTime?
+  visibilityRule     ModuleVisibilityRule @default(ALL_VISIBLE)
+  lessons            Lesson[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  instructionThreads InstructionThread[]
 
   @@index([courseId, position])
 }
 
 model Lesson {
-  id            String           @id @default(cuid())
-  moduleId      String
-  module        CourseModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  title         String
-  content       String?
-  position      Int              @default(0)
-  visibility    LessonVisibility @default(VISIBLE)
-  isRequired    Boolean          @default(true)
-  embedUrl      String?
-  attachments   LessonAttachment[]
-  completions   LessonCompletion[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id          String             @id @default(cuid())
+  moduleId    String
+  module      CourseModule       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  content     String?
+  position    Int                @default(0)
+  visibility  LessonVisibility   @default(VISIBLE)
+  isRequired  Boolean            @default(true)
+  embedUrl    String?
+  attachments LessonAttachment[]
+  completions LessonCompletion[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([moduleId, position])
 }
 
 model LessonAttachment {
-  id           String             @id @default(cuid())
-  lessonId     String
-  lesson       Lesson             @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  kind         LessonAttachmentKind @default(FILE)
-  label        String?
-  fileName     String?
-  mimeType     String?
-  sizeBytes    Int?
-  storageKey   String?
-  publicUrl    String?
-  createdAt    DateTime           @default(now())
+  id         String               @id @default(cuid())
+  lessonId   String
+  lesson     Lesson               @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  kind       LessonAttachmentKind @default(FILE)
+  label      String?
+  fileName   String?
+  mimeType   String?
+  sizeBytes  Int?
+  storageKey String?
+  publicUrl  String?
+  createdAt  DateTime             @default(now())
 
   @@index([lessonId, kind])
 }
 
 model LessonCompletion {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   lessonId    String
   studentId   String
-  completedAt DateTime  @default(now())
-  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  student     User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([lessonId, studentId])
   @@index([studentId, completedAt])
@@ -387,4 +402,83 @@ model AdminActionLog {
 
   @@index([action, createdAt])
   @@index([actorId, createdAt])
+}
+
+model InstructionThread {
+  id String @id @default(cuid())
+
+  /// The student who opened this thread
+  studentId String
+  student   User   @relation("ThreadStudent", fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// Which course this thread belongs to (always required)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  /// Optional: narrow the thread to a specific module
+  moduleId String?
+  module   CourseModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+
+  /// What level is this question targeting
+  scope InstructionThreadScope @default(COURSE)
+
+  /// Short subject line, e.g. "Confused about Big-O notation"
+  subject String
+
+  /// Thread lifecycle
+  status InstructionThreadStatus @default(OPEN)
+
+  /// Teacher can pin a thread so all enrolled students see it (FAQ-style)
+  isPinned Boolean @default(false)
+
+  /// true  → only the student who asked + the course teacher can see it
+  /// false → all enrolled students can read it
+  isPrivate Boolean @default(true)
+
+  messages InstructionMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId, status])
+  @@index([courseId, isPinned])
+  @@index([studentId, createdAt])
+  @@index([moduleId, status])
+}
+
+model InstructionMessage {
+  id String @id @default(cuid())
+
+  /// Which thread this message belongs to
+  threadId String
+  thread   InstructionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  /// null  → top-level message (the opening question)
+  /// value → this message is a reply nested under parentId
+  parentId String?
+  parent   InstructionMessage?  @relation("MessageReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  InstructionMessage[] @relation("MessageReplies")
+
+  /// Who wrote this message (student or teacher)
+  authorId String
+  author   User   @relation("MessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  /// The message body
+  body String
+
+  /// Convenience flag — lets the UI style teacher replies differently
+  /// without having to join User.role on every render
+  isTeacherReply Boolean @default(false)
+
+  /// Soft-delete: body becomes "[deleted]" but row stays so
+  /// nested replies are never orphaned
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([threadId, createdAt])
+  @@index([parentId])
+  @@index([authorId, createdAt])
 }

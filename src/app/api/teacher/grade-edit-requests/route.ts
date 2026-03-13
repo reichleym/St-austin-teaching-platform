@@ -61,8 +61,17 @@ export async function POST(request: NextRequest) {
     if (!assignmentId || !studentId || !reason || proposedPoints == null) {
       return NextResponse.json({ error: "assignmentId, studentId, reason, and proposedPoints are required." }, { status: 400 });
     }
-    if (!Number.isFinite(proposedPoints) || proposedPoints < 0) {
-      return NextResponse.json({ error: "proposedPoints must be a non-negative number." }, { status: 400 });
+
+    if (
+      !Number.isFinite(proposedPoints) ||
+      proposedPoints < 0 ||
+      proposedPoints > 9999.99 ||
+      !/^\d+(\.\d{1,2})?$/.test(proposedPoints.toString())
+    ) {
+      return NextResponse.json(
+        { error: "proposedPoints must be a non-negative number with up to 2 decimal places (max 9999.99)." },
+        { status: 400 }
+      );
     }
 
     const assignment = await prisma.assignment.findUnique({
