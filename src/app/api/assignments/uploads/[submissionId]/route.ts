@@ -18,21 +18,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "submissionId is required." }, { status: 400 });
     }
 
-    const submission = await prisma.assignmentSubmission.findUnique({
-      where: { id: submissionId },
-      select: {
-        id: true,
-        fileUrl: true,
-        fileName: true,
-        mimeType: true,
-        studentId: true,
-        assignment: {
-          select: {
-            course: { select: { teacherId: true } },
-          },
-        },
-      },
-    });
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        fileUrl: string | null;
+        fileName: string | null;
+        mimeType: string | null;
+        studentId: string;
+        teacherId: string | null;
+      }>
+    >`
+      SELECT
+        s."id",
+        s."fileUrl",
+        s."fileName",
+        s."mimeType",
+        s."studentId",
+        c."teacherId"
+      FROM "AssignmentSubmission" s
+      JOIN "Assignment" a ON a."id" = s."assignmentId"
+      JOIN "Course" c ON c."id" = a."courseId"
+      WHERE s."id" = ${submissionId}
+      LIMIT 1
+    `;
+    const submission = rows[0];
 
     if (!submission || !submission.fileUrl) {
       return NextResponse.json({ error: "File not found." }, { status: 404 });
@@ -41,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const isSuperAdmin = isSuperAdminRole(user.role);
     const isTeacher = user.role === Role.TEACHER;
     const isOwner = user.role === Role.STUDENT && submission.studentId === user.id;
-    const isTeacherOwner = isTeacher && submission.assignment?.course.teacherId === user.id;
+    const isTeacherOwner = isTeacher && submission.teacherId === user.id;
 
     if (!isSuperAdmin && !isOwner && !isTeacherOwner) {
       return NextResponse.json({ error: "You do not have access to this file." }, { status: 403 });
