@@ -802,7 +802,7 @@ export default async function DashboardPage({ params }: Props) {
       : roleKey === "DEPARTMENT_HEAD"
         ? [
             { label: "Courses Overseen", value: enrolledCoursesCount, delta: "assigned coverage", href: "/dashboard/courses" },
-            { label: "Engagement", value: engagementDiscussionCount, delta: "active discussions", href: "/dashboard/engagement" },
+          { label: "Discussion Board", value: engagementDiscussionCount, delta: "active discussions", href: "/dashboard/engagement" },
             { label: "Assignments", value: assignmentCount, delta: "in assigned courses", href: "/dashboard/assessment" },
           ]
         : roleKey === "TEACHER"

@@ -533,7 +533,7 @@ export function EngagementModule({ role }: Props) {
           {canModerate ? (
             <div className="mt-4 grid gap-3">
               <div className="rounded-md border border-[#dbe9fb] p-3">
-                <p className="brand-label">Engagement Alerts</p>
+                <p className="brand-label">Discussion Board Alerts</p>
                 <p className="mt-1 text-xs text-[#2f5f98]">
                   Missing: {selectedDiscussion.alerts.missingStudents.length} | Partial: {selectedDiscussion.alerts.partialStudents.length}
                 </p>

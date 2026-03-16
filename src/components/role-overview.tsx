@@ -71,7 +71,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
       metrics:
         dynamicOverview?.metrics ?? [
           { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard/courses" },
-          { label: "Engagement Flags", value: 0, delta: "students missing participation", href: "/dashboard/engagement" },
+          { label: "Discussion Board Flags", value: 0, delta: "students missing participation", href: "/dashboard/engagement" },
           { label: "Assignments", value: 0, delta: "active in assigned courses", href: "/dashboard/assessment" },
         ],
       focus: [
@@ -81,7 +81,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
           priority: "High",
         },
         {
-          title: "Engagement follow-ups",
+          title: "Discussion board follow-ups",
           detail: "Contact instructors with students flagged for low participation.",
           priority: "Medium",
         },
@@ -93,7 +93,7 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
       ] as FocusItem[],
       timeline: [
         "09:30 Course progress check",
-        "11:00 Engagement alerts review",
+        "11:00 Discussion board alerts review",
         "14:00 Instructor feedback round",
         "16:30 Department summary notes",
       ],

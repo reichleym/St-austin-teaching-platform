@@ -745,7 +745,7 @@ export default async function DashboardDetailPage({ params }: Props) {
                     href={`/dashboard/${module}/${assignment.id}/submit`}
                     className="btn-brand-primary px-4 py-2 text-sm font-semibold no-underline"
                   >
-                    Submit
+                    Submit to View Assignment
                   </Link>
                 ) : null}
                 <Link
