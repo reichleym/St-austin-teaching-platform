@@ -325,7 +325,7 @@ export default async function AssignmentSubmissionDetailPage({ params }: Props) 
                 <p><span className="font-semibold">Type:</span> {submission.mimeType || "-"}</p>
                 <a
                   className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f518f] underline"
-                  href={submission.fileUrl}
+                  href={`/api/assignments/uploads/${submission.id}`}
                   target="_blank"
                   rel="noreferrer"
                 >

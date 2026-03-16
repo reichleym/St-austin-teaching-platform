@@ -2061,7 +2061,12 @@ export function AssignmentsModule({ role }: Props) {
                   ) : null}
                   {submission.textResponse ? <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{submission.textResponse}</p> : null}
                   {submission.fileUrl ? (
-                    <a href={submission.fileUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-[#1f518f] underline">
+                    <a
+                      href={`/api/assignments/uploads/${submission.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex text-xs font-semibold text-[#1f518f] underline"
+                    >
                       {submission.fileName || "Open submitted file"}
                     </a>
                   ) : null}

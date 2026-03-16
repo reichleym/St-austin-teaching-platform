@@ -368,11 +368,21 @@ async function extractSubmissionContent(submission: {
     chunks.push(submission.textResponse.trim());
   }
   if (submission.fileUrl && canCheckFileType(submission.fileName, submission.mimeType)) {
-    const relative = submission.fileUrl.startsWith("/") ? submission.fileUrl.slice(1) : submission.fileUrl;
-    const absolute = path.join(process.cwd(), "public", relative);
     try {
-      const content = await fs.readFile(absolute, "utf8");
-      if (content.trim()) chunks.push(content.trim());
+      if (submission.fileUrl.startsWith("http")) {
+        const token = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const response = await fetch(submission.fileUrl, { headers });
+        if (response.ok) {
+          const content = await response.text();
+          if (content.trim()) chunks.push(content.trim());
+        }
+      } else {
+        const relative = submission.fileUrl.startsWith("/") ? submission.fileUrl.slice(1) : submission.fileUrl;
+        const absolute = path.join(process.cwd(), "public", relative);
+        const content = await fs.readFile(absolute, "utf8");
+        if (content.trim()) chunks.push(content.trim());
+      }
     } catch {
       // Ignore file extraction failures and continue with available content.
     }

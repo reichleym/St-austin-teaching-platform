@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const finalName = `${Date.now()}-${randomUUID()}-${safe}${ext}`;
 
     const blob = await put(`assignment-submissions/${finalName}`, file, {
-      access: "public",
+      access: "private",
       contentType: file.type || "application/octet-stream",
       addRandomSuffix: false,
       token: blobToken,
