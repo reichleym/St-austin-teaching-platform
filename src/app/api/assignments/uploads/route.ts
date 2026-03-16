@@ -16,6 +16,13 @@ function sanitizeFileName(input: string) {
 export async function POST(request: NextRequest) {
   try {
     await requireAuthenticatedUser();
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      return NextResponse.json(
+        { error: "Vercel Blob token missing. Set BLOB_READ_WRITE_TOKEN in the environment." },
+        { status: 500 }
+      );
+    }
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
@@ -34,6 +41,7 @@ export async function POST(request: NextRequest) {
       access: "public",
       contentType: file.type || "application/octet-stream",
       addRandomSuffix: false,
+      token: blobToken,
     });
 
     return NextResponse.json({
