@@ -50,10 +50,10 @@ function ReplyBox({
         onChange={(e) => setBody(e.target.value)}
         placeholder={compact ? "Write a reply..." : "Write your reply..."}
         rows={compact ? 2 : 3}
-        className="w-full resize-none rounded-xl border border-[#9bc4f6] bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#07316b] focus:outline-none focus:ring-2 focus:ring-[#07316b]/20"
+        className={`brand-input resize-none text-sm ${compact ? "min-h-[70px]" : "min-h-[110px]"}`}
       />
       {error && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-600">
+        <p className="rounded-md border border-[#f1c4c4] bg-[#fff4f4] px-3 py-1.5 text-xs text-[#9c1e1e]">
           {error}
         </p>
       )}
@@ -61,7 +61,7 @@ function ReplyBox({
         <button
           type="submit"
           disabled={isPending || !body.trim()}
-          className={`rounded-lg bg-[#07316b] font-semibold text-white hover:bg-[#083e8a] transition-colors disabled:opacity-40
+          className={`btn-brand-primary font-semibold disabled:opacity-60
             ${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}`}
         >
           {isPending ? "Posting..." : "Post Reply"}
@@ -111,37 +111,35 @@ function MessageBubble({
   return (
     <div style={{ marginLeft: `${indent}px` }} className="relative">
       {depth > 0 && (
-        <div className="absolute -left-3 bottom-2 top-0 w-px bg-[#9bc4f6]/50" />
+        <div className="absolute -left-3 bottom-2 top-0 w-px bg-[#c6ddfa]" />
       )}
 
       <div
-        className={`mb-2 rounded-xl border p-4 transition-all
-          ${isTeacher ? "border-[#9bc4f6] bg-[#e8f3ff]" : "border-slate-200 bg-white"}
-          ${isDeleted ? "opacity-50" : ""}`}
+        className={`mb-2 p-4 transition-all
+          ${isTeacher ? "brand-panel" : "rounded-xl border border-[#dbe9fb] bg-white/85"}
+          ${isDeleted ? "opacity-60" : ""}`}
       >
         {/* Header row */}
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div
               className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold
-                ${isTeacher ? "bg-[#07316b] text-white" : "bg-slate-200 text-slate-600"}`}
+                ${isTeacher ? "bg-[#0b3e81] text-white" : "bg-[#e8f2ff] text-[#4b6fa6]"}`}
             >
               {initials}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-800">
+              <span className="text-sm font-semibold text-[#0b3e81]">
                 {message.author.name ?? "Unknown"}
               </span>
               {isTeacher && (
-                <span className="rounded bg-[#07316b] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                  Teacher
-                </span>
+                <span className="brand-chip">Teacher</span>
               )}
             </div>
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-3">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-[#6c8fbe]">
               {new Date(message.createdAt).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -153,7 +151,7 @@ function MessageBubble({
               <button
                 onClick={handleDelete}
                 disabled={isPending}
-                className="text-xs text-slate-400 transition-colors hover:text-red-500"
+                className="text-xs text-[#6c8fbe] transition-colors hover:text-[#b21d1d]"
               >
                 Delete
               </button>
@@ -164,7 +162,7 @@ function MessageBubble({
         {/* Message body */}
         <p
           className={`whitespace-pre-wrap text-sm leading-relaxed
-            ${isDeleted ? "italic text-slate-400" : "text-slate-700"}`}
+            ${isDeleted ? "italic text-[#7c99c6]" : "text-[#2f5d96]"}`}
         >
           {message.body}
         </p>
@@ -173,7 +171,7 @@ function MessageBubble({
         {canReply && !isDeleted && (
           <button
             onClick={() => setShowReply((v) => !v)}
-            className="mt-2.5 flex items-center gap-1 text-xs font-medium text-[#2b5699] transition-colors hover:text-[#07316b]"
+            className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-[#1f518f] transition-colors hover:text-[#083e8a]"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -290,22 +288,25 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   // ── Loading skeleton ──
   if (loading) {
     return (
-      <div className="space-y-3 animate-pulse">
-        <div className="h-5 w-32 rounded bg-slate-200" />
-        <div className="h-28 rounded-xl border border-slate-200 bg-white" />
-        <div className="h-24 rounded-xl border border-slate-200 bg-white" />
-      </div>
+      <section className="brand-card p-5">
+        <p className="brand-section-title">Thread</p>
+        <div className="mt-4 space-y-3 animate-pulse">
+          <div className="h-5 w-32 rounded bg-slate-200" />
+          <div className="h-28 rounded-xl border border-[#dbe9fb] bg-white/80" />
+          <div className="h-24 rounded-xl border border-[#dbe9fb] bg-white/80" />
+        </div>
+      </section>
     );
   }
 
   if (error || !thread) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm text-red-700">{error ?? "Thread not found."}</p>
-        <button onClick={onBack} className="mt-3 text-sm text-[#07316b] underline">
+      <section className="brand-card p-5 text-center">
+        <p className="text-sm text-[#9c1e1e]">{error ?? "Thread not found."}</p>
+        <button onClick={onBack} className="mt-3 text-sm font-semibold text-[#1f518f] underline">
           Go back
         </button>
-      </div>
+      </section>
     );
   }
 
@@ -313,11 +314,11 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   const canReply = thread.status !== "CLOSED";
 
   return (
-    <div>
+    <section className="brand-card p-5">
       {/* Back */}
       <button
         onClick={onBack}
-        className="mb-4 flex items-center gap-1 text-sm text-[#2b5699] transition-colors hover:text-[#07316b]"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[#1f518f] transition-colors hover:text-[#083e8a]"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -326,7 +327,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
       </button>
 
       {/* Thread header card */}
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="brand-panel mb-5 p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -338,25 +339,21 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
                 {s.label}
               </span>
               {thread.isPinned && (
-                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">
-                  📌 Pinned
-                </span>
+                <span className="brand-chip">Pinned</span>
               )}
               {!thread.isPrivate && (
-                <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-600">
-                  🌐 Public
-                </span>
+                <span className="brand-chip brand-chip-accent">Public</span>
               )}
             </div>
 
-            <h2 className="text-lg font-bold text-[#07316b]">{thread.subject}</h2>
+            <h2 className="text-lg font-bold text-[#0b3e81]">{thread.subject}</h2>
 
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#3a689f]">
               <span>by {thread.student.name ?? "Student"}</span>
               {thread.module && (
                 <>
                   <span>·</span>
-                  <span className="text-slate-500">📚 {thread.module.title}</span>
+                  <span className="text-[#2f5d96]">📚 {thread.module.title}</span>
                 </>
               )}
               <span>·</span>
@@ -376,20 +373,20 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
               <button
                 onClick={() => handleAction("togglePin")}
                 disabled={actionPending}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors
+                className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors
                   ${thread.isPinned
-                    ? "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    ? "border-[#b8d3fb] bg-[#eef6ff] text-[#1f518f] hover:border-[#8fb7eb]"
+                    : "border-[#dbe9fb] bg-white/80 text-[#2f5d96] hover:border-[#8fb7eb]"}`}
               >
-                📌 {thread.isPinned ? "Unpin" : "Pin"}
+                {thread.isPinned ? "Unpin" : "Pin"}
               </button>
               {thread.status !== "CLOSED" && (
                 <button
                   onClick={() => handleAction("close")}
                   disabled={actionPending}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                  className="rounded-md border border-[#f1c4c4] bg-white/80 px-3 py-1.5 text-xs font-semibold text-[#a12525] transition-colors hover:bg-[#fff1f1]"
                 >
-                  🔒 Close
+                  Close
                 </button>
               )}
             </div>
@@ -413,20 +410,18 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
 
       {/* Closed notice */}
       {thread.status === "CLOSED" && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-center text-sm text-slate-500">
-          🔒 This thread is closed and no longer accepts replies.
+        <div className="brand-panel mb-5 px-5 py-4 text-center text-sm text-[#5c7cab]">
+          This thread is closed and no longer accepts replies.
         </div>
       )}
 
       {/* Top-level reply box */}
       {canReply && (
-        <div className="rounded-xl border border-[#9bc4f6] bg-[#e8f3ff] p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#2b5699]">
-            Add a reply
-          </p>
+        <div className="brand-panel p-4">
+          <p className="brand-section-title mb-3">Add a reply</p>
           <ReplyBox threadId={threadId} parentId={null} onSuccess={loadThread} />
         </div>
       )}
-    </div>
+    </section>
   );
 }

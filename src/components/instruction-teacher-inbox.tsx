@@ -18,22 +18,20 @@ function ThreadRow({ thread, onClick }: { thread: InboxThread; onClick: () => vo
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-[#9bc4f6] hover:shadow-sm"
+      className="group w-full rounded-xl border border-[#dbe9fb] bg-white/80 p-4 text-left transition-all hover:border-[#93b9e8] hover:shadow-[0_8px_24px_rgba(11,62,129,0.08)]"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
-              {thread.course.code}
-            </span>
+            <span className="brand-chip">{thread.course.code}</span>
             {thread.module && (
-              <span className="truncate text-xs text-slate-400">📚 {thread.module.title}</span>
+              <span className="truncate text-xs text-[#3a689f]">📚 {thread.module.title}</span>
             )}
           </div>
-          <p className="truncate text-sm font-semibold text-[#07316b] transition-colors group-hover:text-[#083e8a]">
+          <p className="truncate text-sm font-semibold text-[#0b3e81] transition-colors group-hover:text-[#083e8a]">
             {thread.subject}
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#3a689f]">
             <span>{thread.student.name ?? "Student"}</span>
             <span>·</span>
             <span>
@@ -44,7 +42,7 @@ function ThreadRow({ thread, onClick }: { thread: InboxThread; onClick: () => vo
             </span>
           </div>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-1 pt-0.5 text-xs text-slate-400">
+        <div className="flex flex-shrink-0 items-center gap-1 pt-0.5 text-xs text-[#3a689f]">
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
@@ -98,18 +96,18 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
   const answered = threads.filter((t) => t.status === "ANSWERED");
 
   return (
-    <div>
+    <section className="brand-card p-5">
       <div className="mb-5">
-        <h3 className="text-lg font-semibold text-[#07316b]">Student Questions</h3>
+        <p className="brand-section-title">Student Questions</p>
         {!loading && (
-          <p className="mt-0.5 text-xs text-[#3b6aa5]">
+          <p className="brand-muted mt-2 text-sm">
             {open.length} awaiting reply · {answered.length} answered
           </p>
         )}
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-xl border border-[#f1c4c4] bg-[#fff4f4] px-4 py-3 text-sm text-[#9c1e1e]">
           {error}
         </div>
       )}
@@ -117,7 +115,7 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
       {loading && (
         <div className="space-y-2 animate-pulse">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div key={i} className="rounded-xl border border-[#dbe9fb] bg-white/80 p-4">
               <div className="mb-2 h-4 w-3/4 rounded bg-slate-200" />
               <div className="h-3 w-1/2 rounded bg-slate-100" />
             </div>
@@ -126,10 +124,10 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
       )}
 
       {!loading && threads.length === 0 && (
-        <div className="rounded-xl border border-[#9bc4f6] bg-[#e8f3ff] py-14 text-center">
-          <div className="mb-3 text-4xl">✅</div>
-          <p className="font-medium text-[#07316b]">All caught up!</p>
-          <p className="mt-1 text-sm text-[#3b6aa5]">No open questions from students.</p>
+        <div className="brand-panel py-14 text-center">
+          <div className="mb-3 text-3xl">✅</div>
+          <p className="text-base font-semibold text-[#0b3e81]">All caught up!</p>
+          <p className="brand-muted mt-1 text-sm">No open questions from students.</p>
         </div>
       )}
 
@@ -139,7 +137,7 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#3f70ae]">
                   Needs Your Reply
                 </h4>
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">
@@ -162,7 +160,7 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#3f70ae]">
                   Answered
                 </h4>
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
@@ -182,6 +180,6 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

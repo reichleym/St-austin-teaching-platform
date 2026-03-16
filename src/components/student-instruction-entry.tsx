@@ -49,46 +49,51 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
   // ── Loading ──
   if (loading) {
     return (
-      <div className="space-y-2 animate-pulse">
-        {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+      <section className="brand-card p-5">
+        <p className="brand-section-title">Ask Your Teacher</p>
+        <div className="mt-4 space-y-2 animate-pulse">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-[#dbe9fb] bg-white/80 p-4">
               <div className="mb-2 h-4 w-3/4 rounded bg-slate-200" />
               <div className="h-3 w-1/2 rounded bg-slate-100" />
             </div>
           ))}
-      </div>
+        </div>
+      </section>
     );
   }
 
   // ── No courses ──
   if (!loading && courses.length === 0) {
     return (
-      <div className="rounded-xl border border-[#9bc4f6] bg-[#e8f3ff] py-16 text-center">
-        <div className="mb-3 text-4xl">📚</div>
-        <p className="font-medium text-[#07316b]">No enrolled courses</p>
-        <p className="mt-1 text-sm text-[#3b6aa5]">
-          Enroll in a course to ask your teacher questions.
-        </p>
-      </div>
+      <section className="brand-card p-5">
+        <p className="brand-section-title">Ask Your Teacher</p>
+        <div className="brand-panel mt-4 py-12 text-center">
+          <div className="mb-3 text-3xl">📚</div>
+          <p className="text-base font-semibold text-[#0b3e81]">No enrolled courses</p>
+          <p className="brand-muted mt-1 text-sm">
+            Enroll in a course to ask your teacher questions.
+          </p>
+        </div>
+      </section>
     );
   }
 
   // ── Course selected → show thread list ──
   if (selectedCourseId) {
-    {console.log("hello")}
     return (
       <div>
         {/* Course breadcrumb — only shown if more than one course */}
         {courses.length > 1 && (
           <button
             onClick={() => setSelectedCourseId(null)}
-            className="mb-5 flex items-center gap-1 text-sm text-[#2b5699] transition-colors hover:text-[#07316b]"
+            className="mb-5 inline-flex items-center gap-1 text-sm font-semibold text-[#1f518f] transition-colors hover:text-[#083e8a]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             <span className="font-medium">{selectedCourse?.code}</span>
-            <span className="text-slate-400">— {selectedCourse?.title}</span>
+            <span className="text-[#6c8fbe]">— {selectedCourse?.title}</span>
           </button>
         )}
 
@@ -103,10 +108,10 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
 
   // ── Course picker ──
   return (
-    <div>
+    <section className="brand-card p-5">
       <div className="mb-5">
-        <h3 className="text-lg font-semibold text-[#07316b]">Ask Your Teacher</h3>
-        <p className="mt-0.5 text-xs text-[#3b6aa5]">Select a course to view or post questions</p>
+        <p className="brand-section-title">Ask Your Teacher</p>
+        <p className="brand-muted mt-2 text-sm">Select a course to view or post questions</p>
       </div>
 
       <div className="space-y-2">
@@ -114,19 +119,17 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
           <button
             key={course.id}
             onClick={() => setSelectedCourseId(course.id)}
-            className="group w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-[#9bc4f6] hover:shadow-sm"
+            className="group w-full rounded-xl border border-[#dbe9fb] bg-white/80 p-4 text-left transition-all hover:border-[#93b9e8] hover:shadow-[0_8px_24px_rgba(11,62,129,0.08)]"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="rounded bg-[#e8f3ff] px-2 py-0.5 text-xs font-semibold text-[#2b5699]">
-                  {course.code}
-                </span>
-                <span className="font-semibold text-[#07316b] transition-colors group-hover:text-[#083e8a]">
+                <span className="brand-chip">{course.code}</span>
+                <span className="font-semibold text-[#0b3e81] transition-colors group-hover:text-[#083e8a]">
                   {course.title}
                 </span>
               </div>
               <svg
-                className="h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-[#07316b]"
+                className="h-4 w-4 flex-shrink-0 text-[#6c8fbe] transition-colors group-hover:text-[#083e8a]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -137,6 +140,6 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
           </button>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

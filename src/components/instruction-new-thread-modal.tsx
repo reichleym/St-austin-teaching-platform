@@ -60,16 +60,18 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[#06254d]/40 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
-        {/* Modal header — matches brand-glass style */}
-        <div className="bg-gradient-to-r from-[#07316b] to-[#083e8a] px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Ask Your Teacher</h2>
+      <section className="brand-card relative z-10 w-full max-w-lg p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="brand-section-title">Ask Your Teacher</p>
+            <p className="brand-muted mt-2 text-sm">Send a question and choose the visibility.</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-blue-200 hover:text-white transition-colors"
+            className="text-[#1f518f] transition-colors hover:text-[#083e8a]"
             aria-label="Close"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,72 +80,71 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 grid gap-4">
           {/* Module */}
-          <div>
-            <label className="block text-sm font-medium text-[#07316b] mb-1">
-              Related Module{" "}
-              <span className="text-[#3b6aa5] font-normal">(optional)</span>
-            </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">
+              Related Module <span className="brand-helper font-normal">(optional)</span>
+            </span>
             <select
               value={moduleId}
               onChange={(e) => setModuleId(e.target.value)}
-              className="w-full rounded-lg border border-[#9bc4f6] bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#07316b] focus:outline-none focus:ring-2 focus:ring-[#07316b]/20"
+              className="brand-input"
             >
               <option value="">— General course question —</option>
               {modules.map((m) => (
                 <option key={m.id} value={m.id}>{m.title}</option>
               ))}
             </select>
-          </div>
+          </label>
 
           {/* Subject */}
-          <div>
-            <label className="block text-sm font-medium text-[#07316b] mb-1">
-              Subject <span className="text-red-500">*</span>
-            </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">
+              Subject <span className="text-[#b21d1d]">*</span>
+            </span>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="e.g. Confused about recursion in Week 3"
               maxLength={200}
-              className="w-full rounded-lg border border-[#9bc4f6] px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#07316b] focus:outline-none focus:ring-2 focus:ring-[#07316b]/20"
+              className="brand-input"
             />
-          </div>
+          </label>
 
           {/* Body */}
-          <div>
-            <label className="block text-sm font-medium text-[#07316b] mb-1">
-              Your Question <span className="text-red-500">*</span>
-            </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">
+              Your Question <span className="text-[#b21d1d]">*</span>
+            </span>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={5}
               placeholder="Describe your question in detail..."
-              className="w-full resize-none rounded-lg border border-[#9bc4f6] px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#07316b] focus:outline-none focus:ring-2 focus:ring-[#07316b]/20"
+              className="brand-input min-h-[140px] resize-none"
             />
-          </div>
+          </label>
 
           {/* Privacy toggle */}
-          <label className="flex cursor-pointer select-none items-start gap-3 rounded-lg border border-[#9bc4f6] bg-[#e8f3ff] px-4 py-3">
+          <label className="brand-panel flex cursor-pointer select-none items-start gap-3 px-4 py-3">
             <input
               type="checkbox"
               checked={isPrivate}
               onChange={(e) => setIsPrivate(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-[#07316b]"
+              className="mt-0.5 h-4 w-4 accent-[#003b8f]"
             />
             <div>
-              <p className="text-sm font-medium text-[#07316b]">Private question</p>
-              <p className="text-xs text-[#3b6aa5]">
+              <p className="text-sm font-semibold text-[#0b3e81]">Private question</p>
+              <p className="text-xs text-[#3a689f]">
                 Only visible to you and your teacher
               </p>
             </div>
           </label>
 
           {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <p className="rounded-lg border border-[#f1c4c4] bg-[#fff4f4] px-3 py-2 text-sm text-[#9c1e1e]">
               {error}
             </p>
           )}
@@ -152,20 +153,20 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="btn-brand-secondary flex-1 px-4 py-2 text-sm font-semibold"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 rounded-lg bg-[#07316b] py-2 text-sm font-semibold text-white hover:bg-[#083e8a] transition-colors disabled:opacity-50"
+              className="btn-brand-primary flex-1 px-4 py-2 text-sm font-semibold disabled:opacity-60"
             >
               {isPending ? "Sending..." : "Send Question"}
             </button>
           </div>
         </form>
-      </div>
+      </section>
     </div>
   );
 }
