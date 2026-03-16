@@ -357,7 +357,7 @@ export function EngagementModule({ role }: Props) {
               <span className="brand-label">Prompt</span>
               <textarea className="brand-input min-h-[84px]" placeholder="Prompt / question" value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
             </label>
-            <div className="grid gap-2 md:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-3">
               <label className="grid gap-1">
                 <span className="brand-label">Module</span>
                 <select className="brand-input" value={createModuleId} onChange={(event) => setCreateModuleId(event.currentTarget.value)}>
@@ -377,11 +377,12 @@ export function EngagementModule({ role }: Props) {
                 <span className="brand-label">Close At</span>
                 <input className="brand-input" type="datetime-local" value={createCloseAt} onChange={(event) => setCreateCloseAt(event.currentTarget.value)} required />
               </label>
+              
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
               <label className="brand-input inline-flex items-center gap-2">
                 <input type="checkbox" checked={createAllowLate} onChange={(event) => setCreateAllowLate(event.currentTarget.checked)} /> Allow late
               </label>
-            </div>
-            <div className="grid gap-2 md:grid-cols-3">
               <label className="brand-input inline-flex items-center gap-2">
                 <input type="checkbox" checked={createIsGraded} onChange={(event) => setCreateIsGraded(event.currentTarget.checked)} />
                 Graded discussion
