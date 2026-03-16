@@ -183,6 +183,23 @@ async function getCourseDepartmentHeads(courseId: string) {
   }
 }
 
+async function getPendingEnrollmentRequestCount() {
+  try {
+    const tableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public."EnrollmentRequest"') IS NOT NULL AS "exists"
+    `;
+    if (!tableExists[0]?.exists) return 0;
+    const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM "EnrollmentRequest"
+      WHERE "status" = 'PENDING'
+    `;
+    return Number(rows[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 async function getAssignmentConfig(assignmentId: string) {
   try {
     const configTableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
@@ -496,6 +513,8 @@ export default async function DashboardDetailPage({ params }: Props) {
 
     const canShowAssignments = !isStudent || Boolean(studentEnrollment);
     const canManageStructure = isSuperAdmin || isTeacher;
+    const canViewStructure = canManageStructure || isDepartmentHead;
+    const pendingEnrollmentRequestCount = isSuperAdmin ? await getPendingEnrollmentRequestCount() : 0;
 
     return (
       <main className="min-h-screen lg:flex">
@@ -558,15 +577,15 @@ export default async function DashboardDetailPage({ params }: Props) {
             <article className="brand-card p-5">
               <p className="brand-section-title">Quick Actions</p>
               <div className="mt-3 grid gap-2 text-sm">
-                {module === "courses" && canManageStructure ? (
+                {module === "courses" && canViewStructure ? (
                   <Link
                     href={`/dashboard/courses/${course.id}/structure`}
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
                   >
-                    Manage Modules & Lessons
+                    {canManageStructure ? "Manage Modules & Lessons" : "View Modules & Lessons"}
                   </Link>
                 ) : null}
-                {isTeacher ? (
+                {isTeacher || isDepartmentHead ? (
                   <Link
                     href={`/dashboard/courses/${course.id}/progress`}
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
@@ -574,7 +593,7 @@ export default async function DashboardDetailPage({ params }: Props) {
                     Student Progress
                   </Link>
                 ) : null}
-                {isSuperAdmin || isTeacher ? (
+                {isSuperAdmin || isTeacher || isDepartmentHead ? (
                   <Link
                     href={`/dashboard/courses/${course.id}/students`}
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
@@ -588,9 +607,9 @@ export default async function DashboardDetailPage({ params }: Props) {
                     className="flex items-center justify-between rounded-lg border border-[#f3b8b8] bg-[#fff1f1] px-3 py-2 text-xs font-semibold text-[#9b1c1c] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
                   >
                     Enrollment Requests
-                    {/* <span className="rounded-full bg-[#d92d20] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                      Hot
-                    </span> */}
+                    <span className="rounded-full bg-[#d92d20] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                      {pendingEnrollmentRequestCount}
+                    </span>
                   </Link>
                 ) : null}
                 {isSuperAdmin ? (
@@ -721,6 +740,7 @@ export default async function DashboardDetailPage({ params }: Props) {
       quizAnswers: submission.quizAnswers ?? null,
     }));
     const canGrade = roleKey === "TEACHER";
+    const canEditQuestions = roleKey === "TEACHER" && (config.assignmentType === "QUIZ" || config.assignmentType === "EXAM");
     const canViewAttempt = canGrade || isSuperAdmin;
 
     return (
@@ -740,6 +760,14 @@ export default async function DashboardDetailPage({ params }: Props) {
                 <p className="brand-muted mt-2 max-w-3xl text-sm">{assignment.description || "No description provided yet."}</p>
               </div>
               <div className="flex items-center gap-2">
+                {canEditQuestions ? (
+                  <Link
+                    href={`/dashboard/assessment?assignmentId=${assignment.id}#assignment-questions`}
+                    className="rounded-md border border-[#9bbfed] bg-white px-4 py-2 text-sm font-semibold text-[#1f518f]"
+                  >
+                    Edit Questions
+                  </Link>
+                ) : null}
                 {isStudent ? (
                   <Link
                     href={`/dashboard/${module}/${assignment.id}/submit`}

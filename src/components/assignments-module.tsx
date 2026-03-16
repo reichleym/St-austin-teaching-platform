@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "@/lib/toast";
@@ -246,6 +246,7 @@ const isPublishedOrLockedState = (state: string) =>
 
 export function AssignmentsModule({ role }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const canManage = role === "TEACHER";
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";
@@ -365,12 +366,24 @@ export function AssignmentsModule({ role }: Props) {
   const [reviewPendingId, setReviewPendingId] = useState("");
   const [reviewApprovedPointsByRequest, setReviewApprovedPointsByRequest] = useState<Record<string, string>>({});
   const [reviewNoteByRequest, setReviewNoteByRequest] = useState<Record<string, string>>({});
+  const assignmentIdParam = searchParams.get("assignmentId")?.trim() ?? "";
 
   useEffect(() => {
     if (!error.trim()) return;
     toast.error(error);
     setError("");
   }, [error]);
+
+  useEffect(() => {
+    if (!assignmentIdParam) return;
+    if (!assignments.length) return;
+    const exists = assignments.some((item) => item.id === assignmentIdParam);
+    if (!exists) return;
+    if (selectedAssignmentId !== assignmentIdParam) {
+      setSelectedAssignmentId(assignmentIdParam);
+      setActiveMenu("ALL");
+    }
+  }, [assignmentIdParam, assignments, selectedAssignmentId]);
 
   const selectedAssignment = useMemo(
     () => assignments.find((item) => item.id === selectedAssignmentId) ?? null,
@@ -1737,7 +1750,7 @@ export function AssignmentsModule({ role }: Props) {
           ) : null}
 
           {canManage && isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
-            <div className="mt-4 rounded-md border border-[#dbe9fb] p-3">
+            <div id="assignment-questions" className="mt-4 rounded-md border border-[#dbe9fb] p-3">
               <p className="brand-label">
                 {selectedAssignment.config.assignmentType === "QUIZ" ? "Quiz Questions (MCQ)" : "Exam Questions (MCQ + Short Answer)"}
               </p>

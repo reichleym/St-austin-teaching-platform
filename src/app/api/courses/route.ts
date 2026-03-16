@@ -523,6 +523,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    let pendingEnrollmentRequestCount = 0;
+    if (isSuperAdminRole(role)) {
+      await ensureEnrollmentRequestSchema();
+      const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "EnrollmentRequest"
+        WHERE "status" = 'PENDING'
+      `.catch(() => []);
+      pendingEnrollmentRequestCount = Number(rows[0]?.count ?? 0);
+    }
+
     return NextResponse.json({
       viewerId: user.id,
       courses: courses.map((course) => {
@@ -570,6 +581,7 @@ export async function GET(request: NextRequest) {
       teachers,
       students,
       departmentHeads,
+      pendingEnrollmentRequestCount,
     });
   } catch (error) {
     if (error instanceof PermissionError) {

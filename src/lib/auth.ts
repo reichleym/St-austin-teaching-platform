@@ -109,14 +109,19 @@ export const authOptions: NextAuthOptions = {
         token.status = normalizeStatus(user.status as string | UserStatus);
       }
 
-      if ((!token.role || !token.status) && token.sub) {
+      if (token.sub) {
         try {
           const dbUsers = await prisma.$queryRaw<Array<{ role: string; status: string }>>`
             SELECT "role"::text AS "role","status"::text AS "status" FROM "User" WHERE "id" = ${token.sub} LIMIT 1
           `;
           const dbUser = dbUsers[0];
-          token.role = normalizeRole(dbUser?.role);
-          token.status = normalizeStatus(dbUser?.status);
+          if (dbUser) {
+            token.role = normalizeRole(dbUser.role);
+            token.status = normalizeStatus(dbUser.status);
+          } else {
+            token.role = Role.STUDENT;
+            token.status = UserStatus.DISABLED;
+          }
         } catch (error) {
           console.error("JWT callback error:", error);
           token.role = Role.STUDENT;

@@ -119,6 +119,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [departmentHeads, setDepartmentHeads] = useState<PersonOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pendingEnrollmentRequestCount, setPendingEnrollmentRequestCount] = useState(0);
 
   const [showCreate, setShowCreate] = useState(false);
   const [editCourseId, setEditCourseId] = useState("");
@@ -169,6 +170,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
           teachers?: PersonOption[];
           students?: PersonOption[];
           departmentHeads?: PersonOption[];
+          pendingEnrollmentRequestCount?: number;
           error?: string;
         })
         : {};
@@ -181,12 +183,14 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
       setTeachers(result.teachers ?? []);
       setStudents(result.students ?? []);
       setDepartmentHeads(result.departmentHeads ?? []);
+      setPendingEnrollmentRequestCount(result.pendingEnrollmentRequestCount ?? 0);
     } catch {
       setError("Unable to load courses.");
       setCourses([]);
       setTeachers([]);
       setStudents([]);
       setDepartmentHeads([]);
+      setPendingEnrollmentRequestCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -430,9 +434,12 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
             <div className="flex items-center gap-2">
               <Link
                 href="/dashboard/courses/enrollment-requests"
-                className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
+                className="inline-flex items-center gap-2 rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
               >
                 Enrollment Requests
+                <span className="rounded-full bg-[#1f518f] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                  {pendingEnrollmentRequestCount}
+                </span>
               </Link>
               <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={() => setShowCreate(true)}>
                 Create Course

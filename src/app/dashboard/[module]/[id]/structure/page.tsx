@@ -12,6 +12,23 @@ type Props = {
   params: Promise<{ module: string; id: string }>;
 };
 
+async function getDepartmentHeadCourseIds(userId: string) {
+  try {
+    const tableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public."DepartmentHeadCourseAssignment"') IS NOT NULL AS "exists"
+    `;
+    if (!tableExists[0]?.exists) return [] as string[];
+    const rows = await prisma.$queryRaw<Array<{ courseId: string }>>`
+      SELECT "courseId"
+      FROM "DepartmentHeadCourseAssignment"
+      WHERE "departmentHeadId" = ${userId}
+    `;
+    return rows.map((row) => row.courseId);
+  } catch {
+    return [] as string[];
+  }
+}
+
 export default async function CourseStructurePage({ params }: Props) {
   const session = await auth();
 
@@ -33,14 +50,25 @@ export default async function CourseStructurePage({ params }: Props) {
 
   const isSuperAdmin = isSuperAdminRole(roleKey);
   const isTeacher = isTeacherRole(roleKey);
+  const isDepartmentHead = roleKey === "DEPARTMENT_HEAD";
   const canManage = isSuperAdmin || isTeacher;
+  const canView = canManage || isDepartmentHead;
 
-  if (!canManage) {
+  if (!canView) {
     redirect(`/dashboard/courses/${courseId}`);
   }
 
+  const departmentHeadCourseIds = isDepartmentHead ? await getDepartmentHeadCourseIds(session.user.id) : [];
+  if (isDepartmentHead && !departmentHeadCourseIds.includes(courseId)) {
+    redirect("/dashboard/courses");
+  }
+
   const course = await prisma.course.findFirst({
-    where: isSuperAdmin ? { id: courseId } : { id: courseId, teacherId: session.user.id },
+    where: isSuperAdmin
+      ? { id: courseId }
+      : isTeacher
+        ? { id: courseId, teacherId: session.user.id }
+        : { id: courseId },
     select: { id: true, code: true, title: true },
   });
 
@@ -81,7 +109,7 @@ export default async function CourseStructurePage({ params }: Props) {
         <CourseModulesList
           courseId={course.id}
           role={roleKey as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT"}
-          showManageActions
+          showManageActions={canManage}
           showAssignmentsLink={false}
           showViewAllLink={false}
         />
