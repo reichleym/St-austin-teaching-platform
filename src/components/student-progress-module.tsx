@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 
@@ -69,6 +70,12 @@ export function StudentProgressModule({ role, courseId }: Props) {
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pendingCompletionKey, setPendingCompletionKey] = useState("");
+  const [completionDialog, setCompletionDialog] = useState<
+    | null
+    | { type: "course" }
+    | { type: "module"; moduleId: string; moduleTitle: string }
+  >(null);
 
   const loadBase = useCallback(async () => {
     setLoading(true);
@@ -149,6 +156,36 @@ export function StudentProgressModule({ role, courseId }: Props) {
       setLoading(false);
     }
   }, []);
+
+  const applyCompletion = async (payload: { courseId?: string; moduleId?: string }) => {
+    if (!selectedCourseId || !selectedStudentId) return;
+    const key = payload.moduleId ? `module:${payload.moduleId}` : "course";
+    setPendingCompletionKey(key);
+    setError("");
+    try {
+      const response = await fetch("/api/courses/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId: payload.courseId,
+          moduleId: payload.moduleId,
+          studentId: selectedStudentId,
+          completed: true,
+        }),
+      });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? "Unable to update completion.");
+        return;
+      }
+      await loadStudentProgress(selectedCourseId, selectedStudentId);
+    } catch {
+      setError("Unable to update completion.");
+    } finally {
+      setPendingCompletionKey("");
+    }
+  };
 
   useEffect(() => {
     if (courseId) {
@@ -258,6 +295,16 @@ export function StudentProgressModule({ role, courseId }: Props) {
               <p className="brand-muted mt-1 text-xs">
                 {canSelectStudent && selectedStudent ? formatStudentLabel(selectedStudent) : "Your progress"}
               </p>
+              {canSelectStudent && selectedStudent ? (
+                <button
+                  type="button"
+                  className="mt-3 rounded border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
+                  disabled={!selectedStudentId || pendingCompletionKey === "course"}
+                  onClick={() => setCompletionDialog({ type: "course" })}
+                >
+                  {pendingCompletionKey === "course" ? "Saving..." : "Mark Course Complete"}
+                </button>
+              ) : null}
             </article>
             <article className="brand-card p-5">
               <p className="brand-section-title">Completion</p>
@@ -285,6 +332,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
                       <th className="px-3 py-2 font-semibold">Completed</th>
                       <th className="px-3 py-2 font-semibold">Progress</th>
                       <th className="px-3 py-2 font-semibold">Access</th>
+                      {canSelectStudent ? <th className="px-3 py-2 font-semibold">Actions</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -295,6 +343,20 @@ export function StudentProgressModule({ role, courseId }: Props) {
                         <td className="px-3 py-2">{module.completedLessons}</td>
                         <td className="px-3 py-2">{module.progressPercent}%</td>
                         <td className="px-3 py-2">{module.accessState}</td>
+                        {canSelectStudent ? (
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              className="rounded border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f] disabled:opacity-60"
+                              disabled={!selectedStudentId || pendingCompletionKey === `module:${module.id}`}
+                              onClick={() =>
+                                setCompletionDialog({ type: "module", moduleId: module.id, moduleTitle: module.title })
+                              }
+                            >
+                              {pendingCompletionKey === `module:${module.id}` ? "Saving..." : "Mark Module Complete"}
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -328,6 +390,29 @@ export function StudentProgressModule({ role, courseId }: Props) {
           <p className="brand-muted text-sm">No courses are available for progress tracking yet.</p>
         </section>
       ) : null}
+      <ConfirmModal
+        open={!!completionDialog}
+        title="Confirm Completion"
+        message={
+          completionDialog
+            ? completionDialog.type === "course"
+              ? `Mark ${selectedCourse?.code} - ${selectedCourse?.title} complete for ${selectedStudent ? formatStudentLabel(selectedStudent) : "this student"}? This will mark every module complete.`
+              : `Mark ${completionDialog.moduleTitle} complete for ${selectedStudent ? formatStudentLabel(selectedStudent) : "this student"}?`
+            : ""
+        }
+        confirmLabel="Mark Complete"
+        onCancel={() => setCompletionDialog(null)}
+        onConfirm={() => {
+          const dialog = completionDialog;
+          setCompletionDialog(null);
+          if (!dialog) return;
+          if (dialog.type === "course") {
+            void applyCompletion({ courseId: selectedCourseId });
+            return;
+          }
+          void applyCompletion({ moduleId: dialog.moduleId });
+        }}
+      />
     </section>
   );
 }

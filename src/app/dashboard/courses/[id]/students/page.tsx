@@ -51,7 +51,13 @@ export default async function CourseStudentsPage({ params }: Props) {
     orderBy: [{ student: { name: "asc" } }, { student: { email: "asc" } }],
   });
 
-  const students = enrollments.map((row) => row.student).filter(Boolean);
+  const students = enrollments.map((row) => row.student).filter(Boolean) as Array<{
+    id: string;
+    name: string | null;
+    email: string;
+    studentId: string | null;
+    status: string;
+  }>;
 
   return (
     <main className="min-h-screen lg:flex">

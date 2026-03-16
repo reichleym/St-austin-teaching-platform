@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
-import { promises as fs } from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
 export const runtime = "nodejs";
@@ -30,16 +30,16 @@ export async function POST(request: NextRequest) {
     const safe = sanitizeFileName(path.basename(file.name, ext));
     const finalName = `${Date.now()}-${randomUUID()}-${safe}${ext}`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "assignment-submissions");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const bytes = await file.arrayBuffer();
-    await fs.writeFile(path.join(uploadDir, finalName), Buffer.from(bytes));
+    const blob = await put(`assignment-submissions/${finalName}`, file, {
+      access: "public",
+      contentType: file.type || "application/octet-stream",
+      addRandomSuffix: false,
+    });
 
     return NextResponse.json({
       ok: true,
       file: {
-        url: `/uploads/assignment-submissions/${finalName}`,
+        url: blob.url,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
       },
