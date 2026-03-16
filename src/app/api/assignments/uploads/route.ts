@@ -16,10 +16,10 @@ function sanitizeFileName(input: string) {
 export async function POST(request: NextRequest) {
   try {
     await requireAuthenticatedUser();
-    const blobToken = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+    const blobToken = process.env.staustin_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
     if (!blobToken) {
       return NextResponse.json(
-        { error: "Vercel Blob token missing. Set BLOB_READ_WRITE_TOKEN in the environment." },
+        { error: "Vercel Blob token missing. Set staustin_READ_WRITE_TOKEN in the environment." },
         { status: 500 }
       );
     }
