@@ -125,6 +125,8 @@ const formatDateTime = (value: string | null) => {
   });
 };
 
+const formatEngagementStatus = (value: "COMPLETED" | "PARTIAL" | "NOT_PARTICIPATED") => value.replace(/_/g, " ");
+
 const getPostingBlockReason = (
   discussion: { openAt: string | null; closeAt: string | null; allowLate: boolean; isLocked: boolean } | null,
   canModerate: boolean
@@ -463,7 +465,7 @@ export function EngagementModule({ role }: Props) {
 
           {selectedDiscussion.viewer ? (
             <p className="mt-2 text-sm text-[#2f5f98]">
-              Your status: {selectedDiscussion.viewer.status} | Initial post: {selectedDiscussion.viewer.hasInitialPost ? "Yes" : "No"} | Replies: {selectedDiscussion.viewer.replyCount}/2
+              Your status: {formatEngagementStatus(selectedDiscussion.viewer.status)} | Initial post: {selectedDiscussion.viewer.hasInitialPost ? "Yes" : "No"} | Replies: {selectedDiscussion.viewer.replyCount}/2
             </p>
           ) : null}
 
@@ -574,7 +576,7 @@ export function EngagementModule({ role }: Props) {
                       <td className="px-2 py-1.5">{(item.studentName || "Student") + " - " + item.studentEmail}</td>
                       <td className="px-2 py-1.5">{item.hasInitialPost ? "Yes" : "No"}</td>
                       <td className="px-2 py-1.5">{item.replyCount}</td>
-                      <td className="px-2 py-1.5">{item.status}</td>
+                      <td className="px-2 py-1.5">{formatEngagementStatus(item.status)}</td>
                       {selectedDiscussion.isGraded ? (
                         <td className="px-2 py-1.5">{item.score !== null ? item.score.toFixed(1) : "-"}</td>
                       ) : null}

@@ -110,6 +110,8 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const isTeacher = role === "TEACHER";
   const canManage = isSuperAdmin;
   const studentSimpleView = isStudent;
+  const showTeacherColumn = !isTeacher;
+  const showDepartmentHeadColumn = !isStudent && !isDepartmentHead;
 
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [teachers, setTeachers] = useState<PersonOption[]>([]);
@@ -147,6 +149,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
   const [filterStudentId, setFilterStudentId] = useState("");
+  const [filterDepartmentHeadId, setFilterDepartmentHeadId] = useState("");
   const [enrollPendingCourseId, setEnrollPendingCourseId] = useState("");
   const availableDepartmentHeadIds = useMemo(
     () => new Set(departmentHeads.map((head) => head.id)),
@@ -216,9 +219,10 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         if (filterCourseId && course.id !== filterCourseId) return false;
         if (filterTeacherId && course.teacher?.id !== filterTeacherId) return false;
         if (filterStudentId && !course.enrolledStudents.some((student) => student.id === filterStudentId)) return false;
+        if (filterDepartmentHeadId && !course.departmentHeads.some((head) => head.id === filterDepartmentHeadId)) return false;
         return true;
       }),
-    [courses, filterCourseId, filterStudentId, filterTeacherId]
+    [courses, filterCourseId, filterDepartmentHeadId, filterStudentId, filterTeacherId]
   );
 
   const filteredCreateStudents = useMemo(() => {
@@ -438,7 +442,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         </div>
 
         {canManage ? (
-          <div className="mt-3 grid gap-4 md:grid-cols-3">
+          <div className="mt-3 grid gap-4 md:grid-cols-4">
             <label className="grid gap-1.5">
               <span className="brand-label">Filter by Course</span>
               <select className="brand-input" value={filterCourseId} onChange={(event) => setFilterCourseId(event.currentTarget.value)}>
@@ -457,6 +461,21 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 {teachers.map((teacher) => (
                   <option key={teacher.id} value={teacher.id}>
                     {(teacher.name || "Unnamed Teacher") + " - " + teacher.email + (teacher.status === "DISABLED" ? " (DISABLED)" : "")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">Filter by Department Head</span>
+              <select
+                className="brand-input"
+                value={filterDepartmentHeadId}
+                onChange={(event) => setFilterDepartmentHeadId(event.currentTarget.value)}
+              >
+                <option value="">All department heads</option>
+                {departmentHeads.map((head) => (
+                  <option key={head.id} value={head.id}>
+                    {(head.name || "Unnamed Department Head") + " - " + head.email}
                   </option>
                 ))}
               </select>
@@ -490,8 +509,8 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                   <th className="px-3 py-2 font-semibold">Code</th>
                   <th className="px-3 py-2 font-semibold">Title</th>
                   <th className="px-3 py-2 font-semibold">Duration</th>
-                  <th className="px-3 py-2 font-semibold">Teacher</th>
-                  {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Department Heads</th> : null}
+                  {showTeacherColumn ? <th className="px-3 py-2 font-semibold">Teacher</th> : null}
+                  {showDepartmentHeadColumn ? <th className="px-3 py-2 font-semibold">Department Heads</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Visibility</th> : null}
                   {!studentSimpleView ? <th className="px-3 py-2 font-semibold">Enrollments</th> : null}
                   {isStudent && viewMode === "enrolled" ? <th className="px-3 py-2 font-semibold">Progress</th> : null}
@@ -510,8 +529,10 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                       <td className="px-3 py-2">
                         {formatDurationYmd(course.startDate, course.endDate)}
                       </td>
-                      <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
-                      {!studentSimpleView ? (
+                      {showTeacherColumn ? (
+                        <td className="px-3 py-2">{course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</td>
+                      ) : null}
+                      {showDepartmentHeadColumn ? (
                         <td className="px-3 py-2">
                           {course.departmentHeads.length
                             ? course.departmentHeads.map((head) => head.name || head.email).join(", ")
