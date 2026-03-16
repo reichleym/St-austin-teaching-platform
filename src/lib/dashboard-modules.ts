@@ -36,8 +36,8 @@ export const dashboardModules: DashboardModule[] = [
   },
   {
     slug: "engagement",
-    title: "Engagement",
-    description: "Discussions and classroom interaction management.",
+    title: "Discussion Board",
+    description: "Discussion boards and classroom interaction management.",
     roles: ["DEPARTMENT_HEAD", "TEACHER", "STUDENT"],
   },
   {
