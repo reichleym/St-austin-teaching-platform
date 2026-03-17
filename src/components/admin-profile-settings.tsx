@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { LoadingIndicator } from "@/components/loading-indicator";
 import { PasswordField } from "@/components/password-field";
 
 type AdminProfile = {
@@ -113,7 +114,11 @@ export function AdminProfileSettings() {
       </article>
 
       <article className="brand-card p-5">
-        {isLoading ? <p className="brand-muted text-sm">Loading profile...</p> : null}
+        {isLoading ? (
+          <div className="mt-2">
+            <LoadingIndicator label="Loading profile..." lines={2} />
+          </div>
+        ) : null}
         {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
         {success ? <p className="mb-2 text-sm text-green-700">{success}</p> : null}
 

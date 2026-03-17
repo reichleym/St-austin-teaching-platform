@@ -253,7 +253,14 @@ export function StudentProgressModule({ role, courseId }: Props) {
             <div className="grid gap-1.5">
               <span className="brand-label">Course</span>
               <div className="brand-input flex items-center bg-[#f4f9ff] text-[#0b3e81]">
-                {selectedCourse ? `${selectedCourse.code} - ${selectedCourse.title}` : "Loading course..."}
+                {selectedCourse ? (
+                  `${selectedCourse.code} - ${selectedCourse.title}`
+                ) : (
+                  <span className="inline-flex items-center">
+                    <span className="h-4 w-44 animate-pulse rounded bg-slate-200" />
+                    <span className="sr-only">Loading course</span>
+                  </span>
+                )}
               </div>
             </div>
           )}

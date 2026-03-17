@@ -108,7 +108,7 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
 
   // ── Course picker ──
   return (
-    <section className="brand-card p-5">
+    <section className="">
       <div className="mb-5">
         <p className="brand-section-title">Ask Your Teacher</p>
         <p className="brand-muted mt-2 text-sm">Select a course to view or post questions</p>

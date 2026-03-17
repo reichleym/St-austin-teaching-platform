@@ -13,9 +13,12 @@ export function LoadingOverlay({ active, label = "Loading..." }: { active: boole
   if (!active || !mounted) return null;
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-white/70 backdrop-blur-sm">
-      <div className="flex items-center gap-3 rounded-xl border border-[#c6ddfa] bg-white px-4 py-3 text-sm font-semibold text-[#1f518f] shadow-[0_18px_36px_rgba(15,55,110,0.2)]">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#9bbfed] border-t-transparent" />
-        <span>{label}</span>
+      <div className="rounded-xl border border-[#c6ddfa] bg-white px-5 py-4 text-sm font-semibold text-[#1f518f] shadow-[0_18px_36px_rgba(15,55,110,0.2)]">
+        <div className="w-44 space-y-2 animate-pulse" role="status" aria-live="polite" aria-label={label}>
+          <div className="h-3.5 w-32 rounded bg-slate-200" />
+          <div className="h-3 w-24 rounded bg-slate-100" />
+          <span className="sr-only">{label}</span>
+        </div>
       </div>
     </div>,
     document.body

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { LoadingIndicator } from "@/components/loading-indicator";
 import { toast } from "@/lib/toast";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
@@ -1425,7 +1426,11 @@ export function AssignmentsModule({ role }: Props) {
       {isSuperAdmin ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">Pending Grade Edit Requests</p>
-          {gradeEditRequestsLoading ? <p className="brand-muted mt-3 text-sm">Loading requests...</p> : null}
+          {gradeEditRequestsLoading ? (
+            <div className="mt-3">
+              <LoadingIndicator label="Loading requests..." lines={2} />
+            </div>
+          ) : null}
           {!gradeEditRequestsLoading && gradeEditRequests.length === 0 ? (
             <p className="brand-muted mt-3 text-sm">No pending requests.</p>
           ) : null}
@@ -1517,7 +1522,11 @@ export function AssignmentsModule({ role }: Props) {
             ) : null}
           </div>
         </div>
-        {loading ? <p className="brand-muted mt-3 text-sm">Loading assignments...</p> : null}
+        {loading ? (
+          <div className="mt-3">
+            <LoadingIndicator label="Loading assignments..." lines={2} />
+          </div>
+        ) : null}
 
         {!loading && filteredAssignments.length ? (
           <div className="mt-3 w-full max-w-full overflow-x-auto">
@@ -1631,7 +1640,11 @@ export function AssignmentsModule({ role }: Props) {
 
           {isStudent ? (
             <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit} onFocusCapture={startStudentQuizTimerIfNeeded}>
-              {submissionsLoading ? <p className="brand-muted text-sm">Checking your submission status...</p> : null}
+              {submissionsLoading ? (
+                <div className="mt-1">
+                  <LoadingIndicator label="Checking your submission status..." lines={1} />
+                </div>
+              ) : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
                   {isSubmissionBeforeWindow
@@ -1666,7 +1679,11 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
               {isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
                 <>
-                  {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
+                  {quizQuestionsLoading ? (
+                    <div className="mt-2">
+                      <LoadingIndicator label="Loading questions..." lines={2} />
+                    </div>
+                  ) : null}
                   {quizQuestions.map((question, index) => (
                     <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                       <p className="text-sm font-semibold text-[#0d3f80]">
@@ -1850,7 +1867,7 @@ export function AssignmentsModule({ role }: Props) {
               </form>
 
               <div className="mt-3 grid gap-2">
-                {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
+                {quizQuestionsLoading ? <LoadingIndicator label="Loading questions..." lines={2} /> : null}
                 {!quizQuestionsLoading && quizQuestions.length === 0 ? <p className="brand-muted text-sm">No quiz questions yet.</p> : null}
                 {quizQuestions.map((question, index) => (
                   <div key={question.id} className="rounded-md border border-[#e7f0fc] p-2">
@@ -2001,7 +2018,7 @@ export function AssignmentsModule({ role }: Props) {
           {(canManage || isStudent || isAdminReadOnly) ? (
             <div className="mt-4 space-y-2">
               <p className="brand-label">Submissions</p>
-              {submissionsLoading ? <p className="brand-muted text-sm">Loading submissions...</p> : null}
+              {submissionsLoading ? <LoadingIndicator label="Loading submissions..." lines={2} /> : null}
               {!submissionsLoading && submissions.length === 0 ? <p className="brand-muted text-sm">No submissions yet.</p> : null}
               {isAdminReadOnly && submissions.length ? (
                 <div className="w-full overflow-x-auto">

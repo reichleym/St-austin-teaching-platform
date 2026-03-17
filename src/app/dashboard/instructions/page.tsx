@@ -30,21 +30,17 @@ export default async function InstructionsPage() {
       <DashboardSidebar role={roleText} selectedSlug="instructions" />
       <div className="flex-1 space-y-6 p-6 lg:p-8">
         <DashboardTopbar name={session.user.name} email={session.user.email} role={roleText} />
-        <main className="brand-glass brand-animate p-6">
-          <div className="mx-auto max-w-4xl px-6 py-8">
-            {isStaff ? (
-              <InstructionTeacherInbox
-                currentUserId={session.user.id}
-                currentUserRole={roleText}
-              />
-            ) : (
-              <StudentInstructionEntry
-                currentUserId={session.user.id}
-                currentUserRole={roleText}
-              />
-            )}
-          </div>
-        </main>
+        {isStaff ? (
+          <InstructionTeacherInbox
+            currentUserId={session.user.id}
+            currentUserRole={roleText}
+          />
+        ) : (
+          <StudentInstructionEntry
+            currentUserId={session.user.id}
+            currentUserRole={roleText}
+          />
+        )}
       </div>
     </div>
   );

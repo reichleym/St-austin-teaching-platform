@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 
 type UserStatus = "ACTIVE" | "DISABLED";
@@ -649,6 +650,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               <select
                 className="brand-input"
                 value={fullDraft.country}
+                disabled={isCountriesLoading}
                 onChange={async (event) => {
                   const value = event.currentTarget.value;
                   setFullDraft((prev) => ({ ...prev, country: value, state: "" }));
@@ -659,13 +661,18 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   }
                 }}
               >
-                <option value="">{isCountriesLoading ? "Loading countries..." : "Select country"}</option>
+                <option value="">Select country</option>
                 {visibleCountries.map((country) => (
                   <option key={country.code} value={country.name}>
                     {country.name}
                   </option>
                 ))}
               </select>
+              {isCountriesLoading ? (
+                <div className="mt-2">
+                  <LoadingIndicator label="Loading countries..." lines={1} />
+                </div>
+              ) : null}
             </label>
             <label className="grid gap-1.5">
               <span className="brand-label">State</span>
@@ -676,15 +683,20 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   const value = event.currentTarget.value;
                   setFullDraft((prev) => ({ ...prev, state: value }));
                 }}
-                disabled={!fullDraft.country}
+                disabled={!fullDraft.country || isStatesLoading}
               >
-                <option value="">{isStatesLoading ? "Loading states..." : "Select state"}</option>
+                <option value="">Select state</option>
                 {visibleStates.map((state) => (
                   <option key={state.code} value={state.name}>
                     {state.name}
                   </option>
                 ))}
               </select>
+              {isStatesLoading ? (
+                <div className="mt-2">
+                  <LoadingIndicator label="Loading states..." lines={1} />
+                </div>
+              ) : null}
             </label>
             <label className="grid gap-1.5">
               <span className="brand-label">Role</span>

@@ -96,7 +96,7 @@ export function InstructionTeacherInbox({ currentUserId, currentUserRole }: Prop
   const answered = threads.filter((t) => t.status === "ANSWERED");
 
   return (
-    <section className="brand-card p-5">
+    <section >
       <div className="mb-5">
         <p className="brand-section-title">Student Questions</p>
         {!loading && (

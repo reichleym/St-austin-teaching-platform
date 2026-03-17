@@ -2,6 +2,7 @@
 // src/components/instruction-new-thread-modal.tsx
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 
 type Module = { id: string; title: string; position: number };
 
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [modules, setModules] = useState<Module[]>([]);
   const [moduleId, setModuleId] = useState("");
   const [subject, setSubject] = useState("");
@@ -19,6 +21,18 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
   const [isPrivate, setIsPrivate] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    document.body.classList.add("overflow-hidden", "modal-open");
+    return () => {
+      document.body.classList.remove("overflow-hidden", "modal-open");
+    };
+  }, [mounted]);
 
   useEffect(() => {
     // Reuse the existing modules API
@@ -58,7 +72,9 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
     });
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#06254d]/40 backdrop-blur-sm" onClick={onClose} />
 
@@ -167,6 +183,7 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
           </div>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }

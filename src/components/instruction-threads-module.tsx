@@ -65,7 +65,12 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
         <div>
           <p className="brand-section-title">Ask Your Teacher</p>
           <p className="brand-muted mt-2 text-sm">
-            {loading ? "Loading..." : `${threads.length} thread${threads.length !== 1 ? "s" : ""}`}
+            {loading ? (
+              <span className="inline-flex items-center">
+                <span className="h-3 w-20 animate-pulse rounded bg-slate-200" />
+                <span className="sr-only">Loading threads</span>
+              </span>
+            ) : `${threads.length} thread${threads.length !== 1 ? "s" : ""}`}
           </p>
         </div>
         {isStudent && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 
 type AssignmentType = "HOMEWORK" | "QUIZ" | "EXAM";
@@ -300,7 +301,11 @@ export function AssignmentStudentSubmission(props: Props) {
     <section className="brand-card p-5">
       <p className="brand-section-title">Submit Assignment</p>
       <ToastMessage type="error" message={error} />
-      {submissionsLoading ? <p className="brand-muted mt-2 text-sm">Refreshing submissions...</p> : null}
+      {submissionsLoading ? (
+        <div className="mt-2">
+          <LoadingIndicator label="Refreshing submissions..." lines={1} />
+        </div>
+      ) : null}
 
       <div className="mt-2 text-sm text-[#1f518f]">
         {timerMinutes ? (
@@ -335,7 +340,11 @@ export function AssignmentStudentSubmission(props: Props) {
       >
         {questionBased ? (
           <>
-            {quizQuestionsLoading ? <p className="brand-muted text-sm">Loading questions...</p> : null}
+            {quizQuestionsLoading ? (
+              <div className="mt-2">
+                <LoadingIndicator label="Loading questions..." lines={2} />
+              </div>
+            ) : null}
             {quizQuestions.map((question, index) => (
               <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                 <p className="text-sm font-semibold text-[#0d3f80]">
