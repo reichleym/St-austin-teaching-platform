@@ -212,7 +212,25 @@ export async function GET(request: NextRequest) {
     const discussionIdParam = request.nextUrl.searchParams.get("discussionId")?.trim() ?? "";
 
     const courses = await listAccessibleCourses(user);
-    const selectedCourseId = courseIdParam || courses[0]?.id || "";
+    const accessibleCourseIds = new Set(courses.map((course) => course.id));
+    let selectedCourseId = courseIdParam || "";
+
+    if (!selectedCourseId && discussionIdParam) {
+      const discussionCourseRows = await prisma.$queryRaw<Array<{ courseId: string }>>`
+        SELECT "courseId"
+        FROM "EngagementDiscussion"
+        WHERE "id" = ${discussionIdParam}
+        LIMIT 1
+      `;
+      const discussionCourseId = discussionCourseRows[0]?.courseId ?? "";
+      if (discussionCourseId && accessibleCourseIds.has(discussionCourseId)) {
+        selectedCourseId = discussionCourseId;
+      }
+    }
+
+    if (!selectedCourseId || !accessibleCourseIds.has(selectedCourseId)) {
+      selectedCourseId = courses[0]?.id || "";
+    }
 
     const discussions = selectedCourseId
       ? await prisma.$queryRaw<
