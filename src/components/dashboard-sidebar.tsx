@@ -12,6 +12,7 @@ type DashboardSidebarProps = {
 
 export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const roleKey = String(role) as DashboardRole;
   const availableModules = dashboardModules.filter((item) => item.roles.includes(roleKey));
   const rootKey = "__root__";
@@ -33,8 +34,11 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
     const items = modulesByParent.get(parentKey) ?? [];
     return items.map((item) => {
       const hasChildren = (modulesByParent.get(item.slug) ?? []).length > 0;
+      const firstChild = (modulesByParent.get(item.slug) ?? [])[0];
+      const itemHref = hasChildren && firstChild ? firstChild.href ?? `/dashboard/${firstChild.slug}` : item.href ?? `/dashboard/${item.slug}`;
       const active = item.slug === selectedSlug || hasSelectedDescendant(item.slug);
       const isTopLevel = depth === 0;
+      const isExpanded = expanded[item.slug] ?? active;
 
       return (
         <div key={item.slug} style={depth > 0 ? { marginLeft: `${depth * 12}px` } : undefined}>
@@ -46,19 +50,46 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
                   ? "My Learning"
                   : item.title;
             return (
-          <Link
-            href={item.href ?? `/dashboard/${item.slug}`}
-            className={
-              isTopLevel
-                ? `brand-nav-link ${active ? "brand-nav-link-active !text-white" : ""}`
-                : `brand-nav-sublink ${active ? "brand-nav-sublink-active !text-[#002f74]" : ""}`
-            }
-          >
-            {title}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={itemHref}
+              className={`${isTopLevel ? "brand-nav-link" : "brand-nav-sublink"} flex-1 ${
+                active
+                  ? isTopLevel
+                    ? "brand-nav-link-active !text-white"
+                    : "brand-nav-sublink-active !text-[#002f74]"
+                  : ""
+              }`}
+            >
+              {title}
+            </Link>
+            {hasChildren ? (
+              <button
+                type="button"
+                aria-label={`Toggle ${title} submenu`}
+                aria-expanded={isExpanded}
+                onClick={() => setExpanded((prev) => ({ ...prev, [item.slug]: !isExpanded }))}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[#0f3a74] transition ${
+                  isTopLevel ? "hover:bg-[#cfe4ff]" : "hover:bg-[#dcedff]"
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
             );
           })()}
-          {hasChildren ? <div className="mt-1 space-y-1">{renderTree(item.slug, depth + 1)}</div> : null}
+          {hasChildren && isExpanded ? (
+            <div className="mt-1 space-y-1">{renderTree(item.slug, depth + 1)}</div>
+          ) : null}
         </div>
       );
     });

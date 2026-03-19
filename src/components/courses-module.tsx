@@ -96,7 +96,11 @@ const formatDurationYmd = (startIso: string | null, endIso: string | null) => {
   const dayMs = 24 * 60 * 60 * 1000;
   const days = Math.max(0, Math.floor((target.getTime() - cursor.getTime()) / dayMs));
 
-  return `${years}Y ${months}M ${days}D`;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years}Y`);
+  if (months > 0) parts.push(`${months}M`);
+  parts.push(`${days}D`);
+  return parts.join(" ");
 };
 
 function PersonLabel({ person }: { person: PersonOption }) {

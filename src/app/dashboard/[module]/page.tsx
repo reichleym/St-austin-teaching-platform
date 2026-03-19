@@ -89,8 +89,23 @@ export default async function DashboardPage({ params }: Props) {
   const availableModules = dashboardModules.filter((item) => item.roles.includes(moduleRoleKey));
   const selected =
     availableModules.find((item) => item.slug === routeParams.module) ?? availableModules[0] ?? dashboardModules[0];
+
+  const rootKey = "__root__";
+  const modulesByParent = new Map<string, typeof availableModules>();
+  for (const item of availableModules) {
+    const key = item.parentSlug ?? rootKey;
+    const group = modulesByParent.get(key) ?? [];
+    group.push(item);
+    modulesByParent.set(key, group);
+  }
+
   if (selected?.slug && selected.slug !== routeParams.module) {
     redirect(`/dashboard/${selected.slug}`);
+  }
+  const selectedChildren = selected?.slug ? modulesByParent.get(selected.slug) ?? [] : [];
+  if (selectedChildren.length > 0) {
+    const firstChild = selectedChildren[0];
+    redirect(firstChild.href ?? `/dashboard/${firstChild.slug}`);
   }
   if (selected?.href) {
     redirect(selected.href);
