@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
@@ -24,6 +25,7 @@ type AnnouncementItem = {
 
 type Props = {
   initialAnnouncements: AnnouncementItem[];
+  detailBaseHref?: string;
 };
 
 type EditDraft = {
@@ -55,7 +57,7 @@ function toDateTimeLocalValue(value: string | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
+export function AdminAnnouncementsManager({ initialAnnouncements, detailBaseHref }: Props) {
   const { t } = useLanguage();
   const [items, setItems] = useState(initialAnnouncements);
   const [title, setTitle] = useState("");
@@ -68,6 +70,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft>({ title: "", content: "", audience: "BOTH", expiresAt: "" });
   const [isEditPending, setIsEditPending] = useState(false);
+  const detailBase = detailBaseHref ?? "/dashboard/announcements";
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -128,6 +131,27 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
   const onCancelEdit = () => {
     setEditingId(null);
     setEditDraft({ title: "", content: "", audience: "BOTH", expiresAt: "" });
+  };
+
+  const onDelete = async (item: AnnouncementItem) => {
+    setError("");
+    const confirmMessage = t("announcement.deleteMessage", { title: item.title });
+    if (!window.confirm(confirmMessage)) return;
+    try {
+      const response = await fetch(`/api/admin/announcements/${item.id}`, { method: "DELETE" });
+      const raw = await response.text();
+      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      if (!response.ok) {
+        setError(result.error ?? t("error.deleteAnnouncement"));
+        return;
+      }
+      setItems((prev) => prev.filter((entry) => entry.id !== item.id));
+      if (editingId === item.id) {
+        onCancelEdit();
+      }
+    } catch {
+      setError(t("error.deleteAnnouncement"));
+    }
   };
 
   const onSaveEdit = async () => {
@@ -325,12 +349,26 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                         <p>{t("created")}: {formatDate(item.createdAt, t("noExpiry"))}</p>
                         <p>{t("expires")}: {formatDate(item.expiresAt, t("noExpiry"))}</p>
                       </div>
-                      <button
-                        className="mt-3 rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
-                        onClick={() => onStartEdit(item)}
-                      >
-                        {t("action.edit")}
-                      </button>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Link
+                          className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
+                          href={`${detailBase}/${item.id}`}
+                        >
+                          {t("action.viewDetails")}
+                        </Link>
+                        <button
+                          className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
+                          onClick={() => onStartEdit(item)}
+                        >
+                          {t("action.edit")}
+                        </button>
+                        <button
+                          className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700"
+                          onClick={() => void onDelete(item)}
+                        >
+                          {t("action.delete")}
+                        </button>
+                      </div>
                     </>
                   )}
                 </article>

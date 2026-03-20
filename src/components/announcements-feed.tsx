@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLanguage } from "@/components/language-provider";
 
 type Audience =
@@ -22,10 +23,12 @@ type AnnouncementItem = {
 
 type Props = {
   announcements: AnnouncementItem[];
+  detailBaseHref?: string;
 };
 
-export function AnnouncementsFeed({ announcements }: Props) {
+export function AnnouncementsFeed({ announcements, detailBaseHref }: Props) {
   const { t } = useLanguage();
+  const detailBase = detailBaseHref ?? "";
   const formatDateLabel = (value: string | null) => {
     if (!value) return t("noExpiry");
     const date = new Date(value);
@@ -51,7 +54,16 @@ export function AnnouncementsFeed({ announcements }: Props) {
               className="rounded-xl border border-[#c6ddfa] bg-[#f4f9ff] p-4"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-base font-semibold text-[#0b3e81]">{item.title}</p>
+                {detailBase ? (
+                  <Link
+                    href={`${detailBase}/${item.id}`}
+                    className="text-base font-semibold text-[#0b3e81] underline decoration-transparent transition hover:decoration-current"
+                  >
+                    {item.title}
+                  </Link>
+                ) : (
+                  <p className="text-base font-semibold text-[#0b3e81]">{item.title}</p>
+                )}
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{item.content}</p>
               <div className="mt-2 text-xs text-[#3f70ae]">

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { useLanguage } from "@/components/language-provider";
 
 type CourseOverview = {
   id: string;
@@ -43,6 +44,7 @@ const formatDateTime = (value: string | null) => {
 };
 
 export function DepartmentHeadOversightModule() {
+  const { t } = useLanguage();
   const [courses, setCourses] = useState<CourseOverview[]>([]);
   const [messages, setMessages] = useState<SentMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +85,7 @@ export function DepartmentHeadOversightModule() {
         ? (JSON.parse(raw) as { messages?: SentMessage[]; error?: string })
         : {};
       if (!response.ok) {
-setMessageError(result.error ?? t('loading.messages'));
+        setMessageError(result.error ?? t("loading.messages"));
         return;
       }
       setMessages(result.messages ?? []);
@@ -142,7 +144,11 @@ setMessageError(result.error ?? t('loading.messages'));
     <section className="grid gap-4">
       <section className="brand-card p-5">
         <p className="brand-section-title">Oversight Summary</p>
-{loading ? <div className="mt-3"><LoadingIndicator label={t('loading.departmentHeadCourses')} /></div> : null}
+        {loading ? (
+          <div className="mt-3">
+            <LoadingIndicator label={t("loading.departmentHeadCourses")} />
+          </div>
+        ) : null}
         <ToastMessage type="error" message={error} />
         {!loading && !courses.length ? (
           <p className="brand-muted mt-3 text-sm">No courses assigned yet.</p>
