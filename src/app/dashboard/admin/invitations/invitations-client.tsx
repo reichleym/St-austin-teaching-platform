@@ -1,5 +1,6 @@
 "use client";
 
+import { useLanguage } from "@/components/language-provider";
 import { FormEvent, useEffect, useState } from "react";
 
 type InviteRole = "SUPER_ADMIN" | "TEACHER" | "STUDENT" | "DEPARTMENT_HEAD";
@@ -14,6 +15,7 @@ type LocationOption = {
 };
 
 export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClientProps) {
+  const { t } = useLanguage();
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [isPending, setIsPending] = useState(false);
@@ -168,12 +170,12 @@ export function InvitationsClient({ initialRole = "TEACHER" }: InvitationsClient
 
             <label className="grid gap-1.5">
               <span className="brand-label">Phone Number</span>
-              <input className="brand-input" type="tel" name="phone" required placeholder="+1 000 000 0000" />
+              <input className="brand-input" type="tel" name="phone" required placeholder={t('placeholder.examplePhone')} />
             </label>
 
             <label className="grid gap-1.5">
               <span className="brand-label">Email</span>
-              <input className="brand-input" type="email" name="email" required placeholder="name@staustin.edu" />
+              <input className="brand-input" type="email" name="email" required placeholder={t('placeholder.exampleEmail')} />
             </label>
 
             <label className="grid gap-1.5">

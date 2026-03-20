@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { useLanguage } from "@/components/language-provider";
 import { AppRole, formatDateTime } from "@/components/engagement-shared";
 
 type CourseOption = {
@@ -61,6 +62,7 @@ type Props = {
 };
 
 export function EngagementModule({ role }: Props) {
+  const { t } = useLanguage();
   const router = useRouter();
   const canModerate = role === "SUPER_ADMIN" || role === "ADMIN" || role === "TEACHER";
 
@@ -200,11 +202,11 @@ export function EngagementModule({ role }: Props) {
             <p className="brand-label">Create Discussion Topic</p>
             <label className="grid gap-1.5">
               <span className="brand-label">Discussion Title</span>
-              <input className="brand-input" placeholder="Discussion title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
+              <input className="brand-input" placeholder={t('placeholder.discussionTitle')} value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
             </label>
             <label className="grid gap-1.5">
               <span className="brand-label">Prompt</span>
-              <textarea className="brand-input min-h-[84px]" placeholder="Prompt / question" value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
+              <textarea className="brand-input min-h-[84px]" placeholder={t('placeholder.promptQuestion')} value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
             </label>
             <div className="grid gap-2 md:grid-cols-3">
               <label className="grid gap-1">
@@ -242,7 +244,7 @@ export function EngagementModule({ role }: Props) {
                 step={1}
                 value={createMaxPoints}
                 onChange={(event) => setCreateMaxPoints(event.currentTarget.value)}
-                placeholder="Max points"
+                placeholder={t('placeholder.maxPoints')}
                 disabled={!createIsGraded}
                 required={createIsGraded}
               />

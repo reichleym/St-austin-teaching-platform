@@ -1,5 +1,6 @@
 "use client";
 
+import { useLanguage } from "@/components/language-provider";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { ToastMessage } from "@/components/toast-message";
@@ -80,6 +81,7 @@ const toDateInput = (iso: string | null) => {
 };
 
 export function CourseStructurePanel({ role, courses, initialCourseId, showCourseSelector = true }: Props) {
+  const { t } = useLanguage();
   const canManage = role === "SUPER_ADMIN" || role === "TEACHER" || role === "ADMIN";
   const [selectedCourseId, setSelectedCourseId] = useState(initialCourseId || courses[0]?.id || "");
 
@@ -473,7 +475,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
               <span className="brand-label">Module Title</span>
               <input
                 className="brand-input"
-                placeholder="Module title"
+                placeholder={t('placeholder.moduleTitle')}
                 value={createModuleTitle}
                 onChange={(event) => setCreateModuleTitle(event.currentTarget.value)}
                 required
@@ -483,7 +485,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
               <span className="brand-label">Description</span>
               <input
                 className="brand-input"
-                placeholder="Description (optional)"
+                placeholder={t('placeholder.optionalDescription')}
                 value={createModuleDescription}
                 onChange={(event) => setCreateModuleDescription(event.currentTarget.value)}
               />
@@ -712,7 +714,7 @@ export function CourseStructurePanel({ role, courses, initialCourseId, showCours
                         </label>
                         <label className="grid gap-1.5">
                           <span className="brand-label">YouTube URL</span>
-                          <input className="brand-input" name="embedUrl" defaultValue={lesson.embedUrl ?? ""} placeholder="YouTube URL" />
+                          <input className="brand-input" name="embedUrl" defaultValue={lesson.embedUrl ?? ""} placeholder={t('placeholder.youtubeUrl')} />
                         </label>
                       </div>
                       <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={pendingLessonId === lesson.id}>

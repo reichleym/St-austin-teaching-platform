@@ -2,6 +2,7 @@
 // src/components/instruction-new-thread-modal.tsx
 
 import { useEffect, useState, useTransition } from "react";
+import { useLanguage } from "@/components/language-provider";
 import { createPortal } from "react-dom";
 
 type Module = { id: string; title: string; position: number };
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   const [modules, setModules] = useState<Module[]>([]);
   const [moduleId, setModuleId] = useState("");
@@ -119,11 +121,11 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
             <span className="brand-label">
               Subject <span className="text-[#b21d1d]">*</span>
             </span>
-            <input
+              <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. Confused about recursion in Week 3"
+              placeholder={t('placeholder.exampleRecursion')}
               maxLength={200}
               className="brand-input"
             />
@@ -134,11 +136,11 @@ export function NewThreadModal({ courseId, onClose, onCreated }: Props) {
             <span className="brand-label">
               Your Question <span className="text-[#b21d1d]">*</span>
             </span>
-            <textarea
+              <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={5}
-              placeholder="Describe your question in detail..."
+              placeholder={t('placeholder.describeQuestion')}
               className="brand-input min-h-[140px] resize-none"
             />
           </label>

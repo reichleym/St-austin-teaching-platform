@@ -1,5 +1,6 @@
 "use client";
 
+import { useLanguage } from "@/components/language-provider";
 import { useMemo, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 
@@ -53,6 +54,7 @@ const formatEnumLabel = (value: string | null | undefined) => {
 };
 
 export function AssignmentSubmissionsTable({ module, assignmentId, submissions, canGrade, canViewAttempt = false }: Props) {
+  const { t } = useLanguage();
   const [rows, setRows] = useState<SubmissionRow[]>(submissions);
   const [error, setError] = useState("");
   const [gradePendingId, setGradePendingId] = useState("");
@@ -248,7 +250,7 @@ export function AssignmentSubmissionsTable({ module, assignmentId, submissions, 
                               <>
                                 <input
                                   className="brand-input w-24"
-                                  placeholder="Score"
+                                  placeholder={t('placeholder.score')}
                                   value={gradeRawScoreById[row.id] ?? ""}
                                   onChange={(event) =>
                                     setGradeRawScoreById((prev) => ({ ...prev, [row.id]: event.currentTarget.value }))
@@ -256,7 +258,7 @@ export function AssignmentSubmissionsTable({ module, assignmentId, submissions, 
                                 />
                                 <input
                                   className="brand-input w-48"
-                                  placeholder="Feedback"
+                                  placeholder={t('placeholder.feedback')}
                                   value={gradeFeedbackById[row.id] ?? ""}
                                   onChange={(event) =>
                                     setGradeFeedbackById((prev) => ({ ...prev, [row.id]: event.currentTarget.value }))
