@@ -83,7 +83,7 @@ export function DepartmentHeadOversightModule() {
         ? (JSON.parse(raw) as { messages?: SentMessage[]; error?: string })
         : {};
       if (!response.ok) {
-        setMessageError(result.error ?? "Unable to load messages.");
+setMessageError(result.error ?? t('loading.messages'));
         return;
       }
       setMessages(result.messages ?? []);
@@ -142,7 +142,7 @@ export function DepartmentHeadOversightModule() {
     <section className="grid gap-4">
       <section className="brand-card p-5">
         <p className="brand-section-title">Oversight Summary</p>
-        {loading ? <div className="mt-3"><LoadingIndicator label="Loading assigned courses..." /></div> : null}
+{loading ? <div className="mt-3"><LoadingIndicator label={t('loading.departmentHeadCourses')} /></div> : null}
         <ToastMessage type="error" message={error} />
         {!loading && !courses.length ? (
           <p className="brand-muted mt-3 text-sm">No courses assigned yet.</p>
