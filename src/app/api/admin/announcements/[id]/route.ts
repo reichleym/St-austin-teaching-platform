@@ -1,4 +1,4 @@
-import { AdminActionType } from "@prisma/client";
+import { AdminActionType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, requireSuperAdminUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -158,6 +158,11 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     const superAdmin = await requireSuperAdminUser();
     const { id } = await params;
 
+    const existing = await prisma.announcement.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ ok: true });
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.announcement.delete({ where: { id } });
       await tx.adminActionLog.create({
@@ -174,6 +179,9 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   } catch (error) {
     if (error instanceof PermissionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return NextResponse.json({ ok: true });
     }
     const message = error instanceof Error ? error.message : "Unable to delete announcement.";
     return NextResponse.json({ error: message }, { status: 500 });
