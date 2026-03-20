@@ -4,6 +4,7 @@ import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { dashboardModules, type DashboardRole } from "@/lib/dashboard-modules";
 import { EngagementDiscussionDetail } from "@/components/engagement-discussion-detail";
+import { createServerTranslator } from "@/lib/i18n-server";
 
 type EngagementDetailSearchParams = {
   courseId?: string;
@@ -16,6 +17,7 @@ type Props = {
 
 export default async function EngagementDetailPage({ params, searchParams }: Props) {
   const session = await auth();
+  const t = await createServerTranslator();
 
   if (!session?.user || session.user.status !== "ACTIVE") {
     redirect("/login");
@@ -44,6 +46,9 @@ export default async function EngagementDetailPage({ params, searchParams }: Pro
     | undefined;
 
   const courseId = resolvedSearchParams?.courseId?.trim() || undefined;
+  const engagementTitle = engagementModule
+    ? t("module.engagement", undefined, engagementModule.title)
+    : t("module.engagement");
 
   return (
     <main className="min-h-screen lg:flex">
@@ -57,9 +62,9 @@ export default async function EngagementDetailPage({ params, searchParams }: Pro
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
-              <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{engagementModule.title}</h2>
+              <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{engagementTitle}</h2>
             </div>
           </div>
         </section>

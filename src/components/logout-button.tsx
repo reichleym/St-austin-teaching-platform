@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "@/lib/toast";
+import { useLanguage } from "@/components/language-provider";
 
 type LogoutButtonProps = {
   role?: string | null;
@@ -18,11 +19,12 @@ function resolveLogoutCallbackUrl({ role, callbackUrl }: LogoutButtonProps) {
 
 export function LogoutButton({ role, callbackUrl }: LogoutButtonProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { t } = useLanguage();
 
   const handleConfirm = async () => {
     setConfirmOpen(false);
     const resolvedCallbackUrl = resolveLogoutCallbackUrl({ role, callbackUrl });
-    toast.success("Logged out successfully.");
+    toast.success(t("logoutSuccess"));
     try {
       const result = await signOut({ redirect: false, callbackUrl: resolvedCallbackUrl });
       const nextUrl = result?.url ?? resolvedCallbackUrl;
@@ -31,20 +33,20 @@ export function LogoutButton({ role, callbackUrl }: LogoutButtonProps) {
       }, 150);
     } catch (error) {
       console.error("Logout failed", error);
-      toast.error("Unable to log out. Please try again.");
+      toast.error(t("logoutError"));
     }
   };
 
   return (
     <>
-      <button type="button" onClick={() => setConfirmOpen(true)} className="btn-brand-primary px-4 py-2">
-        Logout
+      <button type="button" onClick={() => setConfirmOpen(true)} className="btn-brand-primary px-2 py-2">
+        {t("logout")}
       </button>
       <ConfirmModal
         open={confirmOpen}
-        title="Confirm Logout"
-        message="Are you sure you want to logout?"
-        confirmLabel="Logout"
+        title={t("confirmLogoutTitle")}
+        message={t("confirmLogoutMessage")}
+        confirmLabel={t("confirmLogoutCta")}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleConfirm}
       />

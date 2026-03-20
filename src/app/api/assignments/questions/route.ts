@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
+import { isCourseExpired } from "@/lib/courses";
 import { prisma } from "@/lib/prisma";
 
 type CreateQuestionBody = {
@@ -55,7 +56,7 @@ function parseQuestionType(input: unknown): "MCQ" | "SHORT_ANSWER" {
 async function getAssignmentAccess(assignmentId: string, user: { id: string; role: Role | string }) {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    include: { course: { select: { id: true, teacherId: true } } },
+    include: { course: { select: { id: true, teacherId: true, endDate: true } } },
   });
   if (!assignment) return { assignment: null, allowed: false };
 
@@ -231,6 +232,9 @@ export async function POST(request: NextRequest) {
     if (!access.assignment) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
     }
+    if (isCourseExpired(access.assignment.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
     if (!access.allowed) {
       return NextResponse.json({ error: "You can only manage quiz questions in your assigned courses." }, { status: 403 });
     }
@@ -303,9 +307,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const rows = await prisma.$queryRaw<
-      Array<{ id: string; assignmentId: string; teacherId: string | null }>
+      Array<{ id: string; assignmentId: string; teacherId: string | null; courseEndDate: Date | null }>
     >`
-      SELECT q."id", q."assignmentId", c."teacherId"
+      SELECT q."id", q."assignmentId", c."teacherId", c."endDate" AS "courseEndDate"
       FROM "AssignmentQuizQuestion" q
       JOIN "Assignment" a ON a."id" = q."assignmentId"
       JOIN "Course" c ON c."id" = a."courseId"
@@ -315,6 +319,9 @@ export async function PATCH(request: NextRequest) {
     const row = rows[0];
     if (!row) {
       return NextResponse.json({ error: "Question not found." }, { status: 404 });
+    }
+    if (isCourseExpired(row.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (user.role === Role.TEACHER && row.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only update quiz questions in your assigned courses." }, { status: 403 });
@@ -370,9 +377,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     const rows = await prisma.$queryRaw<
-      Array<{ id: string; assignmentId: string; teacherId: string | null }>
+      Array<{ id: string; assignmentId: string; teacherId: string | null; courseEndDate: Date | null }>
     >`
-      SELECT q."id", q."assignmentId", c."teacherId"
+      SELECT q."id", q."assignmentId", c."teacherId", c."endDate" AS "courseEndDate"
       FROM "AssignmentQuizQuestion" q
       JOIN "Assignment" a ON a."id" = q."assignmentId"
       JOIN "Course" c ON c."id" = a."courseId"
@@ -382,6 +389,9 @@ export async function DELETE(request: NextRequest) {
     const row = rows[0];
     if (!row) {
       return NextResponse.json({ error: "Question not found." }, { status: 404 });
+    }
+    if (isCourseExpired(row.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (user.role === Role.TEACHER && row.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only delete quiz questions in your assigned courses." }, { status: 403 });

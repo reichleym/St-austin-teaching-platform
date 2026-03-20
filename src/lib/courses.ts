@@ -100,3 +100,7 @@ export function validateCourseDuration(startDate: Date, endDate: Date) {
   }
   return null;
 }
+
+export function isCourseExpired(endDate: Date | null, now: Date = new Date()) {
+  return Boolean(endDate && now.getTime() > endDate.getTime());
+}

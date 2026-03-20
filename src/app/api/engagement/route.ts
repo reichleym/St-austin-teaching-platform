@@ -1,7 +1,7 @@
 import { Prisma, Role } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -161,8 +161,14 @@ async function listAccessibleCourses(user: { id: string; role: Role | string }) 
 
 async function ensureCourseManageAccess(courseId: string, user: { id: string; role: Role | string }) {
   if (isSuperAdminRole(user.role)) return { ok: true as const };
-  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { teacherId: true } });
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { teacherId: true, endDate: true },
+  });
   if (!course) return { ok: false as const, status: 404, error: "Course not found." };
+  if (isCourseExpired(course.endDate)) {
+    return { ok: false as const, status: 403, error: "Course is expired and read-only." };
+  }
   if (user.role !== Role.TEACHER || course.teacherId !== user.id) {
     return { ok: false as const, status: 403, error: "Only admin or assigned teacher can manage discussions." };
   }
@@ -527,9 +533,9 @@ export async function POST(request: NextRequest) {
       }
 
       const discussionRows = await prisma.$queryRaw<
-        Array<{ id: string; courseId: string; isLocked: boolean; openAt: Date | null; closeAt: Date | null; allowLate: boolean; teacherId: string | null; visibility: string }>
+        Array<{ id: string; courseId: string; isLocked: boolean; openAt: Date | null; closeAt: Date | null; allowLate: boolean; teacherId: string | null; visibility: string; courseEndDate: Date | null }>
       >`
-        SELECT d."id", d."courseId", d."isLocked", d."openAt", d."closeAt", d."allowLate", c."teacherId", c."visibility"::text AS "visibility"
+        SELECT d."id", d."courseId", d."isLocked", d."openAt", d."closeAt", d."allowLate", c."teacherId", c."visibility"::text AS "visibility", c."endDate" AS "courseEndDate"
         FROM "EngagementDiscussion" d
         JOIN "Course" c ON c."id" = d."courseId"
         WHERE d."id" = ${discussionId}
@@ -538,6 +544,9 @@ export async function POST(request: NextRequest) {
       const discussion = discussionRows[0];
       if (!discussion) {
         return NextResponse.json({ error: "Discussion not found." }, { status: 404 });
+      }
+      if (isCourseExpired(discussion.courseEndDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
       }
 
       const canManage = isSuperAdminRole(user.role) || (user.role === Role.TEACHER && discussion.teacherId === user.id);
@@ -605,8 +614,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "discussionId and isLocked are required." }, { status: 400 });
       }
 
-      const rows = await prisma.$queryRaw<Array<{ id: string; teacherId: string | null }>>`
-        SELECT d."id", c."teacherId"
+      const rows = await prisma.$queryRaw<Array<{ id: string; teacherId: string | null; courseEndDate: Date | null }>>`
+        SELECT d."id", c."teacherId", c."endDate" AS "courseEndDate"
         FROM "EngagementDiscussion" d
         JOIN "Course" c ON c."id" = d."courseId"
         WHERE d."id" = ${discussionId}
@@ -615,6 +624,9 @@ export async function POST(request: NextRequest) {
       const row = rows[0];
       if (!row) {
         return NextResponse.json({ error: "Discussion not found." }, { status: 404 });
+      }
+      if (isCourseExpired(row.courseEndDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
       }
       if (!isSuperAdminRole(user.role) && !(user.role === Role.TEACHER && row.teacherId === user.id)) {
         return NextResponse.json({ error: "Only admin or assigned teacher can lock discussions." }, { status: 403 });
@@ -641,8 +653,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "postId and isPinned are required." }, { status: 400 });
       }
 
-      const rows = await prisma.$queryRaw<Array<{ postId: string; teacherId: string | null; discussionId: string }>>`
-        SELECT p."id" AS "postId", c."teacherId", d."id" AS "discussionId"
+      const rows = await prisma.$queryRaw<Array<{ postId: string; teacherId: string | null; discussionId: string; courseEndDate: Date | null }>>`
+        SELECT p."id" AS "postId", c."teacherId", d."id" AS "discussionId", c."endDate" AS "courseEndDate"
         FROM "EngagementPost" p
         JOIN "EngagementDiscussion" d ON d."id" = p."discussionId"
         JOIN "Course" c ON c."id" = d."courseId"
@@ -652,6 +664,9 @@ export async function POST(request: NextRequest) {
       const row = rows[0];
       if (!row) {
         return NextResponse.json({ error: "Post not found." }, { status: 404 });
+      }
+      if (isCourseExpired(row.courseEndDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
       }
       if (!isSuperAdminRole(user.role) && !(user.role === Role.TEACHER && row.teacherId === user.id)) {
         return NextResponse.json({ error: "Only admin or assigned teacher can pin posts." }, { status: 403 });
@@ -678,8 +693,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "postId is required." }, { status: 400 });
       }
 
-      const rows = await prisma.$queryRaw<Array<{ postId: string; teacherId: string | null; discussionId: string }>>`
-        SELECT p."id" AS "postId", c."teacherId", d."id" AS "discussionId"
+      const rows = await prisma.$queryRaw<Array<{ postId: string; teacherId: string | null; discussionId: string; courseEndDate: Date | null }>>`
+        SELECT p."id" AS "postId", c."teacherId", d."id" AS "discussionId", c."endDate" AS "courseEndDate"
         FROM "EngagementPost" p
         JOIN "EngagementDiscussion" d ON d."id" = p."discussionId"
         JOIN "Course" c ON c."id" = d."courseId"
@@ -689,6 +704,9 @@ export async function POST(request: NextRequest) {
       const row = rows[0];
       if (!row) {
         return NextResponse.json({ error: "Post not found." }, { status: 404 });
+      }
+      if (isCourseExpired(row.courseEndDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
       }
       if (!isSuperAdminRole(user.role) && !(user.role === Role.TEACHER && row.teacherId === user.id)) {
         return NextResponse.json({ error: "Only admin or assigned teacher can delete posts." }, { status: 403 });
@@ -715,8 +733,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "postId and content are required." }, { status: 400 });
       }
 
-      const rows = await prisma.$queryRaw<Array<{ postId: string; authorId: string; teacherId: string | null; isLocked: boolean; openAt: Date | null; closeAt: Date | null; allowLate: boolean }>>`
-        SELECT p."id" AS "postId", p."authorId", c."teacherId", d."isLocked", d."openAt", d."closeAt", d."allowLate"
+      const rows = await prisma.$queryRaw<Array<{ postId: string; authorId: string; teacherId: string | null; isLocked: boolean; openAt: Date | null; closeAt: Date | null; allowLate: boolean; courseEndDate: Date | null }>>`
+        SELECT p."id" AS "postId", p."authorId", c."teacherId", d."isLocked", d."openAt", d."closeAt", d."allowLate", c."endDate" AS "courseEndDate"
         FROM "EngagementPost" p
         JOIN "EngagementDiscussion" d ON d."id" = p."discussionId"
         JOIN "Course" c ON c."id" = d."courseId"
@@ -726,6 +744,9 @@ export async function POST(request: NextRequest) {
       const row = rows[0];
       if (!row) {
         return NextResponse.json({ error: "Post not found." }, { status: 404 });
+      }
+      if (isCourseExpired(row.courseEndDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
       }
 
       const canModerate = isSuperAdminRole(user.role) || (user.role === Role.TEACHER && row.teacherId === user.id);

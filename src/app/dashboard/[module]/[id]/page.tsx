@@ -170,9 +170,9 @@ async function getCourseDepartmentHeads(courseId: string) {
     const tableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT to_regclass('public."DepartmentHeadCourseAssignment"') IS NOT NULL AS "exists"
     `;
-    if (!tableExists[0]?.exists) return [] as Array<{ id: string; name: string | null; email: string }>;
-    const rows = await prisma.$queryRaw<Array<{ id: string; name: string | null; email: string }>>`
-      SELECT u."id", u."name", u."email"
+    if (!tableExists[0]?.exists) return [] as Array<{ id: string; name: string | null; email: string; status: "ACTIVE" | "DISABLED" }>;
+    const rows = await prisma.$queryRaw<Array<{ id: string; name: string | null; email: string; status: "ACTIVE" | "DISABLED" }>>`
+      SELECT u."id", u."name", u."email", u."status"::text AS "status"
       FROM "DepartmentHeadCourseAssignment" a
       JOIN "User" u ON u."id" = a."departmentHeadId"
       WHERE a."courseId" = ${courseId}
@@ -469,18 +469,18 @@ export default async function DashboardDetailPage({ params }: Props) {
     const [teachers, students, departmentHeads, enrolledStudents, assignedDepartmentHeads] = isSuperAdmin
       ? await Promise.all([
           prisma.user.findMany({
-            where: { role: "TEACHER", status: "ACTIVE" },
-            select: { id: true, name: true, email: true },
+            where: { role: "TEACHER" },
+            select: { id: true, name: true, email: true, status: true },
             orderBy: [{ name: "asc" }, { email: "asc" }],
           }),
           prisma.user.findMany({
-            where: { role: "STUDENT", status: "ACTIVE" },
-            select: { id: true, name: true, email: true, phone: true },
+            where: { role: "STUDENT" },
+            select: { id: true, name: true, email: true, phone: true, status: true, studentId: true },
             orderBy: [{ name: "asc" }, { email: "asc" }],
           }),
           prisma.user.findMany({
-            where: { role: "DEPARTMENT_HEAD", status: "ACTIVE" },
-            select: { id: true, name: true, email: true },
+            where: { role: "DEPARTMENT_HEAD" },
+            select: { id: true, name: true, email: true, status: true },
             orderBy: [{ name: "asc" }, { email: "asc" }],
           }),
           prisma.enrollment.findMany({
@@ -771,7 +771,7 @@ export default async function DashboardDetailPage({ params }: Props) {
                 {isStudent ? (
                   <Link
                     href={`/dashboard/${module}/${assignment.id}/submit`}
-                    className="btn-brand-primary px-4 py-2 text-sm font-semibold no-underline"
+                    className="btn-brand-primary px-2 py-2 text-sm font-semibold no-underline"
                   >
                     View Assignment
                   </Link>

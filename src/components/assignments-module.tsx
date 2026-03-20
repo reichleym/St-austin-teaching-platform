@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { toast } from "@/lib/toast";
+import { useLanguage } from "@/components/language-provider";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -196,10 +197,8 @@ const toggleOptionSelection = (selected: number[], index: number) => {
   return [...selected, index].sort((a, b) => a - b);
 };
 
-const formatOptionIndexes = (indexes: number[]) =>
-  indexes
-    .map((index) => `Option ${String.fromCharCode(65 + index)}`)
-    .join(", ");
+const formatOptionIndexes = (indexes: number[], labeler: (label: string) => string) =>
+  indexes.map((index) => labeler(String.fromCharCode(65 + index))).join(", ");
 
 const formatEnumLabel = (value: string | null | undefined) => {
   if (!value) return "-";
@@ -216,12 +215,15 @@ const formatEnumLabel = (value: string | null | undefined) => {
 const isQuestionAssignment = (assignmentType: "HOMEWORK" | "QUIZ" | "EXAM") =>
   assignmentType === "QUIZ" || assignmentType === "EXAM";
 
-const formatMinutes = (minutes: number) => {
-  if (!minutes) return "0m";
+const formatMinutes = (
+  minutes: number,
+  labels: { day: string; hour: string; minute: string }
+) => {
+  if (!minutes) return `0${labels.minute}`;
   const days = Math.floor(minutes / (60 * 24));
   const hours = Math.floor((minutes % (60 * 24)) / 60);
-  if (days > 0) return `${days}d ${hours}h`;
-  return `${hours}h ${minutes % 60}m`;
+  if (days > 0) return `${days}${labels.day} ${hours}${labels.hour}`;
+  return `${hours}${labels.hour} ${minutes % 60}${labels.minute}`;
 };
 
 const normalizeRubricText = (value: string) =>
@@ -231,12 +233,7 @@ const normalizeRubricText = (value: string) =>
     .filter(Boolean)
     .join("\n");
 
-const plagiarismBand = (score: number | null | undefined) => {
-  if (score === null || score === undefined) return "N/A";
-  if (score >= 70) return "High";
-  if (score >= 40) return "Medium";
-  return "Low";
-};
+
 
 const isPublishedOrLockedState = (state: string) =>
   state === "GRADE_PUBLISHED" ||
@@ -246,10 +243,22 @@ const isPublishedOrLockedState = (state: string) =>
   state === "PUBLISHED";
 
 export function AssignmentsModule({ role }: Props) {
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const canManage = role === "TEACHER";
   const isStudent = role === "STUDENT";
+
+  const statusLabel = (value?: string | null) => {
+    if (!value) return t("common.na");
+    return t(`status.${value.toLowerCase()}`, undefined, formatEnumLabel(value));
+  };
+  const plagiarismBandLabel = (score: number | null | undefined) => {
+    if (score === null || score === undefined) return t("common.na");
+    if (score >= 70) return t("plagiarism.high");
+    if (score >= 40) return t("plagiarism.medium");
+    return t("plagiarism.low");
+  };
   const isTeacher = role === "TEACHER";
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN" || role === "DEPARTMENT_HEAD";
@@ -427,7 +436,7 @@ export function AssignmentsModule({ role }: Props) {
         : {};
 
       if (!response.ok) {
-        setError(result.error ?? "Unable to load assignments.");
+        setError(result.error ?? t("error.loadAssignments"));
         setCourses([]);
         setAssignments([]);
         return;
@@ -442,13 +451,13 @@ export function AssignmentsModule({ role }: Props) {
         prev && nextAssignments.some((item) => item.id === prev) ? prev : ""
       );
     } catch {
-      setError("Unable to load assignments.");
+      setError(t("error.loadAssignments"));
       setCourses([]);
       setAssignments([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadGradeEditRequests = useCallback(async () => {
     if (!isSuperAdmin) return;
@@ -458,18 +467,18 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { requests?: GradeEditRequestItem[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load grade edit requests.");
+        setError(result.error ?? t("error.loadGradeEditRequests"));
         setGradeEditRequests([]);
         return;
       }
       setGradeEditRequests(result.requests ?? []);
     } catch {
-      setError("Unable to load grade edit requests.");
+      setError(t("error.loadGradeEditRequests"));
       setGradeEditRequests([]);
     } finally {
       setGradeEditRequestsLoading(false);
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, t]);
 
   const loadSubmissions = useCallback(async (assignmentId: string) => {
     if (!assignmentId) {
@@ -482,18 +491,18 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { submissions?: SubmissionItem[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load submissions.");
+        setError(result.error ?? t("error.loadSubmissions"));
         setSubmissions([]);
         return;
       }
       setSubmissions(result.submissions ?? []);
     } catch {
-      setError("Unable to load submissions.");
+      setError(t("error.loadSubmissions"));
       setSubmissions([]);
     } finally {
       setSubmissionsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadCourseStructure = useCallback(async (courseId: string) => {
     if (!courseId) return;
@@ -531,18 +540,18 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { questions?: QuizQuestion[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load quiz questions.");
+        setError(result.error ?? t("error.loadQuizQuestions"));
         setQuizQuestions([]);
         return;
       }
       setQuizQuestions(result.questions ?? []);
     } catch {
-      setError("Unable to load quiz questions.");
+      setError(t("error.loadQuizQuestions"));
       setQuizQuestions([]);
     } finally {
       setQuizQuestionsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -671,7 +680,7 @@ export function AssignmentsModule({ role }: Props) {
   const addDraftQuestion = () => {
     const prompt = createQuestionPrompt.trim();
     if (createType === "QUIZ" && createQuestionType !== "MCQ") {
-      setError("Quiz supports MCQ questions only.");
+      setError(t("validation.quizMcqOnly"));
       return;
     }
     const options = [createQuestionOptionA, createQuestionOptionB, createQuestionOptionC, createQuestionOptionD]
@@ -684,21 +693,21 @@ export function AssignmentsModule({ role }: Props) {
     const points = Number(createQuestionPoints);
 
     if (!prompt) {
-      setError("Question prompt is required.");
+      setError(t("validation.questionPromptRequired"));
       return;
     }
     if (createQuestionType === "MCQ") {
       if (options.length < 2) {
-        setError("MCQ question needs at least two options.");
+        setError(t("validation.mcqMinOptions"));
         return;
       }
       if (!correctOptionIndexes.length) {
-        setError("Select at least one valid correct option for the quiz question.");
+        setError(t("validation.correctOptionRequired"));
         return;
       }
     }
     if (!Number.isFinite(points) || points <= 0) {
-      setError("Question points must be greater than zero.");
+      setError(t("validation.questionPointsPositive"));
       return;
     }
 
@@ -771,25 +780,25 @@ export function AssignmentsModule({ role }: Props) {
       const points = Number(editQuestionPoints);
 
       if (!prompt) {
-        setError("Question prompt is required.");
+        setError(t("validation.questionPromptRequired"));
         return;
       }
       if (selectedAssignment.config.assignmentType === "QUIZ" && editQuestionType !== "MCQ") {
-        setError("Quiz supports MCQ questions only.");
+        setError(t("validation.quizMcqOnly"));
         return;
       }
       if (editQuestionType === "MCQ") {
         if (options.length < 2) {
-          setError("MCQ question needs at least two options.");
+          setError(t("validation.mcqMinOptions"));
           return;
         }
         if (!correctOptionIndexes.length) {
-          setError("Select at least one valid correct option for the quiz question.");
+          setError(t("validation.correctOptionRequired"));
           return;
         }
       }
       if (!Number.isFinite(points) || points <= 0) {
-        setError("Question points must be greater than zero.");
+        setError(t("validation.questionPointsPositive"));
         return;
       }
 
@@ -810,14 +819,14 @@ export function AssignmentsModule({ role }: Props) {
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
 
       if (!response.ok) {
-        setError(result.error ?? "Unable to update quiz question.");
+        setError(result.error ?? t("error.updateQuizQuestion"));
         return;
       }
 
       await loadQuizQuestions(selectedAssignment.id);
       resetEditQuestion();
     } catch {
-      setError("Unable to update quiz question.");
+      setError(t("error.updateQuizQuestion"));
     } finally {
       setEditQuestionPendingId("");
     }
@@ -831,11 +840,11 @@ export function AssignmentsModule({ role }: Props) {
       const createRubricSteps = createRubric.split("\n").map((item) => item.trim()).filter(Boolean);
       const hasCreateContent = createDescription.trim().length > 0 || createRubricSteps.length > 0;
       if ((createType === "QUIZ" || createType === "EXAM") && !hasCreateContent) {
-        setError("Quiz and exam assignments cannot be empty. Add instructions or rubric steps.");
+        setError(t("validation.assignmentNeedsContent"));
         return;
       }
       if (isQuestionAssignment(createType) && createDraftQuestions.length === 0) {
-        setError(createType === "QUIZ" ? "Add at least one quiz question before creating the quiz assignment." : "Add at least one question before creating the exam assignment.");
+        setError(createType === "QUIZ" ? t("validation.quizNeedsQuestion") : t("validation.examNeedsQuestion"));
         return;
       }
 
@@ -851,13 +860,13 @@ export function AssignmentsModule({ role }: Props) {
       if (!createStartIso || !createEndIso) {
         setError(
           createType === "HOMEWORK"
-            ? "Provide a valid start date, end date, start time, and end time for homework."
-            : "Provide valid start and end dates."
+            ? t("validation.homeworkDatesRequired")
+            : t("validation.assignmentDatesRequired")
         );
         return;
       }
       if (new Date(createEndIso).getTime() <= new Date(createStartIso).getTime()) {
-        setError(createType === "HOMEWORK" ? "Homework end time must be after start time." : "End date must be after start date.");
+        setError(createType === "HOMEWORK" ? t("validation.homeworkEndAfterStart") : t("validation.endDateAfterStart"));
         return;
       }
 
@@ -886,7 +895,7 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string; assignment?: { id: string } }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to create assignment.");
+        setError(result.error ?? t("error.createAssignment"));
         return;
       }
 
@@ -909,7 +918,7 @@ export function AssignmentsModule({ role }: Props) {
           if (!questionResponse.ok) {
             const questionRaw = await questionResponse.text();
             const questionResult = questionRaw ? (JSON.parse(questionRaw) as { error?: string }) : {};
-            setError(questionResult.error ?? "Assignment created but some quiz questions failed to save.");
+            setError(questionResult.error ?? t("error.assignmentQuestionSavePartial"));
             break;
           }
         }
@@ -946,7 +955,7 @@ export function AssignmentsModule({ role }: Props) {
       setShowCreateModal(false);
       await load();
     } catch {
-      setError("Unable to create assignment.");
+      setError(t("error.createAssignment"));
     } finally {
       setCreatePending(false);
     }
@@ -961,7 +970,7 @@ export function AssignmentsModule({ role }: Props) {
       const editRubricSteps = editRubric.split("\n").map((item) => item.trim()).filter(Boolean);
       const hasEditContent = editDescription.trim().length > 0 || editRubricSteps.length > 0;
       if ((editType === "QUIZ" || editType === "EXAM") && !hasEditContent) {
-        setError("Quiz and exam assignments cannot be empty. Add instructions or rubric steps.");
+        setError(t("validation.assignmentNeedsContent"));
         return;
       }
 
@@ -977,13 +986,13 @@ export function AssignmentsModule({ role }: Props) {
       if (!editStartIso || !editEndIso) {
         setError(
           editType === "HOMEWORK"
-            ? "Provide a valid start date, end date, start time, and end time for homework."
-            : "Provide valid start and end dates."
+            ? t("validation.homeworkDatesRequired")
+            : t("validation.assignmentDatesRequired")
         );
         return;
       }
       if (new Date(editEndIso).getTime() <= new Date(editStartIso).getTime()) {
-        setError(editType === "HOMEWORK" ? "Homework end time must be after start time." : "End date must be after start date.");
+        setError(editType === "HOMEWORK" ? t("validation.homeworkEndAfterStart") : t("validation.endDateAfterStart"));
         return;
       }
 
@@ -1012,14 +1021,14 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to update assignment.");
+        setError(result.error ?? t("error.updateAssignment"));
         return;
       }
       setEditId("");
       setEditRubricFileName("");
       await load();
     } catch {
-      setError("Unable to update assignment.");
+      setError(t("error.updateAssignment"));
     } finally {
       setEditPending(false);
     }
@@ -1037,12 +1046,12 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to delete assignment.");
+        setError(result.error ?? t("error.deleteAssignment"));
         return;
       }
       await load();
     } catch {
-      setError("Unable to delete assignment.");
+      setError(t("error.deleteAssignment"));
     } finally {
       setDeletePendingId("");
     }
@@ -1058,13 +1067,13 @@ export function AssignmentsModule({ role }: Props) {
         body: JSON.stringify({
           submissionId,
           action: "INVALIDATE_ATTEMPT",
-          reason: "Attempt invalidated by teacher for controlled resubmission.",
+          reason: t("assignment.invalidatedReason"),
         }),
       });
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to invalidate attempt.");
+        setError(result.error ?? t("error.invalidateAttempt"));
         return;
       }
       if (selectedAssignmentId) {
@@ -1072,7 +1081,7 @@ export function AssignmentsModule({ role }: Props) {
       }
       await load();
     } catch {
-      setError("Unable to invalidate attempt.");
+      setError(t("error.invalidateAttempt"));
     } finally {
       setInvalidatePendingId("");
     }
@@ -1086,7 +1095,7 @@ export function AssignmentsModule({ role }: Props) {
     try {
       const prompt = newQuestionPrompt.trim();
       if (selectedAssignment.config.assignmentType === "QUIZ" && newQuestionType !== "MCQ") {
-        setError("Quiz supports MCQ questions only.");
+        setError(t("validation.quizMcqOnly"));
         return;
       }
       const options = [newQuestionOptionA, newQuestionOptionB, newQuestionOptionC, newQuestionOptionD]
@@ -1098,19 +1107,19 @@ export function AssignmentsModule({ role }: Props) {
       const shortAnswerKey = newQuestionShortAnswerKey.trim() || null;
       const points = Number(newQuestionPoints);
       if (!prompt) {
-        setError("Question prompt is required.");
+        setError(t("validation.questionPromptRequired"));
         return;
       }
       if (newQuestionType === "MCQ" && options.length < 2) {
-        setError("At least two options are required for MCQ.");
+        setError(t("validation.mcqMinOptions"));
         return;
       }
       if (newQuestionType === "MCQ" && !correctOptionIndexes.length) {
-        setError("Select at least one valid correct option.");
+        setError(t("validation.correctOptionRequired"));
         return;
       }
       if (!Number.isFinite(points) || points <= 0) {
-        setError("Question points must be greater than zero.");
+        setError(t("validation.questionPointsPositive"));
         return;
       }
       const response = await fetch("/api/assignments/questions", {
@@ -1129,7 +1138,7 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to create quiz question.");
+        setError(result.error ?? t("error.createQuizQuestion"));
         return;
       }
       setNewQuestionPrompt("");
@@ -1143,7 +1152,7 @@ export function AssignmentsModule({ role }: Props) {
       setNewQuestionPoints("1");
       await loadQuizQuestions(selectedAssignment.id);
     } catch {
-      setError("Unable to create quiz question.");
+      setError(t("error.createQuizQuestion"));
     } finally {
       setCreateQuestionPending(false);
     }
@@ -1161,14 +1170,14 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to delete quiz question.");
+        setError(result.error ?? t("error.deleteQuizQuestion"));
         return;
       }
       if (selectedAssignmentId) {
         await loadQuizQuestions(selectedAssignmentId);
       }
     } catch {
-      setError("Unable to delete quiz question.");
+      setError(t("error.deleteQuizQuestion"));
     } finally {
       setDeleteQuestionPendingId("");
     }
@@ -1184,7 +1193,7 @@ export function AssignmentsModule({ role }: Props) {
       const isQuestionBased = isQuestionAssignment(selectedAssignment.config.assignmentType);
       if (isQuestionBased) {
         if (!quizQuestions.length) {
-          setError("No questions are configured for this assignment.");
+          setError(t("validation.noQuestionsConfigured"));
           return;
         }
         const hasUnansweredQuestion = quizQuestions.some((question) => {
@@ -1195,7 +1204,7 @@ export function AssignmentsModule({ role }: Props) {
           return (studentQuizAnswers[question.id] ?? []).length === 0;
         });
         if (hasUnansweredQuestion) {
-          setError("Answer all questions before submitting.");
+          setError(t("validation.answerAllQuestions"));
           return;
         }
       }
@@ -1213,7 +1222,7 @@ export function AssignmentsModule({ role }: Props) {
           ? (JSON.parse(uploadRaw) as { error?: string; file?: { url: string; fileName: string; mimeType: string } })
           : {};
         if (!uploadResponse.ok || !uploadResult.file) {
-          setError(uploadResult.error ?? "Unable to upload submission file.");
+          setError(uploadResult.error ?? t("error.uploadSubmissionFile"));
           return;
         }
         fileUrl = uploadResult.file.url;
@@ -1257,7 +1266,7 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to submit assignment.");
+        setError(result.error ?? t("error.submitAssignment"));
         return;
       }
 
@@ -1271,7 +1280,7 @@ export function AssignmentsModule({ role }: Props) {
       setStudentQuizStartedAt(null);
       await loadSubmissions(selectedAssignment.id);
     } catch {
-      setError("Unable to submit assignment.");
+      setError(t("error.submitAssignment"));
     } finally {
       setStudentPending(false);
     }
@@ -1286,11 +1295,11 @@ export function AssignmentsModule({ role }: Props) {
       if (rawScoreInput !== undefined && rawScoreInput !== "") {
         const parsed = Number(rawScoreInput);
         if (!Number.isFinite(parsed) || parsed < 0) {
-          setError("Raw score must be a non-negative number.");
+          setError(t("validation.rawScoreNonNegative"));
           return;
         }
         if (maxPoints !== null && parsed > maxPoints) {
-          setError(`Raw score cannot exceed max points (${maxPoints}).`);
+          setError(t("validation.rawScoreExceedsMax", { maxPoints }));
           return;
         }
       }
@@ -1308,14 +1317,14 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to grade submission.");
+        setError(result.error ?? t("error.gradeSubmission"));
         return;
       }
       if (selectedAssignmentId) {
         await loadSubmissions(selectedAssignmentId);
       }
     } catch {
-      setError("Unable to grade submission.");
+      setError(t("error.gradeSubmission"));
     } finally {
       setGradePendingId("");
     }
@@ -1325,7 +1334,7 @@ export function AssignmentsModule({ role }: Props) {
     if (!selectedAssignment || !isTeacher) return;
     const proposedPointsValue = Number(requestEditProposedPoints);
     if (!Number.isFinite(proposedPointsValue) || proposedPointsValue < 0) {
-      setError("Proposed points are required and must be non-negative.");
+      setError(t("validation.proposedPointsNonNegative"));
       return;
     }
     setRequestEditPendingId(submission.id);
@@ -1344,14 +1353,14 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to submit grade edit request.");
+        setError(result.error ?? t("error.gradeEditRequest"));
         return;
       }
       setRequestEditForSubmissionId("");
       setRequestEditReason("");
       setRequestEditProposedPoints("");
     } catch {
-      setError("Unable to submit grade edit request.");
+      setError(t("error.gradeEditRequest"));
     } finally {
       setRequestEditPendingId("");
     }
@@ -1374,7 +1383,7 @@ export function AssignmentsModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to process grade edit decision.");
+        setError(result.error ?? t("error.gradeEditDecision"));
         return;
       }
       await loadGradeEditRequests();
@@ -1382,7 +1391,7 @@ export function AssignmentsModule({ role }: Props) {
         await loadSubmissions(selectedAssignmentId);
       }
     } catch {
-      setError("Unable to process grade edit decision.");
+      setError(t("error.gradeEditDecision"));
     } finally {
       setReviewPendingId("");
     }
@@ -1425,35 +1434,38 @@ export function AssignmentsModule({ role }: Props) {
     <section className="grid min-w-0 gap-4">
       {isSuperAdmin ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
-          <p className="brand-section-title">Pending Grade Edit Requests</p>
+          <p className="brand-section-title">{t("gradeEdit.pendingTitle")}</p>
           {gradeEditRequestsLoading ? (
             <div className="mt-3">
-              <LoadingIndicator label="Loading requests..." lines={2} />
+              <LoadingIndicator label={t("loading.requests")} lines={2} />
             </div>
           ) : null}
           {!gradeEditRequestsLoading && gradeEditRequests.length === 0 ? (
-            <p className="brand-muted mt-3 text-sm">No pending requests.</p>
+            <p className="brand-muted mt-3 text-sm">{t("gradeEdit.none")}</p>
           ) : null}
           <div className="mt-3 grid gap-3">
             {gradeEditRequests.map((request) => (
               <article key={request.id} className="rounded-md border border-[#dbe9fb] p-3">
                 <p className="text-sm font-semibold text-[#0d3f80]">
-                  {request.assignment?.title ?? "Assignment"} - {request.student?.name || request.student?.email || "Student"}
+                  {request.assignment?.title ?? t("assignment.label")} - {request.student?.name || request.student?.email || t("student.label")}
                 </p>
-                <p className="mt-1 text-xs text-[#3a689f]">Reason: {request.reason}</p>
                 <p className="mt-1 text-xs text-[#3a689f]">
-                  Proposed: {request.proposedPoints ?? "N/A"} | Requested by: {request.requestedBy?.name || request.requestedBy?.email || "Teacher"}
+                  {t("gradeEdit.reason")}: {request.reason}
+                </p>
+                <p className="mt-1 text-xs text-[#3a689f]">
+                  {t("gradeEdit.proposed")}: {request.proposedPoints ?? t("gradeEdit.na")} | {t("gradeEdit.requestedBy")}:{" "}
+                  {request.requestedBy?.name || request.requestedBy?.email || t("teacher.label")}
                 </p>
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Approved Points</span>
+                    <span className="brand-label">{t("gradeEdit.approvedPoints")}</span>
                     <input
                       className="brand-input"
                       type="number"
                       min="0"
                       step="0.01"
-                      placeholder="Approved points (optional)"
-                      aria-label={`Approved points for ${request.assignment?.title ?? "assignment"}`}
+                      placeholder={t("gradeEdit.approvedPointsPlaceholder")}
+                      aria-label={t("gradeEdit.approvedPointsAria", { title: request.assignment?.title ?? t("assignment.labelLower") })}
                       value={reviewApprovedPointsByRequest[request.id] ?? ""}
                       onChange={(event) => {
                         const value = (event.target as HTMLInputElement | null)?.value ?? "";
@@ -1462,11 +1474,11 @@ export function AssignmentsModule({ role }: Props) {
                     />
                   </label>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Review Note</span>
+                    <span className="brand-label">{t("gradeEdit.reviewNote")}</span>
                     <input
                       className="brand-input"
-                      placeholder="Review note (optional)"
-                      aria-label={`Review note for ${request.assignment?.title ?? "assignment"}`}
+                      placeholder={t("gradeEdit.reviewNotePlaceholder")}
+                      aria-label={t("gradeEdit.reviewNoteAria", { title: request.assignment?.title ?? t("assignment.labelLower") })}
                       value={reviewNoteByRequest[request.id] ?? ""}
                       onChange={(event) => {
                         const value = (event.target as HTMLInputElement | null)?.value ?? "";
@@ -1482,7 +1494,7 @@ export function AssignmentsModule({ role }: Props) {
                     disabled={reviewPendingId === request.id}
                     onClick={() => void onReviewGradeEditRequest(request.id, "APPROVE")}
                   >
-                    {reviewPendingId === request.id ? "Processing..." : "Approve"}
+                    {reviewPendingId === request.id ? t("status.processing") : t("action.approve")}
                   </button>
                   <button
                     type="button"
@@ -1490,7 +1502,7 @@ export function AssignmentsModule({ role }: Props) {
                     disabled={reviewPendingId === request.id}
                     onClick={() => void onReviewGradeEditRequest(request.id, "REJECT")}
                   >
-                    Reject
+                    {t("action.reject")}
                   </button>
                 </div>
               </article>
@@ -1501,30 +1513,30 @@ export function AssignmentsModule({ role }: Props) {
 
       <section className="brand-card min-w-0 overflow-hidden p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="brand-section-title">Assignment List</p>
+          <p className="brand-section-title">{t("assignment.listTitle")}</p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="grid gap-1.5">
-              <span className="brand-label">Filter</span>
+              <span className="brand-label">{t("filter.label")}</span>
               <select
                 className="brand-input min-w-[200px]"
                 value={activeMenu}
                 onChange={(event) => setActiveMenu(event.currentTarget.value as "ALL" | "SUBMITTED" | "DUE")}
               >
-                <option value="ALL">All Assignments</option>
-                <option value="SUBMITTED">Submitted Only</option>
-                <option value="DUE">Due Assignments</option>
+                <option value="ALL">{t("filter.allAssignments")}</option>
+                <option value="SUBMITTED">{t("filter.submittedOnly")}</option>
+                <option value="DUE">{t("filter.dueAssignments")}</option>
               </select>
             </label>
             {canManage ? (
               <button type="button" className="btn-brand-primary px-3 py-1.5 text-xs font-semibold" onClick={() => setShowCreateModal(true)}>
-                Create Assignment
+                {t("action.createAssignment")}
               </button>
             ) : null}
           </div>
         </div>
         {loading ? (
           <div className="mt-3">
-            <LoadingIndicator label="Loading assignments..." lines={2} />
+            <LoadingIndicator label={t("loading.assignments")} lines={2} />
           </div>
         ) : null}
 
@@ -1533,15 +1545,15 @@ export function AssignmentsModule({ role }: Props) {
           <table className="w-full min-w-[780px] text-left text-sm lg:min-w-full">
             <thead>
               <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                <th className="px-3 py-2 font-semibold">Course</th>
-                <th className="px-3 py-2 font-semibold">Title</th>
-                <th className="px-3 py-2 font-semibold">Type</th>
-                <th className="px-3 py-2 font-semibold">Linked To</th>
-                <th className="px-3 py-2 font-semibold">Attempts</th>
-                <th className="px-3 py-2 font-semibold">Window</th>
-                <th className="px-3 py-2 font-semibold">Max Points</th>
-                <th className="px-3 py-2 font-semibold">Submissions</th>
-                <th className="px-3 py-2 font-semibold">Actions</th>
+                <th className="px-3 py-2 font-semibold">{t("table.course")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.title")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.type")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.linkedTo")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.attempts")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.window")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.maxPoints")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.submissions")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1556,11 +1568,14 @@ export function AssignmentsModule({ role }: Props) {
                     <p>{item.title}</p>
                     {item.description ? <p className="mt-1 text-xs text-[#3768ac]">{item.description}</p> : null}
                   </td>
-                  <td className="px-3 py-2">{item.config.assignmentType}</td>
+                  <td className="px-3 py-2">{t(`assignment.type.${item.config.assignmentType.toLowerCase()}`)}</td>
                   <td className="px-3 py-2">
                     {item.config.moduleId || item.config.lessonId
-                      ? `Module ${item.config.moduleId ? "Linked" : "None"} / Lesson ${item.config.lessonId ? "Linked" : "None"}`
-                      : "Course Only"}
+                      ? t("assignment.linkedTo", {
+                          module: item.config.moduleId ? t("assignment.linked") : t("assignment.none"),
+                          lesson: item.config.lessonId ? t("assignment.linked") : t("assignment.none"),
+                        })
+                      : t("assignment.courseOnly")}
                   </td>
                   <td className="px-3 py-2">{item.config.maxAttempts}</td>
                   <td className="px-3 py-2">
@@ -1575,7 +1590,7 @@ export function AssignmentsModule({ role }: Props) {
                         className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        Manage
+                        {t("action.manage")}
                       </Link>
                       {canManage ? (
                         <>
@@ -1587,7 +1602,7 @@ export function AssignmentsModule({ role }: Props) {
                               setEditId(item.id);
                             }}
                           >
-                            Edit
+                            {t("action.edit")}
                           </button>
                           <button
                             type="button"
@@ -1598,7 +1613,7 @@ export function AssignmentsModule({ role }: Props) {
                               setConfirmDeleteAssignmentId(item.id);
                             }}
                           >
-                            {deletePendingId === item.id ? "Deleting..." : "Delete"}
+                            {deletePendingId === item.id ? t("status.deleting") : t("action.delete")}
                           </button>
                         </>
                       ) : null}
@@ -1614,27 +1629,31 @@ export function AssignmentsModule({ role }: Props) {
         {!loading && !filteredAssignments.length ? (
           <p className="brand-muted mt-3 text-sm">
             {activeMenu === "SUBMITTED"
-              ? "No submitted assignments yet."
+              ? t("assignment.empty.submitted")
               : activeMenu === "DUE"
-                ? "No due assignments right now."
-                : "No assignments found."}
+                ? t("assignment.empty.due")
+                : t("assignment.empty.all")}
           </p>
         ) : null}
       </section>
 
       {selectedAssignment && showInlineDetails ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
-          <p className="brand-section-title">Assignment Workspace: {selectedAssignment.title}</p>
+          <p className="brand-section-title">
+            {t("assignment.workspace")}: {selectedAssignment.title}
+          </p>
           <p className="brand-muted mt-2 break-words text-sm">
-            Submission Types: {selectedAssignment.config.allowedSubmissionTypes.length
-              ? selectedAssignment.config.allowedSubmissionTypes.join(", ")
+            {t("assignment.submissionTypes")}: {selectedAssignment.config.allowedSubmissionTypes.length
+              ? selectedAssignment.config.allowedSubmissionTypes
+                  .map((type) => (type === "TEXT" ? t("assignment.submissionTypeText") : t("assignment.submissionTypeFile")))
+                  .join(", ")
               : selectedAssignment.config.assignmentType === "QUIZ"
-                ? "Quiz Questions"
-                : "N/A"}{" "}
-            | Rubric Steps: {selectedAssignment.config.rubricSteps.length}
-            {` | Window: ${formatAssignmentWindow(selectedAssignment.config.assignmentType, selectedAssignmentStartAt, selectedAssignmentEndAt)}`}
+                ? t("assignment.quizQuestions")
+                : t("common.na")}{" "}
+            | {t("assignment.rubricSteps")}: {selectedAssignment.config.rubricSteps.length}
+            {` | ${t("assignment.window")}: ${formatAssignmentWindow(selectedAssignment.config.assignmentType, selectedAssignmentStartAt, selectedAssignmentEndAt)}`}
             {selectedAssignment.config.timerMinutes
-              ? ` | Time Frame: ${selectedAssignment.config.timerMinutes} min`
+              ? ` | ${t("assignment.timeFrame")}: ${selectedAssignment.config.timerMinutes} ${t("assignment.minutes")}`
               : ""}
           </p>
 
@@ -1642,30 +1661,32 @@ export function AssignmentsModule({ role }: Props) {
             <form className="mt-3 grid gap-3" onSubmit={onStudentSubmit} onFocusCapture={startStudentQuizTimerIfNeeded}>
               {submissionsLoading ? (
                 <div className="mt-1">
-                  <LoadingIndicator label="Checking your submission status..." lines={1} />
+                  <LoadingIndicator label={t("loading.submissionStatus")} lines={1} />
                 </div>
               ) : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
                   {isSubmissionBeforeWindow
-                    ? `Submission opens on ${formatDate(selectedAssignmentStartAt)}.`
+                    ? t("assignment.submissionOpens", { date: formatDate(selectedAssignmentStartAt) })
                     : isSubmissionAfterWindow && !selectedAssignment.config.allowLateSubmissions
-                      ? "Submission window has ended. Late submissions are blocked."
-                      : `You have reached the maximum ${selectedAssignment.config.assignmentType.toLowerCase()} attempts.`}
+                      ? t("assignment.submissionClosed")
+                      : t("assignment.maxAttemptsReached", {
+                          type: t(`assignment.type.${selectedAssignment.config.assignmentType.toLowerCase()}`),
+                        })}
                 </p>
               ) : null}
               {!submissionsLoading && studentCanSubmit && isSubmissionAfterWindow && selectedAssignment.config.allowLateSubmissions ? (
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Submission window ended on {formatDate(selectedAssignmentEndAt)}. Late penalties may apply.
+                  {t("assignment.lateSubmissionWarning", { date: formatDate(selectedAssignmentEndAt) })}
                 </p>
               ) : null}
               {selectedAssignment.config.timerMinutes ? (
                 <p className="text-sm font-semibold text-[#1f518f]">
-                  Time Remaining:{" "}
+                  {t("assignment.timeRemaining")}:{" "}
                   {quizRemainingSeconds !== null
-                    ? `${Math.floor(quizRemainingSeconds / 60)}m ${quizRemainingSeconds % 60}s`
-                    : `${selectedAssignment.config.timerMinutes}m 0s`}
-                  {!hasStartedTimedAttempt ? " (starts when you begin)" : null}
+                    ? `${Math.floor(quizRemainingSeconds / 60)}${t("time.minuteShort")} ${quizRemainingSeconds % 60}${t("time.secondShort")}`
+                    : `${selectedAssignment.config.timerMinutes}${t("time.minuteShort")} 0${t("time.secondShort")}`}
+                  {!hasStartedTimedAttempt ? ` (${t("assignment.startsWhenBegin")})` : null}
                 </p>
               ) : null}
               {selectedAssignment.config.timerMinutes && !hasStartedTimedAttempt && studentCanSubmit ? (
@@ -1674,27 +1695,27 @@ export function AssignmentsModule({ role }: Props) {
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
                   onClick={startStudentQuizTimerIfNeeded}
                 >
-                  Start Attempt
+                  {t("assignment.startAttempt")}
                 </button>
               ) : null}
               {isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
                 <>
                   {quizQuestionsLoading ? (
                     <div className="mt-2">
-                      <LoadingIndicator label="Loading questions..." lines={2} />
+                      <LoadingIndicator label={t("loading.questions")} lines={2} />
                     </div>
                   ) : null}
                   {quizQuestions.map((question, index) => (
                     <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                       <p className="text-sm font-semibold text-[#0d3f80]">
-                        Q{index + 1}. {question.prompt} ({question.points} pts)
+                        {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt} ({question.points} {t("assignment.points")})
                       </p>
                       {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? (
                         <label className="mt-2 grid gap-1.5">
-                          <span className="brand-label">Short Answer</span>
+                          <span className="brand-label">{t("assignment.shortAnswer")}</span>
                           <textarea
                             className="brand-input min-h-[90px]"
-                            placeholder="Type your answer"
+                            placeholder={t("assignment.typeAnswer")}
                             value={studentShortAnswers[question.id] ?? ""}
                             onChange={(event) => {
                               startStudentQuizTimerIfNeeded();
@@ -1728,11 +1749,11 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
               {!isQuestionAssignment(selectedAssignment.config.assignmentType) && selectedAssignment.config.allowedSubmissionTypes.includes("TEXT") ? (
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Text Response</span>
+                  <span className="brand-label">{t("assignment.textResponse")}</span>
                   <textarea
                     className="brand-input min-h-[100px]"
-                    placeholder="Text response"
-                    aria-label="Text response"
+                    placeholder={t("assignment.textResponsePlaceholder")}
+                    aria-label={t("assignment.textResponse")}
                     value={studentTextResponse}
                     onChange={(event) => {
                       startStudentQuizTimerIfNeeded();
@@ -1743,11 +1764,11 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
               {!isQuestionAssignment(selectedAssignment.config.assignmentType) && selectedAssignment.config.allowedSubmissionTypes.includes("FILE") ? (
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Upload File</span>
+                  <span className="brand-label">{t("assignment.uploadFile")}</span>
                   <input
                     type="file"
                     className="brand-input"
-                    aria-label="Upload assignment file"
+                    aria-label={t("assignment.uploadFile")}
                     onChange={(event) => {
                       startStudentQuizTimerIfNeeded();
                       setStudentFile(event.currentTarget.files?.[0] ?? null);
@@ -1760,7 +1781,7 @@ export function AssignmentsModule({ role }: Props) {
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold"
                   disabled={studentPending || submissionsLoading || (!!selectedAssignment.config.timerMinutes && quizRemainingSeconds === 0)}
                 >
-                  {studentPending ? "Submitting..." : `Submit Attempt ${studentCurrentAttemptNumber}`}
+                  {studentPending ? t("status.submitting") : t("assignment.submitAttempt", { count: studentCurrentAttemptNumber })}
                 </button>
               ) : null}
             </form>
@@ -1769,60 +1790,62 @@ export function AssignmentsModule({ role }: Props) {
           {canManage && isQuestionAssignment(selectedAssignment.config.assignmentType) ? (
             <div id="assignment-questions" className="mt-4 rounded-md border border-[#dbe9fb] p-3">
               <p className="brand-label">
-                {selectedAssignment.config.assignmentType === "QUIZ" ? "Quiz Questions (MCQ)" : "Exam Questions (MCQ + Short Answer)"}
+                {selectedAssignment.config.assignmentType === "QUIZ"
+                  ? t("assignment.quizQuestionsLabel")
+                  : t("assignment.examQuestionsLabel")}
               </p>
               <form className="mt-2 grid gap-2" onSubmit={onCreateQuestion}>
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Question Prompt</span>
+                  <span className="brand-label">{t("assignment.questionPrompt")}</span>
                   <input
                     className="brand-input"
-                    placeholder="Question prompt"
-                    aria-label="Quiz question prompt"
+                    placeholder={t("assignment.questionPromptPlaceholder")}
+                    aria-label={t("assignment.questionPromptAria")}
                     value={newQuestionPrompt}
                     onChange={(event) => setNewQuestionPrompt(event.currentTarget.value)}
                     required
                   />
                 </label>
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Question Type</span>
+                  <span className="brand-label">{t("assignment.questionType")}</span>
                   <select
                     className="brand-input"
                     value={newQuestionType}
                     onChange={(event) => setNewQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
                   >
-                    <option value="MCQ">Multiple Choice (MCQ)</option>
-                    {selectedAssignment.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
+                    <option value="MCQ">{t("assignment.multipleChoice")}</option>
+                    {selectedAssignment.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">{t("assignment.shortAnswer")}</option> : null}
                   </select>
                 </label>
                 {newQuestionType === "MCQ" ? (
                   <>
                     <div className="grid gap-2 md:grid-cols-2">
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Option A</span>
-                        <input className="brand-input" placeholder="Option A" aria-label="Option A" value={newQuestionOptionA} onChange={(event) => setNewQuestionOptionA(event.currentTarget.value)} required />
+                        <span className="brand-label">{t("assignment.option", { label: "A" })}</span>
+                        <input className="brand-input" placeholder={t("assignment.option", { label: "A" })} aria-label={t("assignment.option", { label: "A" })} value={newQuestionOptionA} onChange={(event) => setNewQuestionOptionA(event.currentTarget.value)} required />
                       </label>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Option B</span>
-                        <input className="brand-input" placeholder="Option B" aria-label="Option B" value={newQuestionOptionB} onChange={(event) => setNewQuestionOptionB(event.currentTarget.value)} required />
+                        <span className="brand-label">{t("assignment.option", { label: "B" })}</span>
+                        <input className="brand-input" placeholder={t("assignment.option", { label: "B" })} aria-label={t("assignment.option", { label: "B" })} value={newQuestionOptionB} onChange={(event) => setNewQuestionOptionB(event.currentTarget.value)} required />
                       </label>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Option C</span>
-                        <input className="brand-input" placeholder="Option C (optional)" aria-label="Option C" value={newQuestionOptionC} onChange={(event) => setNewQuestionOptionC(event.currentTarget.value)} />
+                        <span className="brand-label">{t("assignment.option", { label: "C" })}</span>
+                        <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "C" })} aria-label={t("assignment.option", { label: "C" })} value={newQuestionOptionC} onChange={(event) => setNewQuestionOptionC(event.currentTarget.value)} />
                       </label>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Option D</span>
-                        <input className="brand-input" placeholder="Option D (optional)" aria-label="Option D" value={newQuestionOptionD} onChange={(event) => setNewQuestionOptionD(event.currentTarget.value)} />
+                        <span className="brand-label">{t("assignment.option", { label: "D" })}</span>
+                        <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "D" })} aria-label={t("assignment.option", { label: "D" })} value={newQuestionOptionD} onChange={(event) => setNewQuestionOptionD(event.currentTarget.value)} />
                       </label>
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       <div className="grid gap-1.5">
-                        <span className="brand-label">Correct Options</span>
+                        <span className="brand-label">{t("assignment.correctOptions")}</span>
                         <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
                           {[
-                            { label: "Option A", value: newQuestionOptionA, index: 0 },
-                            { label: "Option B", value: newQuestionOptionB, index: 1 },
-                            { label: "Option C", value: newQuestionOptionC, index: 2 },
-                            { label: "Option D", value: newQuestionOptionD, index: 3 },
+                            { label: t("assignment.option", { label: "A" }), value: newQuestionOptionA, index: 0 },
+                            { label: t("assignment.option", { label: "B" }), value: newQuestionOptionB, index: 1 },
+                            { label: t("assignment.option", { label: "C" }), value: newQuestionOptionC, index: 2 },
+                            { label: t("assignment.option", { label: "D" }), value: newQuestionOptionD, index: 3 },
                           ].map((option) => (
                             <label key={`new_correct_${option.index}`} className="inline-flex items-center gap-2">
                               <input
@@ -1839,40 +1862,42 @@ export function AssignmentsModule({ role }: Props) {
                         </div>
                       </div>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Points</span>
-                        <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Question points" value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
+                        <span className="brand-label">{t("assignment.points")}</span>
+                        <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.questionPointsAria")} value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
                       </label>
                     </div>
                   </>
                 ) : (
                   <div className="grid gap-2 md:grid-cols-2">
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Reference Answer (Optional)</span>
+                      <span className="brand-label">{t("assignment.referenceAnswerOptional")}</span>
                       <input
                         className="brand-input"
-                        placeholder="Reference answer for teacher"
+                        placeholder={t("assignment.referenceAnswerPlaceholder")}
                         value={newQuestionShortAnswerKey}
                         onChange={(event) => setNewQuestionShortAnswerKey(event.currentTarget.value)}
                       />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Points</span>
-                      <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Question points" value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
+                      <span className="brand-label">{t("assignment.points")}</span>
+                      <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.questionPointsAria")} value={newQuestionPoints} onChange={(event) => setNewQuestionPoints(event.currentTarget.value)} />
                     </label>
                   </div>
                 )}
                 <button className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" disabled={createQuestionPending}>
-                  {createQuestionPending ? "Adding..." : "Add Question"}
+                  {createQuestionPending ? t("status.adding") : t("action.addQuestion")}
                 </button>
               </form>
 
               <div className="mt-3 grid gap-2">
-                {quizQuestionsLoading ? <LoadingIndicator label="Loading questions..." lines={2} /> : null}
-                {!quizQuestionsLoading && quizQuestions.length === 0 ? <p className="brand-muted text-sm">No quiz questions yet.</p> : null}
+                {quizQuestionsLoading ? <LoadingIndicator label={t("loading.questions")} lines={2} /> : null}
+                {!quizQuestionsLoading && quizQuestions.length === 0 ? <p className="brand-muted text-sm">{t("assignment.noQuizQuestions")}</p> : null}
                 {quizQuestions.map((question, index) => (
                   <div key={question.id} className="rounded-md border border-[#e7f0fc] p-2">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#0d3f80]">Q{index + 1}. {question.prompt}</p>
+                      <p className="text-sm font-semibold text-[#0d3f80]">
+                        {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt}
+                      </p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -1880,7 +1905,7 @@ export function AssignmentsModule({ role }: Props) {
                           disabled={editQuestionPendingId === question.id}
                           onClick={() => startEditQuestion(question)}
                         >
-                          Edit
+                          {t("action.edit")}
                         </button>
                         <button
                           type="button"
@@ -1888,63 +1913,63 @@ export function AssignmentsModule({ role }: Props) {
                           disabled={deleteQuestionPendingId === question.id || editQuestionId === question.id}
                           onClick={() => void onDeleteQuestion(question.id)}
                         >
-                          {deleteQuestionPendingId === question.id ? "Deleting..." : "Delete"}
+                          {deleteQuestionPendingId === question.id ? t("status.deleting") : t("action.delete")}
                         </button>
                       </div>
                     </div>
                     {editQuestionId === question.id ? (
                       <form className="mt-2 grid gap-2" onSubmit={onUpdateQuestion}>
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Question Prompt</span>
+                          <span className="brand-label">{t("assignment.questionPrompt")}</span>
                           <input
                             className="brand-input"
-                            placeholder="Question prompt"
-                            aria-label="Edit question prompt"
+                            placeholder={t("assignment.questionPromptPlaceholder")}
+                            aria-label={t("assignment.questionPromptAria")}
                             value={editQuestionPrompt}
                             onChange={(event) => setEditQuestionPrompt(event.currentTarget.value)}
                             required
                           />
                         </label>
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Question Type</span>
+                          <span className="brand-label">{t("assignment.questionType")}</span>
                           <select
                             className="brand-input"
                             value={editQuestionType}
                             onChange={(event) => setEditQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
                           >
-                            <option value="MCQ">Multiple Choice (MCQ)</option>
-                            {selectedAssignment?.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
+                            <option value="MCQ">{t("assignment.multipleChoice")}</option>
+                            {selectedAssignment?.config.assignmentType === "EXAM" ? <option value="SHORT_ANSWER">{t("assignment.shortAnswer")}</option> : null}
                           </select>
                         </label>
                         {editQuestionType === "MCQ" ? (
                           <>
                             <div className="grid gap-2 md:grid-cols-2">
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Option A</span>
-                                <input className="brand-input" placeholder="Option A" aria-label="Edit option A" value={editQuestionOptionA} onChange={(event) => setEditQuestionOptionA(event.currentTarget.value)} required />
+                                <span className="brand-label">{t("assignment.option", { label: "A" })}</span>
+                                <input className="brand-input" placeholder={t("assignment.option", { label: "A" })} aria-label={t("assignment.option", { label: "A" })} value={editQuestionOptionA} onChange={(event) => setEditQuestionOptionA(event.currentTarget.value)} required />
                               </label>
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Option B</span>
-                                <input className="brand-input" placeholder="Option B" aria-label="Edit option B" value={editQuestionOptionB} onChange={(event) => setEditQuestionOptionB(event.currentTarget.value)} required />
+                                <span className="brand-label">{t("assignment.option", { label: "B" })}</span>
+                                <input className="brand-input" placeholder={t("assignment.option", { label: "B" })} aria-label={t("assignment.option", { label: "B" })} value={editQuestionOptionB} onChange={(event) => setEditQuestionOptionB(event.currentTarget.value)} required />
                               </label>
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Option C</span>
-                                <input className="brand-input" placeholder="Option C (optional)" aria-label="Edit option C" value={editQuestionOptionC} onChange={(event) => setEditQuestionOptionC(event.currentTarget.value)} />
+                                <span className="brand-label">{t("assignment.option", { label: "C" })}</span>
+                                <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "C" })} aria-label={t("assignment.option", { label: "C" })} value={editQuestionOptionC} onChange={(event) => setEditQuestionOptionC(event.currentTarget.value)} />
                               </label>
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Option D</span>
-                                <input className="brand-input" placeholder="Option D (optional)" aria-label="Edit option D" value={editQuestionOptionD} onChange={(event) => setEditQuestionOptionD(event.currentTarget.value)} />
+                                <span className="brand-label">{t("assignment.option", { label: "D" })}</span>
+                                <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "D" })} aria-label={t("assignment.option", { label: "D" })} value={editQuestionOptionD} onChange={(event) => setEditQuestionOptionD(event.currentTarget.value)} />
                               </label>
                             </div>
                             <div className="grid gap-2 md:grid-cols-2">
                               <div className="grid gap-1.5">
-                                <span className="brand-label">Correct Options</span>
+                                <span className="brand-label">{t("assignment.correctOptions")}</span>
                                 <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
                                   {[
-                                    { label: "Option A", value: editQuestionOptionA, index: 0 },
-                                    { label: "Option B", value: editQuestionOptionB, index: 1 },
-                                    { label: "Option C", value: editQuestionOptionC, index: 2 },
-                                    { label: "Option D", value: editQuestionOptionD, index: 3 },
+                                    { label: t("assignment.option", { label: "A" }), value: editQuestionOptionA, index: 0 },
+                                    { label: t("assignment.option", { label: "B" }), value: editQuestionOptionB, index: 1 },
+                                    { label: t("assignment.option", { label: "C" }), value: editQuestionOptionC, index: 2 },
+                                    { label: t("assignment.option", { label: "D" }), value: editQuestionOptionD, index: 3 },
                                   ].map((option) => (
                                     <label key={`edit_correct_${option.index}`} className="inline-flex items-center gap-2">
                                       <input
@@ -1961,25 +1986,25 @@ export function AssignmentsModule({ role }: Props) {
                                 </div>
                               </div>
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Points</span>
-                                <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Edit question points" value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
+                                <span className="brand-label">{t("assignment.points")}</span>
+                                <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.questionPointsAria")} value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
                               </label>
                             </div>
                           </>
                         ) : (
                           <div className="grid gap-2 md:grid-cols-2">
                             <label className="grid gap-1.5">
-                              <span className="brand-label">Reference Answer (Optional)</span>
+                              <span className="brand-label">{t("assignment.referenceAnswerOptional")}</span>
                               <input
                                 className="brand-input"
-                                placeholder="Reference answer for teacher"
+                                placeholder={t("assignment.referenceAnswerPlaceholder")}
                                 value={editQuestionShortAnswerKey}
                                 onChange={(event) => setEditQuestionShortAnswerKey(event.currentTarget.value)}
                               />
                             </label>
                             <label className="grid gap-1.5">
-                              <span className="brand-label">Points</span>
-                              <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Edit question points" value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
+                              <span className="brand-label">{t("assignment.points")}</span>
+                              <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.questionPointsAria")} value={editQuestionPoints} onChange={(event) => setEditQuestionPoints(event.currentTarget.value)} />
                             </label>
                           </div>
                         )}
@@ -1989,23 +2014,27 @@ export function AssignmentsModule({ role }: Props) {
                             className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                             onClick={resetEditQuestion}
                           >
-                            Cancel
+                            {t("action.cancel")}
                           </button>
                           <button
                             type="submit"
                             className="btn-brand-secondary px-3 py-1.5 text-xs font-semibold"
                             disabled={editQuestionPendingId === question.id}
                           >
-                            {editQuestionPendingId === question.id ? "Saving..." : "Save Changes"}
+                            {editQuestionPendingId === question.id ? t("status.saving") : t("action.saveChanges")}
                           </button>
                         </div>
                       </form>
                     ) : (
                       <>
-                        <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
-                        <p className="mt-1 text-xs text-[#3768ac]">Type: {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">{t("assignment.points")}: {question.points}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">
+                          {t("assignment.typeLabel")}: {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? t("assignment.shortAnswer") : t("assignment.multipleChoiceShort")}
+                        </p>
                         {(question.questionType ?? "MCQ") === "MCQ" && question.correctOptionIndexes?.length ? (
-                          <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
+                          <p className="mt-1 text-xs text-[#3768ac]">
+                            {t("assignment.correct")}: {formatOptionIndexes(question.correctOptionIndexes, (label) => t("assignment.optionLabel", { label }))}
+                          </p>
                         ) : null}
                       </>
                     )}
@@ -2017,23 +2046,23 @@ export function AssignmentsModule({ role }: Props) {
 
           {(canManage || isStudent || isAdminReadOnly) ? (
             <div className="mt-4 space-y-2">
-              <p className="brand-label">Submissions</p>
-              {submissionsLoading ? <LoadingIndicator label="Loading submissions..." lines={2} /> : null}
-              {!submissionsLoading && submissions.length === 0 ? <p className="brand-muted text-sm">No submissions yet.</p> : null}
+              <p className="brand-label">{t("assignment.submissions")}</p>
+              {submissionsLoading ? <LoadingIndicator label={t("loading.submissions")} lines={2} /> : null}
+              {!submissionsLoading && submissions.length === 0 ? <p className="brand-muted text-sm">{t("assignment.noSubmissions")}</p> : null}
               {isAdminReadOnly && submissions.length ? (
                 <div className="w-full overflow-x-auto">
                   <table className="w-full min-w-[980px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                        <th className="px-3 py-2 font-semibold">Course</th>
-                        <th className="px-3 py-2 font-semibold">Teacher</th>
-                        <th className="px-3 py-2 font-semibold">Student</th>
-                        <th className="px-3 py-2 font-semibold">Attempt</th>
-                        <th className="px-3 py-2 font-semibold">Score</th>
-                        <th className="px-3 py-2 font-semibold">Letter</th>
-                        <th className="px-3 py-2 font-semibold">Status</th>
-                        <th className="px-3 py-2 font-semibold">Plagiarism</th>
-                        <th className="px-3 py-2 font-semibold">Submitted</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.course")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.teacher")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.student")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.attempt")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.score")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.letter")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.status")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.plagiarism")}</th>
+                        <th className="px-3 py-2 font-semibold">{t("table.submitted")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2043,17 +2072,17 @@ export function AssignmentsModule({ role }: Props) {
                             {selectedAssignment?.course.code} - {selectedAssignment?.course.title}
                           </td>
                           <td className="px-3 py-2">
-                            {selectedAssignment?.course.teacher?.name || selectedAssignment?.course.teacher?.email || "Unassigned"}
+                            {selectedAssignment?.course.teacher?.name || selectedAssignment?.course.teacher?.email || t("course.unassigned")}
                           </td>
-                          <td className="px-3 py-2">{submission.studentName || submission.studentEmail || "Student"}</td>
+                          <td className="px-3 py-2">{submission.studentName || submission.studentEmail || t("student.label")}</td>
                           <td className="px-3 py-2">{submission.attemptNumber}</td>
-                          <td className="px-3 py-2">{submission.finalScore ?? "-"}</td>
-                          <td className="px-3 py-2">{submission.letterGrade ?? "-"}</td>
-                          <td className="px-3 py-2">{formatEnumLabel(submission.status)}</td>
+                          <td className="px-3 py-2">{submission.finalScore ?? t("common.na")}</td>
+                          <td className="px-3 py-2">{submission.letterGrade ?? t("common.na")}</td>
+                          <td className="px-3 py-2">{statusLabel(submission.status)}</td>
                           <td className="px-3 py-2">
                             {submission.plagiarismStatus === "COMPLETED"
-                              ? `${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)`
-                              : formatEnumLabel(submission.plagiarismStatus)}
+                              ? `${plagiarismBandLabel(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)`
+                              : statusLabel(submission.plagiarismStatus)}
                           </td>
                           <td className="px-3 py-2">{formatDate(submission.submittedAt)}</td>
                         </tr>
@@ -2065,31 +2094,44 @@ export function AssignmentsModule({ role }: Props) {
               {!isAdminReadOnly ? submissions.map((submission) => (
                 <div key={submission.id} className="rounded-md border border-[#dbe9fb] p-3">
                   <p className="text-xs font-semibold text-[#285f9f]">
-                    Attempt {submission.attemptNumber}
-                    {submission.studentEmail ? ` - ${submission.studentName || "Student"} (${submission.studentEmail})` : ""}
+                    {t("assignment.attemptLabel", { count: submission.attemptNumber })}
+                    {submission.studentEmail
+                      ? ` - ${submission.studentName || t("student.label")} (${submission.studentEmail})`
+                      : ""}
                   </p>
                   <p className="mt-1 text-xs text-[#3a689f]">
-                    Submitted: {formatDate(submission.submittedAt)} | Late: {submission.isLate ? `${formatMinutes(submission.lateByMinutes)} (${submission.latePenaltyPct}%)` : "No"}
+                    {t("assignment.submittedLabel")}: {formatDate(submission.submittedAt)} | {t("assignment.lateLabel")}:{" "}
+                    {submission.isLate
+                      ? `${formatMinutes(submission.lateByMinutes, {
+                          day: t("time.dayShort"),
+                          hour: t("time.hourShort"),
+                          minute: t("time.minuteShort"),
+                        })} (${submission.latePenaltyPct}%)`
+                      : t("common.no")}
                   </p>
                   {submission.status === "ATTEMPT_CANCELLED" ? (
                     <p className="mt-1 text-xs font-semibold text-[#9b1c1c]">
-                      This attempt was invalidated for controlled resubmission.
+                      {t("assignment.invalidatedAttempt")}
                     </p>
                   ) : null}
                   {submission.finalScore !== null ? (
                     <p className="mt-1 text-xs text-[#3a689f]">
-                      Final Score: {submission.finalScore}
-                      {submission.letterGrade ? ` | Letter: ${submission.letterGrade}` : ""}
+                      {t("assignment.finalScore")}: {submission.finalScore}
+                      {submission.letterGrade ? ` | ${t("assignment.letter")}: ${submission.letterGrade}` : ""}
                     </p>
                   ) : null}
                   {canManage ? (
                     <p className="mt-1 text-xs text-[#3a689f]">
-                      Plagiarism: {formatEnumLabel(submission.plagiarismStatus ?? "PENDING")}
-                      {submission.plagiarismStatus === "COMPLETED" ? ` | ${plagiarismBand(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)` : ""}
+                      {t("assignment.plagiarism")}: {formatEnumLabel(submission.plagiarismStatus ?? "PENDING")}
+                      {submission.plagiarismStatus === "COMPLETED"
+                        ? ` | ${plagiarismBandLabel(submission.plagiarismScore)} (${submission.plagiarismScore ?? 0}%)`
+                        : ""}
                       {submission.plagiarismSummary ? ` | ${submission.plagiarismSummary}` : ""}
                     </p>
                   ) : null}
-                  {submission.textResponse ? <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{submission.textResponse}</p> : null}
+                  {submission.textResponse ? (
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{submission.textResponse}</p>
+                  ) : null}
                   {submission.fileUrl ? (
                     <a
                       href={`/api/assignments/uploads/${submission.id}`}
@@ -2097,22 +2139,22 @@ export function AssignmentsModule({ role }: Props) {
                       rel="noreferrer"
                       className="mt-2 inline-flex text-xs font-semibold text-[#1f518f] underline"
                     >
-                      {submission.fileName || "Open submitted file"}
+                      {submission.fileName || t("assignment.openSubmittedFile")}
                     </a>
                   ) : null}
 
                   {canManage && submission.status !== "ATTEMPT_CANCELLED" && !isPublishedOrLockedState(submission.status) ? (
                     <div className="mt-3 grid gap-2">
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Raw Score</span>
+                        <span className="brand-label">{t("assignment.rawScore")}</span>
                       <input
                         className="brand-input"
                         type="number"
                         min="0"
                         max={selectedAssignment?.maxPoints ?? undefined}
                         step="0.01"
-                        placeholder="Raw score"
-                        aria-label={`Raw score for attempt ${submission.attemptNumber}`}
+                        placeholder={t("assignment.rawScorePlaceholder")}
+                        aria-label={t("assignment.rawScoreAria", { count: submission.attemptNumber })}
                         value={gradeRawScoreBySubmission[submission.id] ?? (submission.rawScore?.toString() ?? "")}
                         onChange={(event) => {
                           const rawValue = event.currentTarget.value;
@@ -2131,11 +2173,11 @@ export function AssignmentsModule({ role }: Props) {
                       />
                       </label>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Feedback</span>
+                        <span className="brand-label">{t("assignment.feedback")}</span>
                         <textarea
                           className="brand-input min-h-[72px]"
-                          placeholder="Feedback"
-                          aria-label={`Feedback for attempt ${submission.attemptNumber}`}
+                          placeholder={t("assignment.feedbackPlaceholder")}
+                          aria-label={t("assignment.feedbackAria", { count: submission.attemptNumber })}
                           value={gradeFeedbackBySubmission[submission.id] ?? (submission.feedback ?? "")}
                           onChange={(event) => {
                             const nextValue = event.currentTarget.value;
@@ -2150,7 +2192,7 @@ export function AssignmentsModule({ role }: Props) {
                           disabled={invalidatePendingId === submission.id}
                           onClick={() => setConfirmInvalidateSubmissionId(submission.id)}
                         >
-                          {invalidatePendingId === submission.id ? "Updating..." : "Invalidate Attempt"}
+                          {invalidatePendingId === submission.id ? t("status.updating") : t("assignment.invalidateAttempt")}
                         </button>
                         <button
                           type="button"
@@ -2158,7 +2200,7 @@ export function AssignmentsModule({ role }: Props) {
                           disabled={gradePendingId === submission.id}
                           onClick={() => void onGrade(submission.id, false)}
                         >
-                          Save Grade
+                          {t("assignment.saveGrade")}
                         </button>
                         <button
                           type="button"
@@ -2166,7 +2208,7 @@ export function AssignmentsModule({ role }: Props) {
                           disabled={gradePendingId === submission.id}
                           onClick={() => void onGrade(submission.id, true)}
                         >
-                          Publish Grade
+                          {t("assignment.publishGrade")}
                         </button>
                       </div>
                     </div>
@@ -2174,7 +2216,7 @@ export function AssignmentsModule({ role }: Props) {
                   {canManage && isPublishedOrLockedState(submission.status) ? (
                     <div className="mt-3 grid gap-2">
                       <p className="text-xs font-semibold text-[#285f9f]">
-                        Published grade is locked. Use grade edit request flow for changes.
+                        {t("assignment.publishedLocked")}
                       </p>
                       {isTeacher && submission.status === "GRADE_PUBLISHED" ? (
                         <>
@@ -2185,29 +2227,31 @@ export function AssignmentsModule({ role }: Props) {
                               setRequestEditForSubmissionId((prev) => (prev === submission.id ? "" : submission.id))
                             }
                           >
-                            {requestEditForSubmissionId === submission.id ? "Cancel Request" : "Request Grade Edit"}
+                            {requestEditForSubmissionId === submission.id
+                              ? t("assignment.cancelRequest")
+                              : t("assignment.requestGradeEdit")}
                           </button>
                           {requestEditForSubmissionId === submission.id ? (
                             <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-3">
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Reason for Grade Edit</span>
+                                <span className="brand-label">{t("assignment.gradeEditReason")}</span>
                                 <textarea
                                   className="brand-input min-h-[78px]"
-                                  placeholder="Reason for grade edit request"
-                                  aria-label="Grade edit request reason"
+                                  placeholder={t("assignment.gradeEditReasonPlaceholder")}
+                                  aria-label={t("assignment.gradeEditReasonAria")}
                                   value={requestEditReason}
                                   onChange={(event) => setRequestEditReason(event.currentTarget.value)}
                                 />
                               </label>
                               <label className="grid gap-1.5">
-                                <span className="brand-label">Proposed Points</span>
+                                <span className="brand-label">{t("assignment.proposedPoints")}</span>
                                 <input
                                   className="brand-input"
                                   type="number"
                                   min="0"
                                   step="0.01"
-                                  placeholder="Proposed points"
-                                  aria-label="Proposed points"
+                                  placeholder={t("assignment.proposedPointsPlaceholder")}
+                                  aria-label={t("assignment.proposedPointsAria")}
                                   value={requestEditProposedPoints}
                                   onChange={(event) => setRequestEditProposedPoints(event.currentTarget.value)}
                                   required
@@ -2219,14 +2263,16 @@ export function AssignmentsModule({ role }: Props) {
                                 disabled={requestEditPendingId === submission.id}
                                 onClick={() => void onRequestGradeEdit(submission)}
                               >
-                                {requestEditPendingId === submission.id ? "Submitting..." : "Submit Request"}
+                                {requestEditPendingId === submission.id
+                                  ? t("assignment.submittingRequest")
+                                  : t("assignment.submitRequest")}
                               </button>
                             </div>
                           ) : null}
                         </>
                       ) : null}
                       {isTeacher && submission.status !== "GRADE_PUBLISHED" ? (
-                        <p className="text-xs text-[#3a689f]">Grade edit is already under admin review or processed.</p>
+                        <p className="text-xs text-[#3a689f]">{t("assignment.gradeEditInReview")}</p>
                       ) : null}
                     </div>
                   ) : null}
@@ -2240,36 +2286,36 @@ export function AssignmentsModule({ role }: Props) {
       {canManage && showCreateModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
         <section className="brand-card min-w-0 w-full max-w-5xl overflow-hidden p-5">
-          <p className="brand-section-title">Create Assignment</p>
+          <p className="brand-section-title">{t("assignment.createTitle")}</p>
           <form className="mt-3 grid gap-3" onSubmit={onCreate}>
             <label className="grid gap-1.5">
-              <span className="brand-label">Course</span>
-              <select className="brand-input" aria-label="Course" value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
-                <option value="">Select course</option>
+              <span className="brand-label">{t("label.course")}</span>
+              <select className="brand-input" aria-label={t("label.course")} value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
+                <option value="">{t("assignment.selectCourse")}</option>
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>{course.code} - {course.title}</option>
                 ))}
               </select>
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Assignment Title</span>
-              <input className="brand-input" placeholder="Assignment title" aria-label="Assignment title" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
+              <span className="brand-label">{t("assignment.assignmentTitle")}</span>
+              <input className="brand-input" placeholder={t("assignment.assignmentTitlePlaceholder")} aria-label={t("assignment.assignmentTitle")} value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Instructions</span>
-              <textarea className="brand-input min-h-[84px]" placeholder="Instructions" aria-label="Instructions" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} />
+              <span className="brand-label">{t("assignment.instructions")}</span>
+              <textarea className="brand-input min-h-[84px]" placeholder={t("assignment.instructionsPlaceholder")} aria-label={t("assignment.instructions")} value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Rubric Steps</span>
-              <textarea className="brand-input min-h-[84px]" placeholder="Rubric steps (one per line)" aria-label="Rubric steps" value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
+              <span className="brand-label">{t("assignment.rubricStepsLabel")}</span>
+              <textarea className="brand-input min-h-[84px]" placeholder={t("assignment.rubricStepsPlaceholder")} aria-label={t("assignment.rubricStepsLabel")} value={createRubric} onChange={(event) => setCreateRubric(event.currentTarget.value)} />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Rubric File</span>
+              <span className="brand-label">{t("assignment.rubricFile")}</span>
               <input
                 className="brand-input"
                 type="file"
                 accept=".txt,.csv"
-                aria-label="Upload rubric file"
+                aria-label={t("assignment.uploadRubricAria")}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   if (!file) {
@@ -2283,22 +2329,22 @@ export function AssignmentsModule({ role }: Props) {
                 }}
               />
               {createRubricFileName ? (
-                <span className="text-xs text-[#3a689f]">Loaded: {createRubricFileName}</span>
+                <span className="text-xs text-[#3a689f]">{t("assignment.rubricLoaded", { name: createRubricFileName })}</span>
               ) : (
-                <span className="text-xs text-[#3a689f]">Upload a text file with one rubric step per line.</span>
+                <span className="text-xs text-[#3a689f]">{t("assignment.rubricUploadHint")}</span>
               )}
             </label>
             <div className="grid gap-3 md:grid-cols-3">
               {createType !== "HOMEWORK" ? (
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Time Frame (Minutes)</span>
+                  <span className="brand-label">{t("assignment.timeFrameMinutes")}</span>
                   <input
                     className="brand-input"
                     type="number"
                     min="1"
                     step="1"
-                    placeholder="Assignment time frame in minutes"
-                    aria-label="Assignment time frame in minutes"
+                    placeholder={t("assignment.timeFramePlaceholder")}
+                    aria-label={t("assignment.timeFramePlaceholder")}
                     value={createTimerMinutes}
                     onChange={(event) => setCreateTimerMinutes(event.currentTarget.value)}
                   />
@@ -2306,15 +2352,15 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
             </div>
             <label className="grid gap-1.5">
-              <span className="brand-label">Attempt Scoring Strategy</span>
+              <span className="brand-label">{t("assignment.attemptScoringStrategy")}</span>
               <select
                 className="brand-input"
-                aria-label="Attempt scoring strategy"
+                aria-label={t("assignment.attemptScoringStrategy")}
                 value={createAttemptScoringStrategy}
                 onChange={(event) => setCreateAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
               >
-                <option value="LATEST">Attempt Rule: Latest attempt counts</option>
-                <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+                <option value="LATEST">{t("assignment.attemptRuleLatest")}</option>
+                <option value="HIGHEST">{t("assignment.attemptRuleHighest")}</option>
               </select>
             </label>
             <label className="brand-input inline-flex items-center gap-2">
@@ -2323,26 +2369,30 @@ export function AssignmentsModule({ role }: Props) {
                 checked={createAllowLateSubmissions}
                 onChange={(event) => setCreateAllowLateSubmissions(event.currentTarget.checked)}
               />
-              Allow late submissions
+              {t("assignment.allowLateSubmissions")}
             </label>
             <div className={`grid gap-3 ${createType === "QUIZ" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
               <label className="grid gap-1.5">
-                <span className="brand-label">Assignment Type</span>
-                <select className="brand-input" aria-label="Assignment type" value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
-                  <option value="HOMEWORK">HOMEWORK</option>
-                  <option value="QUIZ">QUIZ</option>
-                  <option value="EXAM">EXAM</option>
+                <span className="brand-label">{t("assignment.assignmentType")}</span>
+                <select className="brand-input" aria-label={t("assignment.assignmentType")} value={createType} onChange={(event) => setCreateType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
+                  <option value="HOMEWORK">{t("assignment.type.homework")}</option>
+                  <option value="QUIZ">{t("assignment.type.quiz")}</option>
+                  <option value="EXAM">{t("assignment.type.exam")}</option>
                 </select>
               </label>
               {createType !== "QUIZ" ? (
                 <>
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Allow Text Submissions</span>
-                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> TEXT</label>
+                    <span className="brand-label">{t("assignment.allowTextSubmissions")}</span>
+                    <label className="brand-input inline-flex items-center gap-2">
+                      <input type="checkbox" checked={createAllowedText} onChange={(event) => setCreateAllowedText(event.currentTarget.checked)} /> {t("assignment.submissionTypeText")}
+                    </label>
                   </div>
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Allow File Submissions</span>
-                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> FILE</label>
+                    <span className="brand-label">{t("assignment.allowFileSubmissions")}</span>
+                    <label className="brand-input inline-flex items-center gap-2">
+                      <input type="checkbox" checked={createAllowedFile} onChange={(event) => setCreateAllowedFile(event.currentTarget.checked)} /> {t("assignment.submissionTypeFile")}
+                    </label>
                   </div>
                 </>
               ) : null}
@@ -2351,59 +2401,59 @@ export function AssignmentsModule({ role }: Props) {
               <div className="grid gap-3">
                 <div className="rounded-md border border-[#dbe9fb] p-3">
                   <p className="brand-label">
-                    {createType === "QUIZ" ? "Quiz MCQ Builder" : "Exam Question Builder (MCQ + Short Answer)"}
+                    {createType === "QUIZ" ? t("assignment.quizBuilder") : t("assignment.examBuilder")}
                   </p>
                   <div className="mt-2 grid gap-2">
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Question Prompt</span>
+                      <span className="brand-label">{t("assignment.questionPrompt")}</span>
                       <input
                         className="brand-input"
-                        placeholder="Question prompt"
-                        aria-label="Draft question prompt"
+                        placeholder={t("assignment.questionPromptPlaceholder")}
+                        aria-label={t("assignment.draftQuestionPromptAria")}
                         value={createQuestionPrompt}
                         onChange={(event) => setCreateQuestionPrompt(event.currentTarget.value)}
                       />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Question Type</span>
+                      <span className="brand-label">{t("assignment.questionType")}</span>
                       <select
                         className="brand-input"
                         value={createQuestionType}
                         onChange={(event) => setCreateQuestionType(event.currentTarget.value as "MCQ" | "SHORT_ANSWER")}
                       >
-                        <option value="MCQ">Multiple Choice (MCQ)</option>
-                        {createType === "EXAM" ? <option value="SHORT_ANSWER">Short Answer</option> : null}
+                        <option value="MCQ">{t("assignment.multipleChoice")}</option>
+                        {createType === "EXAM" ? <option value="SHORT_ANSWER">{t("assignment.shortAnswer")}</option> : null}
                       </select>
                     </label>
                     {createQuestionType === "MCQ" ? (
                       <>
                         <div className="grid gap-2 md:grid-cols-2">
                           <label className="grid gap-1.5">
-                            <span className="brand-label">Option A</span>
-                            <input className="brand-input" placeholder="Option A" aria-label="Draft option A" value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
+                            <span className="brand-label">{t("assignment.option", { label: "A" })}</span>
+                            <input className="brand-input" placeholder={t("assignment.option", { label: "A" })} aria-label={t("assignment.draftOptionAria", { label: "A" })} value={createQuestionOptionA} onChange={(event) => setCreateQuestionOptionA(event.currentTarget.value)} />
                           </label>
                           <label className="grid gap-1.5">
-                            <span className="brand-label">Option B</span>
-                            <input className="brand-input" placeholder="Option B" aria-label="Draft option B" value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
+                            <span className="brand-label">{t("assignment.option", { label: "B" })}</span>
+                            <input className="brand-input" placeholder={t("assignment.option", { label: "B" })} aria-label={t("assignment.draftOptionAria", { label: "B" })} value={createQuestionOptionB} onChange={(event) => setCreateQuestionOptionB(event.currentTarget.value)} />
                           </label>
                           <label className="grid gap-1.5">
-                            <span className="brand-label">Option C</span>
-                            <input className="brand-input" placeholder="Option C (optional)" aria-label="Draft option C" value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
+                            <span className="brand-label">{t("assignment.option", { label: "C" })}</span>
+                            <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "C" })} aria-label={t("assignment.draftOptionAria", { label: "C" })} value={createQuestionOptionC} onChange={(event) => setCreateQuestionOptionC(event.currentTarget.value)} />
                           </label>
                           <label className="grid gap-1.5">
-                            <span className="brand-label">Option D</span>
-                            <input className="brand-input" placeholder="Option D (optional)" aria-label="Draft option D" value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
+                            <span className="brand-label">{t("assignment.option", { label: "D" })}</span>
+                            <input className="brand-input" placeholder={t("assignment.optionOptional", { label: "D" })} aria-label={t("assignment.draftOptionAria", { label: "D" })} value={createQuestionOptionD} onChange={(event) => setCreateQuestionOptionD(event.currentTarget.value)} />
                           </label>
                         </div>
                         <div className="grid gap-2 md:grid-cols-2">
                           <div className="grid gap-1.5">
-                            <span className="brand-label">Correct Options</span>
+                            <span className="brand-label">{t("assignment.correctOptions")}</span>
                             <div className="grid gap-2 rounded-md border border-[#dbe9fb] p-2 text-sm text-[#234f8f]">
                               {[
-                                { label: "Option A", value: createQuestionOptionA, index: 0 },
-                                { label: "Option B", value: createQuestionOptionB, index: 1 },
-                                { label: "Option C", value: createQuestionOptionC, index: 2 },
-                                { label: "Option D", value: createQuestionOptionD, index: 3 },
+                                { label: t("assignment.option", { label: "A" }), value: createQuestionOptionA, index: 0 },
+                                { label: t("assignment.option", { label: "B" }), value: createQuestionOptionB, index: 1 },
+                                { label: t("assignment.option", { label: "C" }), value: createQuestionOptionC, index: 2 },
+                                { label: t("assignment.option", { label: "D" }), value: createQuestionOptionD, index: 3 },
                               ].map((option) => (
                                 <label key={`draft_correct_${option.index}`} className="inline-flex items-center gap-2">
                                   <input
@@ -2420,40 +2470,40 @@ export function AssignmentsModule({ role }: Props) {
                             </div>
                           </div>
                           <label className="grid gap-1.5">
-                            <span className="brand-label">Question Points</span>
-                            <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Draft question points" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
+                            <span className="brand-label">{t("assignment.questionPoints")}</span>
+                            <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.draftQuestionPointsAria")} value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
                           </label>
                         </div>
                       </>
                     ) : (
                       <div className="grid gap-2 md:grid-cols-2">
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Reference Answer (Optional)</span>
+                          <span className="brand-label">{t("assignment.referenceAnswerOptional")}</span>
                           <input
                             className="brand-input"
-                            placeholder="Reference answer for teacher"
+                            placeholder={t("assignment.referenceAnswerPlaceholder")}
                             value={createQuestionShortAnswerKey}
                             onChange={(event) => setCreateQuestionShortAnswerKey(event.currentTarget.value)}
                           />
                         </label>
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Question Points</span>
-                          <input className="brand-input" type="number" min="0.5" step="0.5" aria-label="Draft question points" value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
+                          <span className="brand-label">{t("assignment.questionPoints")}</span>
+                          <input className="brand-input" type="number" min="0.5" step="0.5" aria-label={t("assignment.draftQuestionPointsAria")} value={createQuestionPoints} onChange={(event) => setCreateQuestionPoints(event.currentTarget.value)} />
                         </label>
                       </div>
                     )}
                     <button type="button" className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold" onClick={addDraftQuestion}>
-                      Add To Draft
+                      {t("assignment.addToDraft")}
                     </button>
                   </div>
 
                   <div className="mt-3 grid gap-2">
-                    {createDraftQuestions.length === 0 ? <p className="brand-muted text-sm">No draft questions added yet.</p> : null}
+                    {createDraftQuestions.length === 0 ? <p className="brand-muted text-sm">{t("assignment.noDraftQuestions")}</p> : null}
                     {createDraftQuestions.map((question, index) => (
                       <div key={`${question.prompt}_${index}`} className="rounded-md border border-[#e7f0fc] p-2">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-[#0d3f80]">
-                            Q{index + 1}. {question.prompt}
+                            {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt}
                           </p>
                           <button
                             type="button"
@@ -2462,13 +2512,15 @@ export function AssignmentsModule({ role }: Props) {
                               setCreateDraftQuestions((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
                             }
                           >
-                            Remove
+                            {t("action.remove")}
                           </button>
                         </div>
-                        <p className="mt-1 text-xs text-[#3768ac]">Points: {question.points}</p>
-                        <p className="mt-1 text-xs text-[#3768ac]">Type: {question.questionType === "SHORT_ANSWER" ? "Short Answer" : "MCQ"}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">{t("assignment.pointsLabel")}: {question.points}</p>
+                        <p className="mt-1 text-xs text-[#3768ac]">{t("assignment.typeLabel")}: {question.questionType === "SHORT_ANSWER" ? t("assignment.shortAnswer") : t("assignment.multipleChoiceShort")}</p>
                         {question.questionType === "MCQ" ? (
-                          <p className="mt-1 text-xs text-[#3768ac]">Correct: {formatOptionIndexes(question.correctOptionIndexes)}</p>
+                          <p className="mt-1 text-xs text-[#3768ac]">
+                            {t("assignment.correct")}: {formatOptionIndexes(question.correctOptionIndexes, (label) => t("assignment.optionLabel", { label }))}
+                          </p>
                         ) : null}
                       </div>
                     ))}
@@ -2478,22 +2530,22 @@ export function AssignmentsModule({ role }: Props) {
             ) : null}
             <div className={`grid gap-3 ${createType === "HOMEWORK" ? "md:grid-cols-6" : "md:grid-cols-4"}`}>
               <label className="grid gap-1.5">
-                <span className="brand-label">Start Date</span>
+                <span className="brand-label">{t("label.startDate")}</span>
                 <input
                   className="brand-input"
                   type="date"
-                  aria-label="Start date"
+                  aria-label={t("label.startDate")}
                   value={createStartAt}
                   onChange={(event) => setCreateStartAt(event.currentTarget.value)}
                   required
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">End Date</span>
+                <span className="brand-label">{t("label.endDate")}</span>
                 <input
                   className="brand-input"
                   type="date"
-                  aria-label="End date"
+                  aria-label={t("label.endDate")}
                   value={createEndAt}
                   onChange={(event) => setCreateEndAt(event.currentTarget.value)}
                   required
@@ -2502,22 +2554,22 @@ export function AssignmentsModule({ role }: Props) {
               {createType === "HOMEWORK" ? (
                 <>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Start Time</span>
+                    <span className="brand-label">{t("assignment.startTime")}</span>
                     <input
                       className="brand-input"
                       type="time"
-                      aria-label="Start time"
+                      aria-label={t("assignment.startTime")}
                       value={createStartTime}
                       onChange={(event) => setCreateStartTime(event.currentTarget.value)}
                       required
                     />
                   </label>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">End Time</span>
+                    <span className="brand-label">{t("assignment.endTime")}</span>
                     <input
                       className="brand-input"
                       type="time"
-                      aria-label="End time"
+                      aria-label={t("assignment.endTime")}
                       value={createEndTime}
                       onChange={(event) => setCreateEndTime(event.currentTarget.value)}
                       required
@@ -2526,20 +2578,20 @@ export function AssignmentsModule({ role }: Props) {
                 </>
               ) : null}
               <label className="grid gap-1.5">
-                <span className="brand-label">Maximum Points</span>
-                <input className="brand-input" type="number" min="1" step="0.01" aria-label="Maximum points" value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
+                <span className="brand-label">{t("assignment.maxPoints")}</span>
+                <input className="brand-input" type="number" min="1" step="0.01" aria-label={t("assignment.maxPoints")} value={createMaxPoints} onChange={(event) => setCreateMaxPoints(event.currentTarget.value)} />
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">Maximum Attempts</span>
-                <input className="brand-input" type="number" min="1" step="1" aria-label="Maximum attempts" value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
+                <span className="brand-label">{t("assignment.maxAttempts")}</span>
+                <input className="brand-input" type="number" min="1" step="1" aria-label={t("assignment.maxAttempts")} value={createAttempts} onChange={(event) => setCreateAttempts(event.currentTarget.value)} />
               </label>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1.5">
-                <span className="brand-label">Module Link</span>
+                <span className="brand-label">{t("assignment.moduleLink")}</span>
                 <select
                   className="brand-input"
-                  aria-label="Module link"
+                  aria-label={t("assignment.moduleLink")}
                   value={createModuleId}
                   onChange={(event) => {
                     const nextModuleId = event.currentTarget.value;
@@ -2547,7 +2599,7 @@ export function AssignmentsModule({ role }: Props) {
                     setCreateLessonId("");
                   }}
                 >
-                  <option value="">No module link</option>
+                  <option value="">{t("assignment.noModuleLink")}</option>
                   {(structureByCourseId[createCourseId] ?? []).map((module) => (
                     <option key={module.id} value={module.id}>
                       {module.title}
@@ -2556,15 +2608,15 @@ export function AssignmentsModule({ role }: Props) {
                 </select>
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">Lesson Link</span>
+                <span className="brand-label">{t("assignment.lessonLink")}</span>
                 <select
                   className="brand-input"
-                  aria-label="Lesson link"
+                  aria-label={t("assignment.lessonLink")}
                   value={createLessonId}
                   onChange={(event) => setCreateLessonId(event.currentTarget.value)}
                   disabled={!createModuleId}
                 >
-                  <option value="">No lesson link</option>
+                  <option value="">{t("assignment.noLessonLink")}</option>
                   {(structureByCourseId[createCourseId] ?? [])
                     .find((module) => module.id === createModuleId)
                     ?.lessons.map((lesson) => (
@@ -2577,10 +2629,10 @@ export function AssignmentsModule({ role }: Props) {
             </div>
             <div className="flex items-center gap-2">
               <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={createPending}>
-                {createPending ? "Creating..." : "Create Assignment"}
+                {createPending ? t("status.creating") : t("action.createAssignment")}
               </button>
               <button type="button" className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]" onClick={() => setShowCreateModal(false)}>
-                Cancel
+                {t("action.cancel")}
               </button>
             </div>
           </form>
@@ -2591,27 +2643,27 @@ export function AssignmentsModule({ role }: Props) {
       {canManage && editId ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
         <section className="brand-card min-w-0 w-full max-w-4xl overflow-hidden p-5">
-          <p className="brand-section-title">Edit Assignment</p>
+          <p className="brand-section-title">{t("assignment.editTitle")}</p>
           <form className="mt-3 grid gap-3" onSubmit={onUpdate}>
             <label className="grid gap-1.5">
-              <span className="brand-label">Assignment Title</span>
-              <input className="brand-input" aria-label="Assignment title" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
+              <span className="brand-label">{t("assignment.assignmentTitle")}</span>
+              <input className="brand-input" aria-label={t("assignment.assignmentTitle")} value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Instructions</span>
-              <textarea className="brand-input min-h-[84px]" aria-label="Instructions" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
+              <span className="brand-label">{t("assignment.instructions")}</span>
+              <textarea className="brand-input min-h-[84px]" aria-label={t("assignment.instructions")} value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Rubric Steps</span>
-              <textarea className="brand-input min-h-[84px]" aria-label="Rubric steps" value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
+              <span className="brand-label">{t("assignment.rubricStepsLabel")}</span>
+              <textarea className="brand-input min-h-[84px]" aria-label={t("assignment.rubricStepsLabel")} value={editRubric} onChange={(event) => setEditRubric(event.currentTarget.value)} />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Rubric File</span>
+              <span className="brand-label">{t("assignment.rubricFile")}</span>
               <input
                 className="brand-input"
                 type="file"
                 accept=".txt,.csv"
-                aria-label="Upload rubric file"
+                aria-label={t("assignment.uploadRubricAria")}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   if (!file) {
@@ -2625,23 +2677,23 @@ export function AssignmentsModule({ role }: Props) {
                 }}
               />
               {editRubricFileName ? (
-                <span className="text-xs text-[#3a689f]">Loaded: {editRubricFileName}</span>
+                <span className="text-xs text-[#3a689f]">{t("assignment.rubricLoaded", { name: editRubricFileName })}</span>
               ) : (
-                <span className="text-xs text-[#3a689f]">Upload a text file with one rubric step per line.</span>
+                <span className="text-xs text-[#3a689f]">{t("assignment.rubricUploadHint")}</span>
               )}
             </label>
             
             <div className="grid gap-3 md:grid-cols-3">
               {editType !== "HOMEWORK" ? (
                 <label className="grid gap-1.5">
-                  <span className="brand-label">Time Frame (Minutes)</span>
+                  <span className="brand-label">{t("assignment.timeFrameMinutes")}</span>
                   <input
                     className="brand-input"
                     type="number"
                     min="1"
                     step="1"
-                    placeholder="Assignment time frame in minutes"
-                    aria-label="Assignment time frame in minutes"
+                    placeholder={t("assignment.timeFramePlaceholder")}
+                    aria-label={t("assignment.timeFramePlaceholder")}
                     value={editTimerMinutes}
                     onChange={(event) => setEditTimerMinutes(event.currentTarget.value)}
                   />
@@ -2649,15 +2701,15 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
             </div>
             <label className="grid gap-1.5">
-              <span className="brand-label">Attempt Scoring Strategy</span>
+              <span className="brand-label">{t("assignment.attemptScoringStrategy")}</span>
               <select
                 className="brand-input"
-                aria-label="Attempt scoring strategy"
+                aria-label={t("assignment.attemptScoringStrategy")}
                 value={editAttemptScoringStrategy}
                 onChange={(event) => setEditAttemptScoringStrategy(event.currentTarget.value as "LATEST" | "HIGHEST")}
               >
-                <option value="LATEST">Attempt Rule: Latest attempt counts</option>
-                <option value="HIGHEST">Attempt Rule: Highest attempt counts</option>
+                <option value="LATEST">{t("assignment.attemptRuleLatest")}</option>
+                <option value="HIGHEST">{t("assignment.attemptRuleHighest")}</option>
               </select>
             </label>
             <label className="brand-input inline-flex items-center gap-2">
@@ -2666,47 +2718,47 @@ export function AssignmentsModule({ role }: Props) {
                 checked={editAllowLateSubmissions}
                 onChange={(event) => setEditAllowLateSubmissions(event.currentTarget.checked)}
               />
-              Allow late submissions
+              {t("assignment.allowLateSubmissions")}
             </label>
             <div className={`grid gap-3 ${editType === "QUIZ" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
               <label className="grid gap-1.5">
-                <span className="brand-label">Assignment Type</span>
-                <select className="brand-input" aria-label="Assignment type" value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
-                  <option value="HOMEWORK">HOMEWORK</option>
-                  <option value="QUIZ">QUIZ</option>
-                  <option value="EXAM">EXAM</option>
+                <span className="brand-label">{t("assignment.assignmentType")}</span>
+                <select className="brand-input" aria-label={t("assignment.assignmentType")} value={editType} onChange={(event) => setEditType(event.currentTarget.value as "HOMEWORK" | "QUIZ" | "EXAM") }>
+                  <option value="HOMEWORK">{t("assignment.type.homework")}</option>
+                  <option value="QUIZ">{t("assignment.type.quiz")}</option>
+                  <option value="EXAM">{t("assignment.type.exam")}</option>
                 </select>
               </label>
               {editType !== "QUIZ" ? (
                 <>
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Allow Text Submissions</span>
-                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> TEXT</label>
+                    <span className="brand-label">{t("assignment.allowTextSubmissions")}</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedText} onChange={(event) => setEditAllowedText(event.currentTarget.checked)} /> {t("assignment.submissionTypeText")}</label>
                   </div>
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Allow File Submissions</span>
-                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> FILE</label>
+                    <span className="brand-label">{t("assignment.allowFileSubmissions")}</span>
+                    <label className="brand-input inline-flex items-center gap-2"><input type="checkbox" checked={editAllowedFile} onChange={(event) => setEditAllowedFile(event.currentTarget.checked)} /> {t("assignment.submissionTypeFile")}</label>
                   </div>
                 </>
               ) : null}
             </div>
             <div className={`grid gap-3 ${editType === "HOMEWORK" ? "md:grid-cols-6" : "md:grid-cols-4"}`}>
               <label className="grid gap-1.5">
-                <span className="brand-label">Start Date</span>
+                <span className="brand-label">{t("label.startDate")}</span>
                 <input
                   className="brand-input"
                   type="date"
-                  aria-label="Start date"
+                  aria-label={t("label.startDate")}
                   value={editStartAt}
                   onChange={(event) => setEditStartAt(event.currentTarget.value)}
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">End Date</span>
+                <span className="brand-label">{t("label.endDate")}</span>
                 <input
                   className="brand-input"
                   type="date"
-                  aria-label="End date"
+                  aria-label={t("label.endDate")}
                   value={editEndAt}
                   onChange={(event) => setEditEndAt(event.currentTarget.value)}
                 />
@@ -2714,21 +2766,21 @@ export function AssignmentsModule({ role }: Props) {
               {editType === "HOMEWORK" ? (
                 <>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Start Time</span>
+                    <span className="brand-label">{t("assignment.startTime")}</span>
                     <input
                       className="brand-input"
                       type="time"
-                      aria-label="Start time"
+                      aria-label={t("assignment.startTime")}
                       value={editStartTime}
                       onChange={(event) => setEditStartTime(event.currentTarget.value)}
                     />
                   </label>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">End Time</span>
+                    <span className="brand-label">{t("assignment.endTime")}</span>
                     <input
                       className="brand-input"
                       type="time"
-                      aria-label="End time"
+                      aria-label={t("assignment.endTime")}
                       value={editEndTime}
                       onChange={(event) => setEditEndTime(event.currentTarget.value)}
                     />
@@ -2736,20 +2788,20 @@ export function AssignmentsModule({ role }: Props) {
                 </>
               ) : null}
               <label className="grid gap-1.5">
-                <span className="brand-label">Maximum Points</span>
-                <input className="brand-input" type="number" min="1" step="0.01" aria-label="Maximum points" value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
+                <span className="brand-label">{t("assignment.maxPoints")}</span>
+                <input className="brand-input" type="number" min="1" step="0.01" aria-label={t("assignment.maxPoints")} value={editMaxPoints} onChange={(event) => setEditMaxPoints(event.currentTarget.value)} />
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">Maximum Attempts</span>
-                <input className="brand-input" type="number" min="1" step="1" aria-label="Maximum attempts" value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
+                <span className="brand-label">{t("assignment.maxAttempts")}</span>
+                <input className="brand-input" type="number" min="1" step="1" aria-label={t("assignment.maxAttempts")} value={editAttempts} onChange={(event) => setEditAttempts(event.currentTarget.value)} />
               </label>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1.5">
-                <span className="brand-label">Module Link</span>
+                <span className="brand-label">{t("assignment.moduleLink")}</span>
                 <select
                   className="brand-input"
-                  aria-label="Module link"
+                  aria-label={t("assignment.moduleLink")}
                   value={editModuleId}
                   onChange={(event) => {
                     const nextModuleId = event.currentTarget.value;
@@ -2757,7 +2809,7 @@ export function AssignmentsModule({ role }: Props) {
                     setEditLessonId("");
                   }}
                 >
-                  <option value="">No module link</option>
+                  <option value="">{t("assignment.noModuleLink")}</option>
                   {(structureByCourseId[editAssignment?.courseId ?? ""] ?? []).map((module) => (
                     <option key={module.id} value={module.id}>
                       {module.title}
@@ -2766,15 +2818,15 @@ export function AssignmentsModule({ role }: Props) {
                 </select>
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">Lesson Link</span>
+                <span className="brand-label">{t("assignment.lessonLink")}</span>
                 <select
                   className="brand-input"
-                  aria-label="Lesson link"
+                  aria-label={t("assignment.lessonLink")}
                   value={editLessonId}
                   onChange={(event) => setEditLessonId(event.currentTarget.value)}
                   disabled={!editModuleId}
                 >
-                  <option value="">No lesson link</option>
+                  <option value="">{t("assignment.noLessonLink")}</option>
                   {(structureByCourseId[editAssignment?.courseId ?? ""] ?? [])
                     .find((module) => module.id === editModuleId)
                     ?.lessons.map((lesson) => (
@@ -2787,9 +2839,11 @@ export function AssignmentsModule({ role }: Props) {
             </div>
             <div className="flex items-center gap-2">
               <button className="btn-brand-secondary px-4 py-2 text-sm font-semibold" disabled={editPending}>
-                {editPending ? "Saving..." : "Save Changes"}
+                {editPending ? t("status.saving") : t("action.saveChanges")}
               </button>
-              <button type="button" className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]" onClick={() => setEditId("")}>Cancel</button>
+              <button type="button" className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]" onClick={() => setEditId("")}>
+                {t("action.cancel")}
+              </button>
             </div>
           </form>
         </section>
@@ -2798,9 +2852,9 @@ export function AssignmentsModule({ role }: Props) {
 
       <ConfirmModal
         open={!!confirmDeleteAssignmentId}
-        title="Delete Assignment"
-        message="Delete this assignment and related submissions?"
-        confirmLabel="Delete"
+        title={t("assignment.deleteTitle")}
+        message={t("assignment.deleteMessage")}
+        confirmLabel={t("action.delete")}
         onCancel={() => setConfirmDeleteAssignmentId("")}
         onConfirm={() => {
           const assignmentId = confirmDeleteAssignmentId;
@@ -2813,9 +2867,9 @@ export function AssignmentsModule({ role }: Props) {
 
       <ConfirmModal
         open={!!confirmInvalidateSubmissionId}
-        title="Invalidate Attempt"
-        message="This will cancel the selected attempt and allow student resubmission if attempt limit allows."
-        confirmLabel="Invalidate"
+        title={t("assignment.invalidateTitle")}
+        message={t("assignment.invalidateMessage")}
+        confirmLabel={t("assignment.invalidateConfirm")}
         onCancel={() => setConfirmInvalidateSubmissionId("")}
         onConfirm={() => {
           const submissionId = confirmInvalidateSubmissionId;

@@ -11,11 +11,27 @@ function parseExpiresAt(input: unknown) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-type AnnouncementAudienceValue = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+type AnnouncementAudienceValue =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
 
 function parseAudience(input: unknown) {
   if (input === undefined) return undefined;
-  if (input === "BOTH" || input === "TEACHER_ONLY" || input === "STUDENT_ONLY") return input;
+  if (
+    input === "BOTH" ||
+    input === "TEACHER_ONLY" ||
+    input === "STUDENT_ONLY" ||
+    input === "DEPARTMENT_HEAD_ONLY" ||
+    input === "TEACHER_DEPARTMENT_HEAD" ||
+    input === "STUDENT_DEPARTMENT_HEAD" ||
+    input === "ALL"
+  )
+    return input;
   return null;
 }
 
@@ -82,6 +98,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     } catch (error) {
       if (!isAnnouncementAudienceCompatibilityError(error)) throw error;
+      if (audience && audience !== "BOTH") throw error;
       announcement = await prisma.$transaction(async (tx) => {
         const updated = await tx.announcement.update({
           where: { id },

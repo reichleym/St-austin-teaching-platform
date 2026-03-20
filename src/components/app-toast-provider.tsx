@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { subscribeToasts, toast, ToastPayload } from "@/lib/toast";
+import { useLanguage } from "@/components/language-provider";
 
 type Props = {
   children: ReactNode;
@@ -72,19 +73,8 @@ function isApiMutation(method: string, rawUrl: string): method is MutationMethod
   return false;
 }
 
-function defaultSuccessMessage(method: MutationMethod) {
-  if (method === "POST") return "Created successfully.";
-  if (method === "PATCH" || method === "PUT") return "Updated successfully.";
-  return "Deleted successfully.";
-}
-
-function defaultErrorMessage(method: MutationMethod) {
-  if (method === "POST") return "Unable to create.";
-  if (method === "PATCH" || method === "PUT") return "Unable to update.";
-  return "Unable to delete.";
-}
-
 export function AppToastProvider({ children }: Props) {
+  const { t } = useLanguage();
   const [items, setItems] = useState<ToastItem[]>([]);
   const timerMapRef = useRef<Map<string, number>>(new Map());
 
@@ -134,9 +124,21 @@ export function AppToastProvider({ children }: Props) {
         const payloadMessage = parsePayloadMessage(parsedPayload);
 
         if (response.ok) {
-          toast.success(payloadMessage ?? defaultSuccessMessage(method));
+          const successMessage =
+            method === "POST"
+              ? t("toast.created")
+              : method === "PATCH" || method === "PUT"
+                ? t("toast.updated")
+                : t("toast.deleted");
+          toast.success(payloadMessage ?? successMessage);
         } else {
-          toast.error(payloadMessage ?? defaultErrorMessage(method));
+          const errorMessage =
+            method === "POST"
+              ? t("toast.createFailed")
+              : method === "PATCH" || method === "PUT"
+                ? t("toast.updateFailed")
+                : t("toast.deleteFailed");
+          toast.error(payloadMessage ?? errorMessage);
         }
 
         return response;
@@ -145,7 +147,7 @@ export function AppToastProvider({ children }: Props) {
           if (error instanceof Error && error.message.trim()) {
             toast.error(error.message);
           } else {
-            toast.error("Network request failed.");
+            toast.error(t("toast.networkFailed"));
           }
         }
         throw error;

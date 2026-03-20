@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { dashboardModules, type DashboardRole } from "@/lib/dashboard-modules";
+import { useLanguage } from "@/components/language-provider";
 
 type DashboardSidebarProps = {
   role: string;
@@ -13,6 +14,7 @@ type DashboardSidebarProps = {
 export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { t } = useLanguage();
   const roleKey = String(role) as DashboardRole;
   const availableModules = dashboardModules.filter((item) => item.roles.includes(roleKey));
   const rootKey = "__root__";
@@ -43,12 +45,23 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
       return (
         <div key={item.slug} style={depth > 0 ? { marginLeft: `${depth * 12}px` } : undefined}>
           {(() => {
-            const title =
+            const baseTitle =
               roleKey === "STUDENT" && item.slug === "courses"
                 ? "All Courses"
                 : roleKey === "STUDENT" && item.slug === "learning"
                   ? "My Learning"
                   : item.title;
+            const translationKey =
+              item.slug === "courses" && roleKey === "STUDENT"
+                ? "module.courses.student"
+                : item.slug === "learning" && roleKey === "STUDENT"
+                  ? "module.learning.student"
+                  : item.slug === "instructions" && roleKey === "STUDENT"
+                    ? "module.instructions.student"
+                    : item.slug === "instructions" && (roleKey === "TEACHER" || roleKey === "DEPARTMENT_HEAD")
+                      ? "module.instructions.teacher"
+                      : `module.${item.slug}`;
+            const title = t(translationKey, undefined, baseTitle);
             return (
           <div className="flex items-center gap-2">
             <Link
@@ -66,7 +79,7 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
             {hasChildren ? (
               <button
                 type="button"
-                aria-label={`Toggle ${title} submenu`}
+                aria-label={t("toggleSubmenu", { name: title })}
                 aria-expanded={isExpanded}
                 onClick={() => setExpanded((prev) => ({ ...prev, [item.slug]: !isExpanded }))}
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[#0f3a74] transition ${
@@ -100,7 +113,7 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
       <div className="flex items-center justify-between gap-3 p-4 lg:hidden">
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-[0.2em] text-[#2b5699]">St. Austin</p>
-          <h1 className="truncate text-lg font-semibold text-[#07316b]">Control Center</h1>
+          <h1 className="truncate text-lg font-semibold text-[#07316b]">{t("controlCenter")}</h1>
         </div>
         <button
           type="button"
@@ -126,11 +139,11 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
           <div className="brand-glass hidden p-3 lg:block">
             <Image src="/logo/image.png" alt="St. Austin logo" width={188} height={92} className="mx-auto" priority />
           </div>
-          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[#2b5699] lg:mt-4">St. Austin</p>
-          <h1 className="text-2xl font-semibold text-[#07316b]">Control Center</h1>
-          <p className="mt-1 text-xs text-[#3b6aa5]">Navigate by role-specific modules</p>
+          {/* <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[#2b5699] lg:mt-4">St. Austin</p> */}
+          {/* <h1 className="text-2xl font-semibold text-[#07316b]">{t("controlCenter")}</h1> */}
+          {/* <p className="mt-1 text-xs text-[#3b6aa5]">{t("navigateByRole")}</p> */}
 
-          <p className="brand-section-title mt-6">Navigation</p>
+          {/* <p className="brand-section-title mt-6">{t("navigation")}</p> */}
           <nav className="mt-2 space-y-1">{renderTree(rootKey)}</nav>
         </div>
       </div>

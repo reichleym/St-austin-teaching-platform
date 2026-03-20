@@ -113,7 +113,7 @@ export default function AcceptInviteClient({ token }: Props) {
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-            <button className="btn-brand-primary px-4 py-2 disabled:opacity-60" disabled={isPending}>
+            <button className="btn-brand-primary px-2 py-2 disabled:opacity-60" disabled={isPending}>
               {isPending ? "Activating..." : "Activate Account"}
             </button>
           </form>

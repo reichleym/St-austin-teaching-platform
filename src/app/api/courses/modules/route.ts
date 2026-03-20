@@ -2,6 +2,7 @@ import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import {
   COURSE_VISIBILITY_PUBLISHED,
+  isCourseExpired,
   MODULE_VISIBILITY_ALL,
   MODULE_VISIBILITY_LIMITED,
   parseModuleVisibility,
@@ -204,6 +205,7 @@ async function getCourseAccess(user: { id: string; role: Role | string }, course
     title: string;
     teacherId: string | null;
     visibility: "DRAFT" | "PUBLISHED";
+    endDate: Date | null;
     enrollments: Array<{ id: string }>;
   } | null = null;
 
@@ -215,6 +217,7 @@ async function getCourseAccess(user: { id: string; role: Role | string }, course
         title: true,
         teacherId: true,
         visibility: true,
+        endDate: true,
         enrollments: {
           where: { studentId: user.id, status: "ACTIVE" },
           select: { id: true },
@@ -229,6 +232,7 @@ async function getCourseAccess(user: { id: string; role: Role | string }, course
         id: true,
         title: true,
         teacherId: true,
+        endDate: true,
         enrollments: {
           where: { studentId: user.id, status: "ACTIVE" },
           select: { id: true },
@@ -474,6 +478,9 @@ export async function POST(request: NextRequest) {
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can create modules." }, { status: 403 });
     }
+    if (isCourseExpired(access.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
 
     const releaseAt = parseOptionalDate(body.releaseAt);
     if (body.releaseAt !== undefined && releaseAt === undefined) {
@@ -562,6 +569,9 @@ export async function PATCH(request: NextRequest) {
       if (!access.canManage) {
         return NextResponse.json({ error: "Only admin or assigned teacher can update modules." }, { status: 403 });
       }
+      if (isCourseExpired(access.course.endDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+      }
 
       if (body.position !== undefined) {
         const siblings = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -637,6 +647,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can update modules." }, { status: 403 });
+    }
+    if (isCourseExpired(access.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const data: Prisma.CourseModuleUpdateInput = {};
@@ -738,6 +751,9 @@ export async function DELETE(request: NextRequest) {
       if (!access.canManage) {
         return NextResponse.json({ error: "Only admin or assigned teacher can delete modules." }, { status: 403 });
       }
+      if (isCourseExpired(access.course.endDate ?? null)) {
+        return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+      }
 
       await prisma.$executeRaw`DELETE FROM "CourseModule" WHERE "id" = ${moduleId}`;
       const siblings = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -771,6 +787,9 @@ export async function DELETE(request: NextRequest) {
     }
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can delete modules." }, { status: 403 });
+    }
+    if (isCourseExpired(access.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     await prisma.$transaction(async (tx) => {

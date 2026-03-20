@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -169,10 +170,13 @@ export async function POST(request: NextRequest) {
 
     const course = await prisma.course.findUnique({
       where: { id: courseId },
-      select: { id: true, teacherId: true },
+      select: { id: true, teacherId: true, endDate: true },
     });
     if (!course || !course.teacherId) {
       return NextResponse.json({ error: "Course teacher not found." }, { status: 400 });
+    }
+    if (isCourseExpired(course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     if (user.role === Role.DEPARTMENT_HEAD) {

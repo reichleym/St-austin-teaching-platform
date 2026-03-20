@@ -447,7 +447,7 @@ export function CourseModulesList({
                     >
                       Cancel
                     </button>
-                    <button type="submit" className="btn-brand-primary px-4 py-2 text-sm font-semibold" disabled={createPending}>
+                    <button type="submit" className="btn-brand-primary px-2 py-2 text-sm font-semibold" disabled={createPending}>
                       {createPending ? "Creating..." : "Create Module"}
                     </button>
                   </div>
@@ -504,7 +504,7 @@ export function CourseModulesList({
                     >
                       Cancel
                     </button>
-                    <button type="submit" className="btn-brand-primary px-4 py-2 text-sm font-semibold" disabled={updatePending}>
+                    <button type="submit" className="btn-brand-primary px-2 py-2 text-sm font-semibold" disabled={updatePending}>
                       {updatePending ? "Saving..." : "Save Changes"}
                     </button>
                   </div>
@@ -600,7 +600,7 @@ export function CourseModulesList({
                     >
                       Cancel
                     </button>
-                    <button type="submit" className="btn-brand-primary px-4 py-2 text-sm font-semibold" disabled={createPending}>
+                    <button type="submit" className="btn-brand-primary px-2 py-2 text-sm font-semibold" disabled={createPending}>
                       {createPending ? "Creating..." : "Create Lesson"}
                     </button>
                   </div>

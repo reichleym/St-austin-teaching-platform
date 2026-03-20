@@ -63,7 +63,7 @@ export default function ForgotPasswordClient() {
           <ToastMessage type="error" message={error} />
           <ToastMessage type="success" message={info} />
 
-          <button className="btn-brand-primary px-4 py-2 disabled:opacity-60" disabled={isPending}>
+          <button className="btn-brand-primary px-2 py-2 disabled:opacity-60" disabled={isPending}>
             {isPending ? "Sending..." : "Send Reset Link"}
           </button>
         </form>

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { useLanguage } from "@/components/language-provider";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -17,6 +18,7 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 function ToastCard({ toast, onClose }: { toast: Toast; onClose: (id: string) => void }) {
+  const { t } = useLanguage();
   const styles =
     toast.type === "success"
       ? "border-emerald-200 bg-emerald-50 text-emerald-900"
@@ -35,9 +37,9 @@ function ToastCard({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
         type="button"
         className="text-xs font-semibold uppercase tracking-wide opacity-70 hover:opacity-100"
         onClick={() => onClose(toast.id)}
-        aria-label="Dismiss"
+        aria-label={t("dismiss")}
       >
-        Close
+        {t("close")}
       </button>
     </div>
   );

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
 
 type PersonOption = {
   id: string;
@@ -42,6 +43,7 @@ const toDateInputValue = (value?: string | null) => {
 };
 
 export function CourseEditModalTrigger({ course, teachers, students, departmentHeads }: Props) {
+  const { t } = useLanguage();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -54,9 +56,19 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const [endDate, setEndDate] = useState(toDateInputValue(course.endDate));
   const [visibility, setVisibility] = useState<"DRAFT" | "PUBLISHED">(course.visibility);
   const [teacherId, setTeacherId] = useState(course.teacherId ?? "");
+  const [teacherSearch, setTeacherSearch] = useState("");
   const [studentIds, setStudentIds] = useState<string[]>(course.studentIds ?? []);
   const [departmentHeadIds, setDepartmentHeadIds] = useState<string[]>(course.departmentHeadIds ?? []);
+  const [departmentHeadSearch, setDepartmentHeadSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+
+  const renderPersonLabel = (person: PersonOption) =>
+    `${person.name || t("label.unnamed")} - ${person.email}${person.status === "DISABLED" ? ` (${t("status.disabled")})` : ""}`;
+
+  const renderStudentLabel = (student: PersonOption) =>
+    `${student.name || t("label.unnamedStudent")} - ${student.studentId ? `${student.studentId} - ` : ""}${
+      student.phone ? `${student.phone} - ` : ""
+    }${student.email}${student.status === "DISABLED" ? ` (${t("status.disabled")})` : ""}`;
 
   useEffect(() => {
     setMounted(true);
@@ -80,13 +92,15 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
     setTeacherId(course.teacherId ?? "");
     setStudentIds(course.studentIds ?? []);
     setDepartmentHeadIds(course.departmentHeadIds ?? []);
+    setTeacherSearch("");
+    setDepartmentHeadSearch("");
     setStudentSearch("");
     setOpen(true);
   };
 
   const filteredStudents = useMemo(() => {
     const query = studentSearch.trim().toLowerCase();
-    if (!query) return students;
+    if (!query) return [];
     return students.filter((student) => {
       const name = (student.name ?? "").toLowerCase();
       const email = (student.email ?? "").toLowerCase();
@@ -96,12 +110,47 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
     });
   }, [studentSearch, students]);
 
+  const filteredTeachers = useMemo(() => {
+    const query = teacherSearch.trim().toLowerCase();
+    if (!query) return [];
+    return teachers.filter((teacher) => {
+      const name = (teacher.name ?? "").toLowerCase();
+      const email = (teacher.email ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query);
+    });
+  }, [teacherSearch, teachers]);
+
+  const filteredDepartmentHeads = useMemo(() => {
+    const query = departmentHeadSearch.trim().toLowerCase();
+    if (!query) return [];
+    return departmentHeads.filter((head) => {
+      const name = (head.name ?? "").toLowerCase();
+      const email = (head.email ?? "").toLowerCase();
+      return name.includes(query) || email.includes(query);
+    });
+  }, [departmentHeadSearch, departmentHeads]);
+
+  const selectedTeacher = useMemo(
+    () => teachers.find((teacher) => teacher.id === teacherId) ?? null,
+    [teacherId, teachers]
+  );
+  const selectedDepartmentHeads = useMemo(
+    () => departmentHeadIds.map((id) => departmentHeads.find((head) => head.id === id)).filter(Boolean) as PersonOption[],
+    [departmentHeadIds, departmentHeads]
+  );
+  const selectedStudents = useMemo(
+    () => studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as PersonOption[],
+    [studentIds, students]
+  );
+
   const toggleStudent = (studentId: string) => {
+    const student = students.find((item) => item.id === studentId);
+    if (student?.status === "DISABLED") return;
     setStudentIds((prev) => (prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]));
   };
 
   const selectAllStudents = () => {
-    setStudentIds(students.map((student) => student.id));
+    setStudentIds(students.filter((student) => student.status !== "DISABLED").map((student) => student.id));
   };
 
   const clearStudents = () => {
@@ -118,11 +167,11 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
     event.preventDefault();
     const nextTitle = title.trim();
     if (!nextTitle) {
-      setError("Course title is required.");
+      setError(t("error.courseTitleRequired"));
       return;
     }
     if (!startDate || !endDate) {
-      setError("Course start and end dates are required.");
+      setError(t("error.courseDatesRequired"));
       return;
     }
     setPending(true);
@@ -149,13 +198,13 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to update course.");
+        setError(result.error ?? t("error.updateCourse"));
         return;
       }
       setOpen(false);
       router.refresh();
     } catch {
-      setError("Unable to update course.");
+      setError(t("error.updateCourse"));
     } finally {
       setPending(false);
     }
@@ -168,125 +217,233 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
         className="btn-brand-secondary px-4 py-2 text-sm font-semibold"
         onClick={openModal}
       >
-        Edit Course
+        {t("action.editCourse")}
       </button>
 
       {mounted && open
         ? createPortal(
             <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#06254d]/40 p-4 md:p-8">
               <section className="brand-card w-full max-w-3xl p-5">
-                <p className="brand-section-title">Edit Course</p>
+                <p className="brand-section-title">{t("course.editTitle")}</p>
                 <form className="mt-3 grid gap-4" onSubmit={onSubmit}>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Course</span>
+                    <span className="brand-label">{t("label.course")}</span>
                     <input className="brand-input" value={course.code} disabled />
                   </label>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Course Title</span>
+                    <span className="brand-label">{t("label.courseTitle")}</span>
                     <input className="brand-input" value={title} onChange={(event) => setTitle(event.currentTarget.value)} maxLength={120} required />
                   </label>
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Start Date</span>
+                      <span className="brand-label">{t("label.startDate")}</span>
                       <input className="brand-input" type="date" value={startDate} onChange={(event) => setStartDate(event.currentTarget.value)} required />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className="brand-label">End Date</span>
+                      <span className="brand-label">{t("label.endDate")}</span>
                       <input className="brand-input" type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.currentTarget.value)} required />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className="brand-label">Visibility</span>
+                      <span className="brand-label">{t("label.visibility")}</span>
                       <select className="brand-input" value={visibility} onChange={(event) => setVisibility(event.currentTarget.value as "DRAFT" | "PUBLISHED")}>
-                        <option value="DRAFT">DRAFT</option>
-                        <option value="PUBLISHED">PUBLISHED</option>
+                        <option value="DRAFT">{t("visibility.draft")}</option>
+                        <option value="PUBLISHED">{t("visibility.published")}</option>
                       </select>
                     </label>
                   </div>
                   <label className="grid gap-1.5 md:max-w-sm">
-                    <span className="brand-label">Assigned Teacher</span>
-                    <select className="brand-input" value={teacherId} onChange={(event) => setTeacherId(event.currentTarget.value)}>
-                      <option value="">No teacher assigned</option>
-                      {teachers.map((teacher) => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {(teacher.name || "Unnamed") + " - " + teacher.email + (teacher.status === "DISABLED" ? " (DISABLED)" : "")}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="brand-label">{t("label.assignedTeacher")}</span>
+                    <div className="grid gap-2">
+                      {selectedTeacher ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81]">
+                            {renderPersonLabel(selectedTeacher)}
+                            <button
+                              type="button"
+                              className="text-[#1f518f] hover:text-[#0b3e81]"
+                              aria-label={t("action.clear")}
+                              onClick={() => setTeacherId("")}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="relative">
+                        <input
+                          className="brand-input"
+                          placeholder={t("placeholder.teacherSearch")}
+                          value={teacherSearch}
+                          onChange={(event) => setTeacherSearch(event.currentTarget.value)}
+                        />
+                        {teacherSearch.trim() ? (
+                          <div className="absolute z-10 mt-2 w-full max-h-48 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-2 shadow-lg">
+                            {filteredTeachers.length ? (
+                              filteredTeachers.map((teacher) => (
+                                <button
+                                  key={teacher.id}
+                                  type="button"
+                                  className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm text-[#0d3f80] hover:bg-[#eff6ff]"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => {
+                                    setTeacherId(teacher.id);
+                                    setTeacherSearch("");
+                                  }}
+                                >
+                                  <span className="truncate">{renderPersonLabel(teacher)}</span>
+                                </button>
+                              ))
+                            ) : (
+                              <p className="px-2 py-1 text-xs text-[#3f70ae]">{t("course.noTeachersMatch")}</p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
                   </label>
                   <label className="grid gap-1.5">
-                    <span className="brand-label">Description (optional)</span>
+                    <span className="brand-label">{t("label.descriptionOptional")}</span>
                     <textarea className="brand-input min-h-[90px]" value={description} onChange={(event) => setDescription(event.currentTarget.value)} maxLength={2000} />
                   </label>
 
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Assigned Department Heads</span>
-                    <div className="max-h-40 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
-                      {departmentHeads.length ? (
-                        departmentHeads.map((head) => (
-                          <label key={head.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
-                            <input
-                              type="checkbox"
-                              checked={departmentHeadIds.includes(head.id)}
-                              onChange={() => toggleDepartmentHead(head.id)}
-                            />
-                            <span>{(head.name || "Unnamed") + " - " + head.email + (head.status === "DISABLED" ? " (DISABLED)" : "")}</span>
-                          </label>
-                        ))
-                      ) : (
-                        <p className="text-sm text-[#3f70ae]">No department heads found.</p>
-                      )}
+                    <span className="brand-label">{t("label.assignedDepartmentHeads")}</span>
+                    <div className="grid gap-2">
+                      {selectedDepartmentHeads.length ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {selectedDepartmentHeads.map((head) => (
+                            <span
+                              key={head.id}
+                              className="inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81]"
+                            >
+                              {renderPersonLabel(head)}
+                              <button
+                                type="button"
+                                className="text-[#1f518f] hover:text-[#0b3e81]"
+                                aria-label={t("action.clear")}
+                                onClick={() => toggleDepartmentHead(head.id)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="relative">
+                        <input
+                          className="brand-input"
+                          placeholder={t("placeholder.departmentHeadSearch")}
+                          value={departmentHeadSearch}
+                          onChange={(event) => setDepartmentHeadSearch(event.currentTarget.value)}
+                        />
+                        {departmentHeadSearch.trim() ? (
+                          <div className="absolute z-10 mt-2 w-full max-h-48 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-2 shadow-lg">
+                            {filteredDepartmentHeads.filter((head) => !departmentHeadIds.includes(head.id)).length ? (
+                              filteredDepartmentHeads
+                                .filter((head) => !departmentHeadIds.includes(head.id))
+                                .map((head) => (
+                                  <button
+                                    key={head.id}
+                                    type="button"
+                                    className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm text-[#0d3f80] hover:bg-[#eff6ff]"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      toggleDepartmentHead(head.id);
+                                      setDepartmentHeadSearch("");
+                                    }}
+                                  >
+                                    <span className="truncate">{renderPersonLabel(head)}</span>
+                                  </button>
+                                ))
+                            ) : (
+                              <p className="px-2 py-1 text-xs text-[#3f70ae]">{t("course.noDepartmentHeadsMatch")}</p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
                   <div className="grid gap-1.5">
-                    <span className="brand-label">Enrolled Students</span>
+                    <span className="brand-label">{t("label.enrolledStudents")}</span>
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <button
                         type="button"
                         className="rounded-md border border-[#9bbfed] px-2 py-1 font-semibold text-[#1f518f]"
                         onClick={selectAllStudents}
                       >
-                        Select all
+                        {t("action.selectAll")}
                       </button>
                       <button
                         type="button"
                         className="rounded-md border border-[#c6ddfa] px-2 py-1 font-semibold text-[#1f518f]"
                         onClick={clearStudents}
                       >
-                        Clear
+                        {t("action.clear")}
                       </button>
-                      <span className="text-[#3a689f]">Selected: {studentIds.length}</span>
+                      <span className="text-[#3a689f]">{t("selectedCount", { count: studentIds.length })}</span>
                     </div>
-                    <input
-                      className="brand-input"
-                      placeholder="Search by name, student ID, phone, or email"
-                      value={studentSearch}
-                      onChange={(event) => setStudentSearch(event.currentTarget.value)}
-                    />
-                    <div className="max-h-52 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-3">
-                      {filteredStudents.length ? (
-                        filteredStudents.map((student) => (
-                          <label key={student.id} className="flex items-center gap-2 py-1 text-sm text-[#0d3f80]">
-                            <input
-                              type="checkbox"
-                              checked={studentIds.includes(student.id)}
-                              onChange={() => toggleStudent(student.id)}
-                            />
-                            <span>
-                              {(student.name || "Unnamed Student") +
-                                " - " +
-                                (student.studentId ? `${student.studentId} - ` : "") +
-                                (student.phone ? `${student.phone} - ` : "") +
-                                student.email +
-                                (student.status === "DISABLED" ? " (DISABLED)" : "")}
+                    <div className="grid gap-2">
+                      {selectedStudents.length ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {selectedStudents.map((student) => (
+                            <span
+                              key={student.id}
+                              className={`inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81] ${student.status === "DISABLED" ? "opacity-60" : ""}`}
+                            >
+                              {renderStudentLabel(student)}
+                              {student.status === "DISABLED" ? null : (
+                                <button
+                                  type="button"
+                                  className="text-[#1f518f] hover:text-[#0b3e81]"
+                                  aria-label={t("action.clear")}
+                                  onClick={() => toggleStudent(student.id)}
+                                >
+                                  ×
+                                </button>
+                              )}
                             </span>
-                          </label>
-                        ))
-                      ) : (
-                        <p className="text-sm text-[#3f70ae]">
-                          {students.length ? "No students match the search." : "No students found."}
-                        </p>
-                      )}
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="relative">
+                        <input
+                          className="brand-input"
+                          placeholder={t("placeholder.studentSearch")}
+                          value={studentSearch}
+                          onChange={(event) => setStudentSearch(event.currentTarget.value)}
+                        />
+                        {studentSearch.trim() ? (
+                          <div className="absolute z-10 mt-2 w-full max-h-48 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-2 shadow-lg">
+                            {filteredStudents.filter((student) => !studentIds.includes(student.id)).length ? (
+                              filteredStudents
+                                .filter((student) => !studentIds.includes(student.id))
+                                .map((student) => (
+                                  <button
+                                    key={student.id}
+                                    type="button"
+                                    className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm ${
+                                      student.status === "DISABLED"
+                                        ? "cursor-not-allowed text-[#9bbfed]"
+                                        : "text-[#0d3f80] hover:bg-[#eff6ff]"
+                                    }`}
+                                    disabled={student.status === "DISABLED"}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      if (student.status === "DISABLED") return;
+                                      toggleStudent(student.id);
+                                      setStudentSearch("");
+                                    }}
+                                  >
+                                    <span className="truncate">{renderStudentLabel(student)}</span>
+                                  </button>
+                                ))
+                            ) : (
+                              <p className="px-2 py-1 text-xs text-[#3f70ae]">{t("course.noStudentsMatch")}</p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
@@ -299,10 +456,10 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                       onClick={() => setOpen(false)}
                       disabled={pending}
                     >
-                      Cancel
+                      {t("action.cancel")}
                     </button>
-                    <button className="btn-brand-primary px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={pending}>
-                      {pending ? "Saving..." : "Save Changes"}
+                    <button className="btn-brand-primary px-2 py-2 text-sm font-semibold disabled:opacity-60" disabled={pending}>
+                      {pending ? t("status.saving") : t("action.saveChanges")}
                     </button>
                   </div>
                 </form>

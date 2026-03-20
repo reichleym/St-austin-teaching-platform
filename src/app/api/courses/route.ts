@@ -7,6 +7,7 @@ import {
   COURSE_DESCRIPTION_MAX_LENGTH,
   generateCourseCodeCandidate,
   isTeacherRole,
+  isCourseExpired,
   normalizeDescription,
   parseCourseDateInput,
   parseCourseVisibility,
@@ -835,6 +836,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (!existing) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
+    }
+    if (isCourseExpired(existing.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const data: Prisma.CourseUpdateInput = {};

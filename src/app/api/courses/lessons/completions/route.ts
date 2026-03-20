@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, requireAuthenticatedUser, isSuperAdminRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,7 @@ async function getLessonContext(lessonId: string, studentId: string) {
       lessonId: string;
       courseId: string;
       teacherId: string | null;
+      courseEndDate: Date | null;
       enrolledCount: bigint | number;
     }>
   >`
@@ -39,6 +41,7 @@ async function getLessonContext(lessonId: string, studentId: string) {
       l."id" AS "lessonId",
       m."courseId",
       c."teacherId",
+      c."endDate" AS "courseEndDate",
       (
         SELECT COUNT(*)::bigint
         FROM "Enrollment" e
@@ -82,6 +85,9 @@ export async function POST(request: NextRequest) {
     const ctx = await getLessonContext(lessonId, studentId);
     if (!ctx) {
       return NextResponse.json({ error: "Lesson not found." }, { status: 404 });
+    }
+    if (isCourseExpired(ctx.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     if (user.role === Role.TEACHER && ctx.teacherId !== user.id) {

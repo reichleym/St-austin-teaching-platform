@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -28,9 +29,9 @@ CREATE INDEX IF NOT EXISTS "ModuleAssignment_moduleId_idx" ON "ModuleAssignment"
 
 async function getModuleAccess(moduleId: string, user: { id: string; role: Role | string }) {
   const rows = await prisma.$queryRaw<
-    Array<{ moduleId: string; courseId: string; teacherId: string | null }>
+    Array<{ moduleId: string; courseId: string; teacherId: string | null; courseEndDate: Date | null }>
   >`
-    SELECT m."id" AS "moduleId", m."courseId", c."teacherId"
+    SELECT m."id" AS "moduleId", m."courseId", c."teacherId", c."endDate" AS "courseEndDate"
     FROM "CourseModule" m
     JOIN "Course" c ON c."id" = m."courseId"
     WHERE m."id" = ${moduleId}
@@ -61,6 +62,9 @@ export async function GET(request: NextRequest) {
     const access = await getModuleAccess(moduleId, user);
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+    if (isCourseExpired(access.module.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const students = await prisma.$queryRaw<

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLanguage } from "@/components/language-provider";
 
 type ConfirmModalProps = {
   open: boolean;
@@ -18,13 +19,16 @@ export function ConfirmModal({
   open,
   title,
   message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
   const [mounted, setMounted] = useState(false);
+  const { t } = useLanguage();
+  const resolvedConfirmLabel = confirmLabel ?? t("confirm");
+  const resolvedCancelLabel = cancelLabel ?? t("cancel");
 
   useEffect(() => {
     setMounted(true);
@@ -48,7 +52,7 @@ export function ConfirmModal({
         <p className="brand-muted mt-2 text-sm">{message}</p>
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" className="rounded border border-[#9bbfed] px-3 py-1.5 text-sm font-semibold text-[#1f518f]" onClick={onCancel}>
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
           <button
             type="button"
@@ -59,7 +63,7 @@ export function ConfirmModal({
             }
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { InputHTMLAttributes, useId, useState } from "react";
+import { useLanguage } from "@/components/language-provider";
 
 type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
   label?: string;
@@ -15,6 +16,7 @@ export function PasswordField({
   id,
   ...inputProps
 }: PasswordFieldProps) {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const autoId = useId();
   const resolvedId = id ?? autoId;
@@ -31,7 +33,7 @@ export function PasswordField({
         />
         <button
           type="button"
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? t("password.hide") : t("password.show")}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[#2d5f9a]"
           onClick={() => setVisible((prev) => !prev)}
         >
@@ -53,4 +55,3 @@ export function PasswordField({
     </label>
   );
 }
-

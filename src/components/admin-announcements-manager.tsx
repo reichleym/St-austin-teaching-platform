@@ -2,8 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
 
-type Audience = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+type Audience =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
 
 type AnnouncementItem = {
   id: string;
@@ -25,10 +33,10 @@ type EditDraft = {
   expiresAt: string;
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "No expiry";
+function formatDate(value: string | null, noExpiryLabel: string) {
+  if (!value) return noExpiryLabel;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No expiry";
+  if (Number.isNaN(date.getTime())) return noExpiryLabel;
   return date.toLocaleString("en-GB", {
     day: "2-digit",
     month: "2-digit",
@@ -47,13 +55,8 @@ function toDateTimeLocalValue(value: string | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function getAudienceLabel(audience: Audience) {
-  if (audience === "TEACHER_ONLY") return "Teachers only";
-  if (audience === "STUDENT_ONLY") return "Students only";
-  return "Teachers + Students";
-}
-
 export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
+  const { t } = useLanguage();
   const [items, setItems] = useState(initialAnnouncements);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -95,7 +98,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
         : {};
 
       if (!response.ok || !result.announcement) {
-        setError(result.error ?? "Unable to create announcement.");
+        setError(result.error ?? t("error.createAnnouncement"));
         return;
       }
 
@@ -105,7 +108,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
       setAudience("BOTH");
       setExpiresAt("");
     } catch {
-      setError("Unable to create announcement.");
+      setError(t("error.createAnnouncement"));
     } finally {
       setIsPending(false);
     }
@@ -156,14 +159,14 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
         : {};
 
       if (!response.ok || !result.announcement) {
-        setError(result.error ?? "Unable to update announcement.");
+        setError(result.error ?? t("error.updateAnnouncement"));
         return;
       }
 
       setItems((prev) => prev.map((item) => (item.id === result.announcement!.id ? result.announcement! : item)));
       onCancelEdit();
     } catch {
-      setError("Unable to update announcement.");
+      setError(t("error.updateAnnouncement"));
     } finally {
       setIsEditPending(false);
     }
@@ -172,15 +175,15 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
   return (
     <section className="grid gap-4">
       <section className="brand-card p-5">
-        <p className="brand-section-title">Create Announcement</p>
+        <p className="brand-section-title">{t("announcement.createTitle")}</p>
         <form className="mt-3 grid gap-4" onSubmit={onSubmit}>
           <label className="grid gap-1.5">
-            <span className="brand-label">Title</span>
+            <span className="brand-label">{t("label.title")}</span>
             <input className="brand-input" value={title} onChange={(event) => setTitle(event.currentTarget.value)} required />
           </label>
 
           <label className="grid gap-1.5">
-            <span className="brand-label">Message</span>
+            <span className="brand-label">{t("label.message")}</span>
             <textarea
               className="brand-input min-h-[120px]"
               value={content}
@@ -191,16 +194,20 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="grid gap-1.5">
-              <span className="brand-label">Audience</span>
+              <span className="brand-label">{t("label.audience")}</span>
               <select className="brand-input" value={audience} onChange={(event) => setAudience(event.currentTarget.value as Audience)}>
-                <option value="BOTH">Teachers and Students</option>
-                <option value="TEACHER_ONLY">Teachers Only</option>
-                <option value="STUDENT_ONLY">Students Only</option>
+                <option value="TEACHER_ONLY">{t("audience.teacherOnly")}</option>
+                <option value="STUDENT_ONLY">{t("audience.studentOnly")}</option>
+                <option value="DEPARTMENT_HEAD_ONLY">{t("audience.departmentHeadOnly")}</option>
+                <option value="BOTH">{t("audience.teacherStudent")}</option>
+                <option value="TEACHER_DEPARTMENT_HEAD">{t("audience.teacherDepartmentHead")}</option>
+                <option value="STUDENT_DEPARTMENT_HEAD">{t("audience.studentDepartmentHead")}</option>
+                <option value="ALL">{t("audience.all")}</option>
               </select>
             </label>
 
             <label className="grid gap-1.5">
-              <span className="brand-label">Expires At (optional)</span>
+              <span className="brand-label">{t("label.expiresAtOptional")}</span>
               <input
                 className="brand-input"
                 type="datetime-local"
@@ -212,14 +219,14 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
 
           <ToastMessage type="error" message={error} />
 
-          <button className="btn-brand-primary px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={isPending}>
-            {isPending ? "Publishing..." : "Publish Announcement"}
+          <button className="btn-brand-primary px-2 py-2 text-sm font-semibold disabled:opacity-60" disabled={isPending}>
+            {isPending ? t("status.publishing") : t("action.publishAnnouncement")}
           </button>
         </form>
       </section>
 
       <section className="brand-card p-5">
-        <p className="brand-section-title">Recent Announcements</p>
+        <p className="brand-section-title">{t("announcement.recentTitle")}</p>
         <div className="mt-3 space-y-3">
           {items.length ? (
             items.map((item) => {
@@ -233,7 +240,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                   {isEditing ? (
                     <div className="grid gap-3">
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Title</span>
+                        <span className="brand-label">{t("label.title")}</span>
                         <input
                           className="brand-input"
                           value={editDraft.title}
@@ -244,7 +251,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                         />
                       </label>
                       <label className="grid gap-1.5">
-                        <span className="brand-label">Message</span>
+                        <span className="brand-label">{t("label.message")}</span>
                         <textarea
                           className="brand-input min-h-[120px]"
                           value={editDraft.content}
@@ -256,7 +263,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                       </label>
                       <div className="grid gap-4 md:grid-cols-2">
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Audience</span>
+                          <span className="brand-label">{t("label.audience")}</span>
                           <select
                             className="brand-input"
                             value={editDraft.audience}
@@ -265,13 +272,17 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                               setEditDraft((prev) => ({ ...prev, audience: value }));
                             }}
                           >
-                            <option value="BOTH">Teachers and Students</option>
-                            <option value="TEACHER_ONLY">Teachers Only</option>
-                            <option value="STUDENT_ONLY">Students Only</option>
+                            <option value="TEACHER_ONLY">{t("audience.teacherOnly")}</option>
+                            <option value="STUDENT_ONLY">{t("audience.studentOnly")}</option>
+                            <option value="DEPARTMENT_HEAD_ONLY">{t("audience.departmentHeadOnly")}</option>
+                            <option value="BOTH">{t("audience.teacherStudent")}</option>
+                            <option value="TEACHER_DEPARTMENT_HEAD">{t("audience.teacherDepartmentHead")}</option>
+                            <option value="STUDENT_DEPARTMENT_HEAD">{t("audience.studentDepartmentHead")}</option>
+                            <option value="ALL">{t("audience.all")}</option>
                           </select>
                         </label>
                         <label className="grid gap-1.5">
-                          <span className="brand-label">Expires At (optional)</span>
+                          <span className="brand-label">{t("label.expiresAtOptional")}</span>
                           <input
                             className="brand-input"
                             type="datetime-local"
@@ -290,14 +301,14 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                           onClick={onSaveEdit}
                           disabled={isEditPending}
                         >
-                          {isEditPending ? "Saving..." : "Save"}
+                          {isEditPending ? t("status.saving") : t("action.save")}
                         </button>
                         <button
                           className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                           onClick={onCancelEdit}
                           disabled={isEditPending}
                         >
-                          Cancel
+                          {t("action.cancel")}
                         </button>
                       </div>
                     </div>
@@ -306,19 +317,19 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-base font-semibold text-[#0b3e81]">{item.title}</p>
                         <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-xs font-semibold text-[#1f518f]">
-                          {getAudienceLabel(item.audience)}
+                          {t(`audience.label.${item.audience}`)}
                         </span>
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{item.content}</p>
                       <div className="mt-2 text-xs text-[#3f70ae]">
-                        <p>Created: {formatDate(item.createdAt)}</p>
-                        <p>Expires: {formatDate(item.expiresAt)}</p>
+                        <p>{t("created")}: {formatDate(item.createdAt, t("noExpiry"))}</p>
+                        <p>{t("expires")}: {formatDate(item.expiresAt, t("noExpiry"))}</p>
                       </div>
                       <button
                         className="mt-3 rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                         onClick={() => onStartEdit(item)}
                       >
-                        Edit
+                        {t("action.edit")}
                       </button>
                     </>
                   )}
@@ -326,7 +337,7 @@ export function AdminAnnouncementsManager({ initialAnnouncements }: Props) {
               );
             })
           ) : (
-            <p className="brand-muted text-sm">No announcements yet.</p>
+            <p className="brand-muted text-sm">{t("announcement.noneYet")}</p>
           )}
         </div>
       </section>

@@ -4,6 +4,7 @@ import {
   COURSE_VISIBILITY_PUBLISHED,
   type CourseVisibilityValue,
   parseEnrollmentStatus,
+  isCourseExpired,
 } from "@/lib/courses";
 import { PermissionError, requireAuthenticatedUser, isSuperAdminRole } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -83,6 +84,9 @@ export async function POST(request: NextRequest) {
     const courseResult = await getCourseForEnrollment(courseId);
     if (!courseResult.ok) {
       return NextResponse.json({ error: courseResult.error }, { status: courseResult.status });
+    }
+    if (isCourseExpired(courseResult.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     const course = courseResult.course;
 

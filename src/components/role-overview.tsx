@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useLanguage } from "@/components/language-provider";
 type RoleKey = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN" | string;
 
 type RoleOverviewProps = {
@@ -25,39 +28,41 @@ type DynamicOverview = {
   timeline?: string[];
 };
 
-function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
+type Translator = (key: string, vars?: Record<string, string | number>, fallback?: string) => string;
+
+function getOverviewModel(roleKey: RoleKey, t: Translator, dynamicOverview?: DynamicOverview) {
   if (roleKey === "SUPER_ADMIN" || roleKey === "ADMIN") {
     return {
-      heading: "Institution Operations",
-      summary: "Governance, staffing, onboarding, and platform reliability across all schools and terms.",
+      heading: t("overview.superAdmin.heading"),
+      summary: t("overview.superAdmin.summary"),
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Announcements", value: 0, delta: "available for your role", href: "/dashboard/announcements" },
-          { label: "Courses", value: 0, delta: "institution total", href: "/dashboard/courses" },
-          { label: "Grade Edit Requests", value: 0, delta: "pending review", href: "/dashboard/assessment" },
+          { label: t("metric.announcements"), value: 0, delta: t("metric.announcements.delta"), href: "/dashboard/announcements" },
+          { label: t("metric.courses"), value: 0, delta: t("metric.courses.delta"), href: "/dashboard/courses" },
+          { label: t("metric.gradeEdit"), value: 0, delta: t("metric.gradeEdit.delta"), href: "/dashboard/assessment" },
         ],
       focus: [
         {
-          title: "User & access governance",
-          detail: "Enrollment lifecycle and access policy enforcement are active for this cycle.",
+          title: t("focus.superAdmin.userAccess.title"),
+          detail: t("focus.superAdmin.userAccess.detail"),
           priority: "High",
         },
         {
-          title: "Academic oversight approvals",
-          detail: "Pending approvals and academic integrity checks require review.",
+          title: t("focus.superAdmin.academic.title"),
+          detail: t("focus.superAdmin.academic.detail"),
           priority: "Medium",
         },
         {
-          title: "Policy and configuration alignment",
-          detail: "System-wide academic and platform controls remain in governance scope.",
+          title: t("focus.superAdmin.policy.title"),
+          detail: t("focus.superAdmin.policy.detail"),
           priority: "Low",
         },
       ] as FocusItem[],
       timeline: [
-        "09:00 Governance sync with Academic Affairs",
-        "11:30 User lifecycle and access review",
-        "14:00 Grade edit approvals and policy checks",
-        "16:30 Global announcement and compliance checkpoint",
+        t("timeline.superAdmin.1"),
+        t("timeline.superAdmin.2"),
+        t("timeline.superAdmin.3"),
+        t("timeline.superAdmin.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
       ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
@@ -66,36 +71,36 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
 
   if (roleKey === "DEPARTMENT_HEAD") {
     return {
-      heading: "Department Oversight Hub",
-      summary: "Monitor assigned courses, instructor progress, engagement signals, and academic follow-through.",
+      heading: t("overview.departmentHead.heading"),
+      summary: t("overview.departmentHead.summary"),
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Courses Overseen", value: 0, delta: "assigned coverage", href: "/dashboard/courses" },
-          { label: "Discussion Board Flags", value: 0, delta: "students missing participation", href: "/dashboard/engagement" },
-          { label: "Assignments", value: 0, delta: "active in assigned courses", href: "/dashboard/assessment" },
+          { label: t("metric.coursesOverseen"), value: 0, delta: t("metric.coursesOverseen.delta"), href: "/dashboard/courses" },
+          { label: t("metric.discussionFlags"), value: 0, delta: t("metric.discussionFlags.delta"), href: "/dashboard/engagement" },
+          { label: t("metric.assignments"), value: 0, delta: t("metric.assignments.deltaDept"), href: "/dashboard/assessment" },
         ],
       focus: [
         {
-          title: "Instructor delivery checkpoints",
-          detail: "Review weekly module releases and lesson completion for assigned courses.",
+          title: t("focus.departmentHead.delivery.title"),
+          detail: t("focus.departmentHead.delivery.detail"),
           priority: "High",
         },
         {
-          title: "Discussion board follow-ups",
-          detail: "Contact instructors with students flagged for low participation.",
+          title: t("focus.departmentHead.discussion.title"),
+          detail: t("focus.departmentHead.discussion.detail"),
           priority: "Medium",
         },
         {
-          title: "Assignment pacing",
-          detail: "Verify grading cadence matches academic calendar.",
+          title: t("focus.departmentHead.pacing.title"),
+          detail: t("focus.departmentHead.pacing.detail"),
           priority: "Low",
         },
       ] as FocusItem[],
       timeline: [
-        "09:30 Course progress check",
-        "11:00 Discussion board alerts review",
-        "14:00 Instructor feedback round",
-        "16:30 Department summary notes",
+        t("timeline.departmentHead.1"),
+        t("timeline.departmentHead.2"),
+        t("timeline.departmentHead.3"),
+        t("timeline.departmentHead.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
       ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
@@ -104,36 +109,36 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
 
   if (roleKey === "TEACHER") {
     return {
-      heading: "Teaching Command Center",
-      summary: "Course delivery, grading throughput, engagement signals, and learner support workflow.",
+      heading: t("overview.teacher.heading"),
+      summary: t("overview.teacher.summary"),
       metrics:
         dynamicOverview?.metrics ?? [
-          { label: "Assigned Courses", value: 0, delta: "currently assigned", href: "/dashboard/courses" },
-          { label: "Submissions Pending", value: 0, delta: "awaiting grading", href: "/dashboard/assessment" },
-          { label: "Assignments", value: 0, delta: "in your courses", href: "/dashboard/assessment" },
+          { label: t("metric.assignedCourses"), value: 0, delta: t("metric.assignedCourses.delta"), href: "/dashboard/courses" },
+          { label: t("metric.submissionsPending"), value: 0, delta: t("metric.submissionsPending.delta"), href: "/dashboard/assessment" },
+          { label: t("metric.assignments"), value: 0, delta: t("metric.assignments.deltaTeacher"), href: "/dashboard/assessment" },
         ],
       focus: [
         {
-          title: "Grade week 6 assessments",
-          detail: "Prioritize Grade 10 Science and Algebra before Friday closure.",
+          title: t("focus.teacher.gradeWeek.title"),
+          detail: t("focus.teacher.gradeWeek.detail"),
           priority: "High",
         },
         {
-          title: "Flag at-risk learners",
-          detail: "6 students below attendance and assignment threshold.",
+          title: t("focus.teacher.atRisk.title"),
+          detail: t("focus.teacher.atRisk.detail"),
           priority: "Medium",
         },
         {
-          title: "Publish next lesson resources",
-          detail: "Attach rubric and worksheet links to tomorrow's classes.",
+          title: t("focus.teacher.publishResources.title"),
+          detail: t("focus.teacher.publishResources.detail"),
           priority: "Low",
         },
       ] as FocusItem[],
       timeline: [
-        "08:30 Grade 10 Algebra",
-        "10:15 Grade 9 Science",
-        "13:00 Office hours and parent queries",
-        "15:30 Assignment moderation",
+        t("timeline.teacher.1"),
+        t("timeline.teacher.2"),
+        t("timeline.teacher.3"),
+        t("timeline.teacher.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
       ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
@@ -141,43 +146,43 @@ function getOverviewModel(roleKey: RoleKey, dynamicOverview?: DynamicOverview) {
   }
 
   return {
-    heading: "Student Learning Hub",
-    summary: "Academic progress, deadlines, attendance performance, and personal learning actions.",
+    heading: t("overview.student.heading"),
+    summary: t("overview.student.summary"),
     metrics:
       dynamicOverview?.metrics ?? [
-        { label: "Enrolled Courses", value: 0, delta: "active enrollments", href: "/dashboard/courses" },
-        { label: "Assignments", value: 0, delta: "available to submit", href: "/dashboard/assessment" },
-        { label: "Announcements", value: 0, delta: "for your role", href: "/dashboard/announcements-feed" },
+        { label: t("metric.enrolledCourses"), value: 0, delta: t("metric.enrolledCourses.delta"), href: "/dashboard/courses" },
+        { label: t("metric.assignments"), value: 0, delta: t("metric.assignments.deltaStudent"), href: "/dashboard/assessment" },
+        { label: t("metric.announcements"), value: 0, delta: t("metric.announcements.deltaStudent"), href: "/dashboard/announcements-feed" },
       ],
     focus: [
       {
-        title: "Complete Mathematics assignment set",
-        detail: "Chapter 6 worksheet and quiz close on Thursday at 11:59 PM.",
+        title: t("focus.student.math.title"),
+        detail: t("focus.student.math.detail"),
         priority: "High",
       },
       {
-        title: "Prepare for Biology practical",
-        detail: "Review microscope and cell structure lab instructions.",
+        title: t("focus.student.bio.title"),
+        detail: t("focus.student.bio.detail"),
         priority: "Medium",
       },
       {
-        title: "Update learning goals",
-        detail: "Set target score for next two assessments.",
+        title: t("focus.student.goals.title"),
+        detail: t("focus.student.goals.detail"),
         priority: "Low",
       },
     ] as FocusItem[],
     timeline: [
-      "09:00 Mathematics",
-      "11:00 Biology Lab",
-      "13:30 English Literature",
-      "16:00 Guided study session",
+      t("timeline.student.1"),
+      t("timeline.student.2"),
+      t("timeline.student.3"),
+      t("timeline.student.4"),
     ],
     ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
     ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
   };
 }
 
-function PriorityBadge({ priority }: { priority: FocusItem["priority"] }) {
+function PriorityBadge({ priority, t }: { priority: FocusItem["priority"]; t: Translator }) {
   const tone =
     priority === "High"
       ? "bg-[#fee6e6] text-[#9b1c1c] border-[#f3b8b8]"
@@ -185,30 +190,34 @@ function PriorityBadge({ priority }: { priority: FocusItem["priority"] }) {
         ? "bg-[#fff5de] text-[#805900] border-[#f3d290]"
         : "bg-[#e8f6ec] text-[#1a6f3e] border-[#b8e3c9]";
 
-  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}>{priority}</span>;
+  const label =
+    priority === "High" ? t("priority.high") : priority === "Medium" ? t("priority.medium") : t("priority.low");
+
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>;
 }
 
 export function RoleOverview({ role, name, overview }: RoleOverviewProps & { overview?: DynamicOverview }) {
+  const { t } = useLanguage();
   const roleKey = String(role);
-  const model = getOverviewModel(roleKey, overview);
+  const model = getOverviewModel(roleKey, t, overview);
   const displayName =
     name?.trim() ||
     (roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
-      ? "Administrator"
+      ? t("roleLabel.administrator")
       : roleKey === "DEPARTMENT_HEAD"
-        ? "Department Head"
+        ? t("roleLabel.departmentHead")
         : roleKey === "TEACHER"
-          ? "Faculty"
-          : "Student");
+          ? t("roleLabel.faculty")
+          : t("roleLabel.student"));
 
   return (
     <section className="grid gap-4">
       <article className="brand-card p-6">
-        <p className="brand-section-title">Overview</p>
+        <p className="brand-section-title">{t("overviewTitle")}</p>
         <h3 className="mt-2 text-2xl font-bold text-[#0b3e81]">{model.heading}</h3>
         <p className="brand-muted mt-2 max-w-3xl">{model.summary}</p>
         <p className="mt-3 text-sm text-[#2a5e9e]">
-          Signed in as <span className="font-semibold text-[#0b3e81]">{displayName}</span>
+          {t("signedInAsLabel")} <span className="font-semibold text-[#0b3e81]">{displayName}</span>
         </p>
       </article>
 
@@ -234,13 +243,13 @@ export function RoleOverview({ role, name, overview }: RoleOverviewProps & { ove
 
       <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr]">
         <article className="brand-card p-5">
-          <p className="brand-section-title">Priority Queue</p>
+          <p className="brand-section-title">{t("priorityQueue")}</p>
           <div className="mt-3 space-y-3">
             {model.focus.map((item) => (
               <div key={item.title} className="rounded-xl border border-[#c6ddfa] bg-[#f4f9ff] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-[#0b3e81]">{item.title}</p>
-                  <PriorityBadge priority={item.priority} />
+                  <PriorityBadge priority={item.priority} t={t} />
                 </div>
                 <p className="mt-1 text-sm text-[#2f5d96]">{item.detail}</p>
               </div>
@@ -249,7 +258,7 @@ export function RoleOverview({ role, name, overview }: RoleOverviewProps & { ove
         </article>
 
         <article className="brand-card p-5">
-          <p className="brand-section-title">Today</p>
+          <p className="brand-section-title">{t("today")}</p>
           <div className="mt-3 space-y-2">
             {model.timeline.map((entry) => (
               <div key={entry} className="flex items-start gap-2 rounded-lg border border-[#cee2fb] bg-white/75 px-3 py-2">

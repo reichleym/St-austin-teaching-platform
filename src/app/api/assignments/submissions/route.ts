@@ -4,7 +4,7 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 
 type GradeLifecycleState =
   | "NOT_SUBMITTED"
@@ -191,6 +191,7 @@ async function getAssignmentConfig(assignmentId: string) {
       maxPoints: Prisma.Decimal;
       courseId: string;
       courseVisibility: string | null;
+      courseEndDate: Date | null;
       teacherId: string | null;
     }>
   >`
@@ -207,6 +208,7 @@ async function getAssignmentConfig(assignmentId: string) {
       a."maxPoints",
       a."courseId",
       c."visibility"::text AS "courseVisibility",
+      c."endDate" AS "courseEndDate",
       c."teacherId"
     FROM "Assignment" a
     JOIN "Course" c ON c."id" = a."courseId"
@@ -239,6 +241,7 @@ async function getAssignmentConfig(assignmentId: string) {
     maxPoints: Number(row.maxPoints),
     courseId: row.courseId,
     courseVisibility: row.courseVisibility,
+    courseEndDate: row.courseEndDate ?? null,
     teacherId: row.teacherId,
   };
 }
@@ -762,6 +765,9 @@ export async function POST(request: NextRequest) {
     if (config.courseVisibility !== COURSE_VISIBILITY_PUBLISHED) {
       return NextResponse.json({ error: "Course is not available for students." }, { status: 403 });
     }
+    if (isCourseExpired(config.courseEndDate)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
 
     const enrolled = await prisma.enrollment.count({
       where: { courseId: config.courseId, studentId: user.id, status: "ACTIVE" },
@@ -1041,6 +1047,7 @@ export async function PATCH(request: NextRequest) {
         latePenaltyPct: number;
         maxPoints: Prisma.Decimal;
         teacherId: string | null;
+        courseEndDate: Date | null;
         rawScore: number | null;
         finalScore: number | null;
         feedback: string | null;
@@ -1059,6 +1066,7 @@ export async function PATCH(request: NextRequest) {
         s."status",
         a."maxPoints",
         c."teacherId",
+        c."endDate" AS "courseEndDate",
         cfg."attemptScoringStrategy"
       FROM "AssignmentSubmission" s
       JOIN "Assignment" a ON a."id" = s."assignmentId"
@@ -1071,6 +1079,9 @@ export async function PATCH(request: NextRequest) {
     const submission = rows[0];
     if (!submission) {
       return NextResponse.json({ error: "Submission not found." }, { status: 404 });
+    }
+    if (isCourseExpired(submission.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     if (!isSuperAdmin && submission.teacherId !== user.id) {

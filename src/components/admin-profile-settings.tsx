@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { PasswordField } from "@/components/password-field";
+import { useLanguage } from "@/components/language-provider";
 
 type AdminProfile = {
   id: string;
@@ -16,6 +17,7 @@ type AdminProfile = {
 };
 
 export function AdminProfileSettings() {
+  const { t } = useLanguage();
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -38,7 +40,7 @@ export function AdminProfileSettings() {
         const raw = await response.text();
         const result = raw ? (JSON.parse(raw) as { error?: string; profile?: AdminProfile }) : {};
         if (!response.ok || !result.profile) {
-          if (active) setError(result.error ?? "Unable to load admin profile.");
+          if (active) setError(result.error ?? t("error.loadAdminProfile"));
           return;
         }
         if (!active) return;
@@ -48,7 +50,7 @@ export function AdminProfileSettings() {
         setCountry(result.profile.country ?? "");
         setState(result.profile.state ?? "");
       } catch {
-        if (active) setError("Unable to load admin profile.");
+        if (active) setError(t("error.loadAdminProfile"));
       } finally {
         if (active) setIsLoading(false);
       }
@@ -64,11 +66,11 @@ export function AdminProfileSettings() {
     setError("");
     setSuccess("");
     if (!name.trim()) {
-      setError("Name is required.");
+      setError(t("error.nameRequired"));
       return;
     }
     if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) {
-      setError("Provide both current and new password to update password.");
+      setError(t("error.passwordPairRequired"));
       return;
     }
     setIsSaving(true);
@@ -88,15 +90,15 @@ export function AdminProfileSettings() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string; profile?: AdminProfile }) : {};
       if (!response.ok || !result.profile) {
-        setError(result.error ?? "Unable to update profile.");
+        setError(result.error ?? t("error.updateProfile"));
         return;
       }
       setProfile(result.profile);
       setCurrentPassword("");
       setNewPassword("");
-      setSuccess("Profile updated successfully.");
+      setSuccess(t("success.profileUpdated"));
     } catch {
-      setError("Unable to update profile.");
+      setError(t("error.updateProfile"));
     } finally {
       setIsSaving(false);
     }
@@ -105,18 +107,20 @@ export function AdminProfileSettings() {
   return (
     <section className="grid gap-4">
       <article className="brand-card p-5">
-        <p className="brand-section-title">Admin Profile Settings</p>
-        <p className="brand-muted mt-2 text-sm">Update your profile details used across the admin panel.</p>
-        {profile ? <p className="mt-1 text-xs text-[#3a689f]">Account: {profile.email}</p> : null}
+        <p className="brand-section-title">{t("adminProfile.title")}</p>
+        <p className="brand-muted mt-2 text-sm">{t("adminProfile.subtitle")}</p>
+        {profile ? <p className="mt-1 text-xs text-[#3a689f]">{t("adminProfile.account")}: {profile.email}</p> : null}
         {profile ? (
-          <p className="mt-1 text-xs text-[#3a689f]">Last updated: {new Date(profile.updatedAt).toLocaleString()}</p>
+          <p className="mt-1 text-xs text-[#3a689f]">
+            {t("adminProfile.lastUpdated")}: {new Date(profile.updatedAt).toLocaleString()}
+          </p>
         ) : null}
       </article>
 
       <article className="brand-card p-5">
         {isLoading ? (
           <div className="mt-2">
-            <LoadingIndicator label="Loading profile..." lines={2} />
+            <LoadingIndicator label={t("loading.profile")} lines={2} />
           </div>
         ) : null}
         {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
@@ -125,57 +129,57 @@ export function AdminProfileSettings() {
         {!isLoading ? (
           <form className="grid gap-3" onSubmit={onSubmit}>
             <label className="grid gap-1.5">
-              <span className="brand-label">Full Name</span>
+              <span className="brand-label">{t("label.fullName")}</span>
               <input
                 className="brand-input"
-                placeholder="Full name"
+                placeholder={t("placeholder.fullName")}
                 value={name}
                 onChange={(event) => setName(event.currentTarget.value)}
                 required
               />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Phone Number</span>
+              <span className="brand-label">{t("label.phoneNumber")}</span>
               <input
                 className="brand-input"
-                placeholder="Phone number"
+                placeholder={t("placeholder.phoneNumber")}
                 value={phone}
                 onChange={(event) => setPhone(event.currentTarget.value)}
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1.5">
-                <span className="brand-label">Country</span>
+                <span className="brand-label">{t("label.country")}</span>
                 <input
                   className="brand-input"
-                  placeholder="Country"
+                  placeholder={t("placeholder.country")}
                   value={country}
                   onChange={(event) => setCountry(event.currentTarget.value)}
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="brand-label">State</span>
+                <span className="brand-label">{t("label.state")}</span>
                 <input
                   className="brand-input"
-                  placeholder="State"
+                  placeholder={t("placeholder.state")}
                   value={state}
                   onChange={(event) => setState(event.currentTarget.value)}
                 />
               </label>
             </div>
-            <p className="brand-label mt-1">Change Password</p>
+            <p className="brand-label mt-1">{t("label.changePassword")}</p>
             <div className="grid gap-3 md:grid-cols-2">
               <PasswordField
-                label="Current Password"
-                placeholder="Current password"
+                label={t("label.currentPassword")}
+                placeholder={t("placeholder.currentPassword")}
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.currentTarget.value)}
                 wrapperClassName="grid gap-1"
                 inputClassName="brand-input pr-11"
               />
               <PasswordField
-                label="New Password"
-                placeholder="New password (min 8 chars)"
+                label={t("label.newPassword")}
+                placeholder={t("placeholder.newPassword")}
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.currentTarget.value)}
                 wrapperClassName="grid gap-1"
@@ -183,7 +187,7 @@ export function AdminProfileSettings() {
               />
             </div>
             <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Update Profile"}
+              {isSaving ? t("status.saving") : t("action.updateProfile")}
             </button>
           </form>
         ) : null}

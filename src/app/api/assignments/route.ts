@@ -2,7 +2,7 @@ import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 
 type AssignmentType = "HOMEWORK" | "QUIZ" | "EXAM";
 type SubmissionType = "TEXT" | "FILE";
@@ -501,10 +501,13 @@ export async function POST(request: NextRequest) {
 
     const course = await prisma.course.findUnique({
       where: { id: courseId },
-      select: { id: true, teacherId: true },
+      select: { id: true, teacherId: true, endDate: true },
     });
     if (!course) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
+    }
+    if (isCourseExpired(course.endDate)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (user.role === Role.TEACHER && course.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only create assignments for your assigned courses." }, { status: 403 });
@@ -604,10 +607,13 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: { course: { select: { id: true, teacherId: true } } },
+      include: { course: { select: { id: true, teacherId: true, endDate: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
+    }
+    if (isCourseExpired(existing.course.endDate)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (user.role === Role.TEACHER && existing.course.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only update assignments in your assigned courses." }, { status: 403 });
@@ -765,10 +771,13 @@ export async function DELETE(request: NextRequest) {
 
     const existing = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: { course: { select: { teacherId: true } } },
+      include: { course: { select: { teacherId: true, endDate: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
+    }
+    if (isCourseExpired(existing.course.endDate)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (user.role === Role.TEACHER && existing.course.teacherId !== user.id) {
       return NextResponse.json({ error: "You can only delete assignments in your assigned courses." }, { status: 403 });

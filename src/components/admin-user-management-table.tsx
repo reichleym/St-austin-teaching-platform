@@ -712,7 +712,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
             </label>
           </div>
           <div className="mt-4 flex items-center gap-2">
-            <button className="btn-brand-primary px-4 py-2 text-sm font-semibold" onClick={onFullSave} disabled={isFullSaving}>
+            <button className="btn-brand-primary px-2 py-2 text-sm font-semibold" onClick={onFullSave} disabled={isFullSaving}>
               {isFullSaving ? "Saving..." : "Save Changes"}
             </button>
             <button

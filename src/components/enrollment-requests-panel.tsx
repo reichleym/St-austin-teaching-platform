@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
 
 type EnrollmentRequestItem = {
   id: string;
@@ -24,6 +25,7 @@ const formatDateTime = (value: string) => {
 };
 
 export function EnrollmentRequestsPanel() {
+  const { t } = useLanguage();
   const [requests, setRequests] = useState<EnrollmentRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -33,6 +35,10 @@ export function EnrollmentRequestsPanel() {
     () => requests.filter((request) => request.status === "PENDING").length,
     [requests]
   );
+  const pendingLabel =
+    pendingCount === 1
+      ? t("pendingRequestSingle")
+      : t("pendingRequestPlural", { count: pendingCount });
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -42,13 +48,13 @@ export function EnrollmentRequestsPanel() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { requests?: EnrollmentRequestItem[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load enrollment requests.");
+        setError(result.error ?? t("error.loadEnrollmentRequests"));
         setRequests([]);
         return;
       }
       setRequests(result.requests ?? []);
     } catch {
-      setError("Unable to load enrollment requests.");
+      setError(t("error.loadEnrollmentRequests"));
       setRequests([]);
     } finally {
       setLoading(false);
@@ -71,12 +77,12 @@ export function EnrollmentRequestsPanel() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to review enrollment request.");
+        setError(result.error ?? t("error.reviewEnrollmentRequest"));
         return;
       }
       await loadRequests();
     } catch {
-      setError("Unable to review enrollment request.");
+      setError(t("error.reviewEnrollmentRequest"));
     } finally {
       setActionId("");
     }
@@ -86,10 +92,8 @@ export function EnrollmentRequestsPanel() {
     <section className="brand-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="brand-section-title">Enrollment Requests</p>
-          <p className="brand-muted mt-1 text-xs">
-            {pendingCount} pending request{pendingCount === 1 ? "" : "s"}
-          </p>
+          <p className="brand-section-title">{t("enrollmentRequests")}</p>
+          <p className="brand-muted mt-1 text-xs">{pendingLabel}</p>
         </div>
         <button
           type="button"
@@ -97,7 +101,7 @@ export function EnrollmentRequestsPanel() {
           onClick={() => void loadRequests()}
           disabled={loading}
         >
-          Refresh
+          {t("action.refresh")}
         </button>
       </div>
 
@@ -105,12 +109,12 @@ export function EnrollmentRequestsPanel() {
 
       {loading ? (
         <div className="mt-3">
-          <LoadingIndicator label="Loading enrollment requests..." />
+          <LoadingIndicator label={t("loading.enrollmentRequests")} />
         </div>
       ) : null}
 
       {!loading && !requests.length ? (
-        <p className="brand-muted mt-3 text-sm">No enrollment requests yet.</p>
+        <p className="brand-muted mt-3 text-sm">{t("enrollmentRequests.none")}</p>
       ) : null}
 
       {!loading && requests.length ? (
@@ -118,11 +122,11 @@ export function EnrollmentRequestsPanel() {
           <table className="min-w-full text-left text-sm">
             <thead>
               <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                <th className="px-3 py-2 font-semibold">Course</th>
-                <th className="px-3 py-2 font-semibold">Student</th>
-                <th className="px-3 py-2 font-semibold">Requested</th>
-                <th className="px-3 py-2 font-semibold">Status</th>
-                <th className="px-3 py-2 font-semibold">Actions</th>
+                <th className="px-3 py-2 font-semibold">{t("table.course")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.student")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.requested")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.status")}</th>
+                <th className="px-3 py-2 font-semibold">{t("table.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,13 +139,13 @@ export function EnrollmentRequestsPanel() {
                       <p className="text-xs text-[#3768ac]">{request.courseTitle}</p>
                     </td>
                     <td className="px-3 py-2">
-                      <p>{request.studentName || "Unnamed Student"}</p>
+                      <p>{request.studentName || t("label.unnamedStudent")}</p>
                       <p className="text-xs text-[#3768ac]">{request.studentEmail}</p>
                     </td>
                     <td className="px-3 py-2">{formatDateTime(request.createdAt)}</td>
                     <td className="px-3 py-2">
                       <span className="rounded-full bg-[#eef5ff] px-2 py-1 text-xs font-semibold text-[#1f518f]">
-                        {request.status}
+                        {t(`status.${request.status.toLowerCase()}`)}
                       </span>
                     </td>
                     <td className="px-3 py-2">
@@ -153,7 +157,7 @@ export function EnrollmentRequestsPanel() {
                             disabled={actionId === request.id}
                             onClick={() => void onReviewRequest(request.id, "APPROVE")}
                           >
-                            {actionId === request.id ? "Processing..." : "Approve"}
+                            {actionId === request.id ? t("status.processing") : t("action.approve")}
                           </button>
                           <button
                             type="button"
@@ -161,11 +165,11 @@ export function EnrollmentRequestsPanel() {
                             disabled={actionId === request.id}
                             onClick={() => void onReviewRequest(request.id, "REJECT")}
                           >
-                            Reject
+                            {t("action.reject")}
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-[#3a689f]">Reviewed</span>
+                        <span className="text-xs text-[#3a689f]">{t("status.reviewed")}</span>
                       )}
                     </td>
                   </tr>

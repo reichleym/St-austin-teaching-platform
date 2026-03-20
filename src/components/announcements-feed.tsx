@@ -1,4 +1,15 @@
-type Audience = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+"use client";
+
+import { useLanguage } from "@/components/language-provider";
+
+type Audience =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
 
 type AnnouncementItem = {
   id: string;
@@ -13,24 +24,24 @@ type Props = {
   announcements: AnnouncementItem[];
 };
 
-function formatDate(value: string | null) {
-  if (!value) return "No expiry";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No expiry";
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
 export function AnnouncementsFeed({ announcements }: Props) {
+  const { t } = useLanguage();
+  const formatDateLabel = (value: string | null) => {
+    if (!value) return t("noExpiry");
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return t("noExpiry");
+    return date.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  };
   return (
     <section className="brand-card p-5">
-      <p className="brand-section-title">Announcements</p>
+      <p className="brand-section-title">{t("announcements")}</p>
       <div className="mt-3 space-y-3">
         {announcements.length ? (
           announcements.map((item) => (
@@ -44,13 +55,13 @@ export function AnnouncementsFeed({ announcements }: Props) {
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{item.content}</p>
               <div className="mt-2 text-xs text-[#3f70ae]">
-                <p>Posted: {formatDate(item.createdAt)}</p>
-                <p>Expires: {formatDate(item.expiresAt)}</p>
+                <p>{t("posted")}: {formatDateLabel(item.createdAt)}</p>
+                <p>{t("expires")}: {formatDateLabel(item.expiresAt)}</p>
               </div>
             </article>
           ))
         ) : (
-          <p className="brand-muted text-sm">No active announcements available.</p>
+          <p className="brand-muted text-sm">{t("noActiveAnnouncements")}</p>
         )}
       </div>
     </section>

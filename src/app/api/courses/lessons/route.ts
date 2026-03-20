@@ -1,6 +1,6 @@
 import { Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { COURSE_VISIBILITY_PUBLISHED, parseLessonVisibility } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired, parseLessonVisibility } from "@/lib/courses";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -154,9 +154,9 @@ async function getCourseAccessByModule(user: { id: string; role: Role | string }
   if (!getCourseModuleDelegate()) {
     await ensureCourseStructureSchema();
     const moduleRows = await prisma.$queryRaw<
-      Array<{ id: string; courseId: string; teacherId: string | null }>
+      Array<{ id: string; courseId: string; teacherId: string | null; courseEndDate: Date | null }>
     >`
-      SELECT m."id", m."courseId", c."teacherId"
+      SELECT m."id", m."courseId", c."teacherId", c."endDate" AS "courseEndDate"
       FROM "CourseModule" m
       JOIN "Course" c ON c."id" = m."courseId"
       WHERE m."id" = ${moduleId}
@@ -174,7 +174,16 @@ async function getCourseAccessByModule(user: { id: string; role: Role | string }
     }
     return {
       ok: true as const,
-      module: { id: row.id, courseId: row.courseId, course: { teacherId: row.teacherId, visibility: COURSE_VISIBILITY_PUBLISHED, enrollments: enrollments ? [{ id: "x" }] : [] } },
+      module: {
+        id: row.id,
+        courseId: row.courseId,
+        course: {
+          teacherId: row.teacherId,
+          visibility: COURSE_VISIBILITY_PUBLISHED,
+          endDate: row.courseEndDate,
+          enrollments: enrollments ? [{ id: "x" }] : [],
+        },
+      },
       canManage,
       canViewAsStudent,
     };
@@ -186,6 +195,7 @@ async function getCourseAccessByModule(user: { id: string; role: Role | string }
     course: {
       teacherId: string | null;
       visibility: "DRAFT" | "PUBLISHED";
+      endDate: Date | null;
       enrollments: Array<{ id: string }>;
     };
   } | null = null;
@@ -200,6 +210,7 @@ async function getCourseAccessByModule(user: { id: string; role: Role | string }
           select: {
             teacherId: true,
             visibility: true,
+            endDate: true,
             enrollments: {
               where: { studentId: user.id, status: "ACTIVE" },
               select: { id: true },
@@ -218,6 +229,7 @@ async function getCourseAccessByModule(user: { id: string; role: Role | string }
         course: {
           select: {
             teacherId: true,
+            endDate: true,
             enrollments: {
               where: { studentId: user.id, status: "ACTIVE" },
               select: { id: true },
@@ -257,9 +269,9 @@ async function getCourseAccessByLesson(user: { id: string; role: Role | string }
   if (!getLessonDelegate()) {
     await ensureCourseStructureSchema();
     const lessonRows = await prisma.$queryRaw<
-      Array<{ id: string; moduleId: string; courseId: string; teacherId: string | null }>
+      Array<{ id: string; moduleId: string; courseId: string; teacherId: string | null; courseEndDate: Date | null }>
     >`
-      SELECT l."id", l."moduleId", m."courseId", c."teacherId"
+      SELECT l."id", l."moduleId", m."courseId", c."teacherId", c."endDate" AS "courseEndDate"
       FROM "Lesson" l
       JOIN "CourseModule" m ON m."id" = l."moduleId"
       JOIN "Course" c ON c."id" = m."courseId"
@@ -281,7 +293,16 @@ async function getCourseAccessByLesson(user: { id: string; role: Role | string }
       lesson: {
         id: row.id,
         moduleId: row.moduleId,
-        module: { id: row.moduleId, courseId: row.courseId, course: { teacherId: row.teacherId, visibility: COURSE_VISIBILITY_PUBLISHED, enrollments: enrollments ? [{ id: "x" }] : [] } },
+        module: {
+          id: row.moduleId,
+          courseId: row.courseId,
+          course: {
+            teacherId: row.teacherId,
+            visibility: COURSE_VISIBILITY_PUBLISHED,
+            endDate: row.courseEndDate,
+            enrollments: enrollments ? [{ id: "x" }] : [],
+          },
+        },
       },
       canManage,
       canViewAsStudent,
@@ -297,6 +318,7 @@ async function getCourseAccessByLesson(user: { id: string; role: Role | string }
       course: {
         teacherId: string | null;
         visibility: "DRAFT" | "PUBLISHED";
+        endDate: Date | null;
         enrollments: Array<{ id: string }>;
       };
     };
@@ -316,6 +338,7 @@ async function getCourseAccessByLesson(user: { id: string; role: Role | string }
               select: {
                 teacherId: true,
                 visibility: true,
+                endDate: true,
                 enrollments: {
                   where: { studentId: user.id, status: "ACTIVE" },
                   select: { id: true },
@@ -340,6 +363,7 @@ async function getCourseAccessByLesson(user: { id: string; role: Role | string }
             course: {
               select: {
                 teacherId: true,
+                endDate: true,
                 enrollments: {
                   where: { studentId: user.id, status: "ACTIVE" },
                   select: { id: true },
@@ -397,6 +421,9 @@ export async function POST(request: NextRequest) {
     }
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can create lessons." }, { status: 403 });
+    }
+    if (isCourseExpired(access.module.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const visibility = body.visibility ? parseLessonVisibility(body.visibility) : "VISIBLE";
@@ -488,6 +515,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can update lessons." }, { status: 403 });
+    }
+    if (isCourseExpired(access.lesson.module.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const data: Prisma.LessonUpdateInput = {};
@@ -654,6 +684,9 @@ export async function DELETE(request: NextRequest) {
     }
     if (!access.canManage) {
       return NextResponse.json({ error: "Only admin or assigned teacher can delete lessons." }, { status: 403 });
+    }
+    if (isCourseExpired(access.lesson.module.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     if (!lessonModel) {

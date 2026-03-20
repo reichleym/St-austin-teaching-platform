@@ -118,7 +118,7 @@ export default function AdminLoginClient() {
           <ToastMessage type="error" message={error} />
 
           <button
-            className="btn-brand-primary px-4 py-2 disabled:opacity-60"
+            className="btn-brand-primary px-2 py-2 disabled:opacity-60"
             disabled={isPending}
           >
             {isPending ? "Signing in..." : "Sign in as Admin"}

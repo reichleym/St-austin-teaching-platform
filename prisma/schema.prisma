@@ -75,6 +75,10 @@ enum AnnouncementAudience {
   BOTH
   TEACHER_ONLY
   STUDENT_ONLY
+  DEPARTMENT_HEAD_ONLY
+  TEACHER_DEPARTMENT_HEAD
+  STUDENT_DEPARTMENT_HEAD
+  ALL
 }
 
 enum InstructionThreadStatus {

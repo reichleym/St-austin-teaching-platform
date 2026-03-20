@@ -1,4 +1,8 @@
+"use client";
+
 import { LogoutButton } from "@/components/logout-button";
+import { useLanguage } from "@/components/language-provider";
+import type { Language } from "@/lib/i18n";
 
 type DashboardTopbarProps = {
   name?: string | null;
@@ -7,21 +11,26 @@ type DashboardTopbarProps = {
 };
 
 export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
+  const { language, setLanguage, t } = useLanguage();
   const displayName = name?.trim() || email?.split("@")[0] || "User";
   const initials = displayName.slice(0, 2).toUpperCase();
   const roleKey = String(role);
   const roleLabel =
-    roleKey === "SUPER_ADMIN"
-      ? "SUPER ADMIN"
+    roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
+      ? t("role.super_admin")
       : roleKey === "DEPARTMENT_HEAD"
-        ? "DEPARTMENT HEAD"
-        : roleKey;
+        ? t("role.department_head")
+        : roleKey === "TEACHER"
+          ? t("role.teacher")
+          : roleKey === "STUDENT"
+            ? t("role.student")
+            : roleKey;
 
   return (
     <header className="mb-6 flex items-center justify-between gap-4">
       <div className="hidden min-w-0 md:block">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3f70ae]">Workspace</p>
-        <p className="truncate text-lg font-semibold text-[#083672]">Welcome back, {displayName}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3f70ae]">{t("workspace")}</p>
+        <p className="truncate text-lg font-semibold text-[#083672]">{t("welcomeBack", { name: displayName })}</p>
       </div>
       <section className="brand-glass w-full max-w-md p-3">
         <div className="flex items-center justify-between gap-3">
@@ -41,12 +50,26 @@ export function DashboardTopbar({ name, email, role }: DashboardTopbarProps) {
                 <span className="brand-chip brand-chip-accent">{roleLabel}</span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#2d66a6]">
                   <span className="h-2 w-2 rounded-full bg-[#2db36b]" />
-                  Online
+                  {t("online")}
                 </span>
               </div>
             </div>
           </div>
-          <LogoutButton role={role} />
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-[#2e5f9e]">
+              <span className="sr-only">{t("language")}</span>
+              <select
+                className="rounded-md border border-[#c6ddfa] bg-white px-2 py-2 text-xs font-semibold text-[#083672]"
+                value={language}
+                onChange={(event) => setLanguage(event.currentTarget.value as Language)}
+                aria-label={t("language")}
+              >
+                <option value="en">{t("english")}</option>
+                <option value="fr">{t("french")}</option>
+              </select>
+            </label>
+            <LogoutButton role={role} />
+          </div>
         </div>
       </section>
     </header>

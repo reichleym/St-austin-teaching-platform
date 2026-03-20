@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
 const STAFF_ROLES = ["TEACHER", "DEPARTMENT_HEAD", "SUPER_ADMIN"];
@@ -21,11 +22,14 @@ export async function POST(request: NextRequest) {
 
     const thread = await prisma.instructionThread.findUniqueOrThrow({
       where: { id: threadId },
-      select: { status: true, studentId: true },
+      select: { status: true, studentId: true, course: { select: { endDate: true } } },
     });
 
     if (thread.status === "CLOSED") {
       return NextResponse.json({ error: "This thread is closed." }, { status: 400 });
+    }
+    if (isCourseExpired(thread.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     if (user.role === Role.STUDENT && thread.studentId !== user.id) {
@@ -92,11 +96,14 @@ export async function DELETE(request: NextRequest) {
 
     const msg = await prisma.instructionMessage.findUniqueOrThrow({
       where: { id: messageId },
-      select: { authorId: true, isDeleted: true },
+      select: { authorId: true, isDeleted: true, thread: { select: { course: { select: { endDate: true } } } } },
     });
 
     if (msg.isDeleted) {
       return NextResponse.json({ error: "Already deleted." }, { status: 400 });
+    }
+    if (isCourseExpired(msg.thread.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
 
     const isAuthor = msg.authorId === user.id;

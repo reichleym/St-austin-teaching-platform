@@ -18,19 +18,29 @@ import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
 import { StudentProgressModule } from "@/components/student-progress-module";
+import { createServerTranslator } from "@/lib/i18n-server";
 
 type Props = {
   params: Promise<{ module: string }>;
 };
 
-type AnnouncementAudienceValue = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+type AnnouncementAudienceValue =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
 
 function isAnnouncementAudienceCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes("Unknown field `audience`") ||
     error.message.includes("Unknown argument `audience`") ||
-    (error.message.includes("Invalid value for argument `audience`") && error.message.includes("AnnouncementAudience")) || (error.message.includes("Invalid value for argument `in`") && error.message.includes("AnnouncementAudience"))
+    (error.message.includes("Invalid value for argument `audience`") && error.message.includes("AnnouncementAudience")) ||
+    (error.message.includes("Invalid value for argument `in`") && error.message.includes("AnnouncementAudience")) ||
+    error.message.toLowerCase().includes("invalid input value for enum \"announcementaudience\"")
   );
 }
 
@@ -65,6 +75,7 @@ function isUserCountryStateCompatibilityError(error: unknown) {
 
 export default async function DashboardPage({ params }: Props) {
   const session = await auth();
+  const t = await createServerTranslator();
 
   if (!session?.user || session.user.status !== "ACTIVE") {
     redirect("/login");
@@ -113,7 +124,21 @@ export default async function DashboardPage({ params }: Props) {
   const isSuperAdmin = isSuperAdminRole(roleKey);
   const announcementModuleSlug = isSuperAdmin ? "announcements" : "announcements-feed";
   const roleAnnouncementAudience: AnnouncementAudienceValue[] =
-    roleKey === "TEACHER" ? ["BOTH", "TEACHER_ONLY"] : roleKey === "STUDENT" ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
+    roleKey === "TEACHER"
+      ? ["TEACHER_ONLY", "BOTH", "TEACHER_DEPARTMENT_HEAD", "ALL"]
+      : roleKey === "STUDENT"
+        ? ["STUDENT_ONLY", "BOTH", "STUDENT_DEPARTMENT_HEAD", "ALL"]
+        : roleKey === "DEPARTMENT_HEAD"
+          ? ["DEPARTMENT_HEAD_ONLY", "TEACHER_DEPARTMENT_HEAD", "STUDENT_DEPARTMENT_HEAD", "ALL"]
+          : [
+              "BOTH",
+              "TEACHER_ONLY",
+              "STUDENT_ONLY",
+              "DEPARTMENT_HEAD_ONLY",
+              "TEACHER_DEPARTMENT_HEAD",
+              "STUDENT_DEPARTMENT_HEAD",
+              "ALL",
+            ];
 
   let announcementCount = 0;
   try {
@@ -136,9 +161,13 @@ export default async function DashboardPage({ params }: Props) {
         if (isSuperAdmin) {
           announcementCount = await prisma.announcement.count();
         } else {
+          const legacyAudience = roleAnnouncementAudience.filter((audience) =>
+            ["BOTH", "TEACHER_ONLY", "STUDENT_ONLY"].includes(audience)
+          );
           announcementCount = await prisma.announcement.count({
             where: {
               isGlobal: true,
+              ...(legacyAudience.length ? { audience: { in: legacyAudience } } : {}),
               OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
             },
           });
@@ -147,7 +176,24 @@ export default async function DashboardPage({ params }: Props) {
         if (isAnnouncementTableMissingError(legacyError)) {
           announcementCount = 0;
         } else {
-          throw legacyError;
+          try {
+            if (isSuperAdmin) {
+              announcementCount = await prisma.announcement.count();
+            } else {
+              announcementCount = await prisma.announcement.count({
+                where: {
+                  isGlobal: true,
+                  OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+                },
+              });
+            }
+          } catch (fallbackError) {
+            if (isAnnouncementTableMissingError(fallbackError)) {
+              announcementCount = 0;
+            } else {
+              throw fallbackError;
+            }
+          }
         }
       }
     } else {
@@ -946,12 +992,23 @@ export default async function DashboardPage({ params }: Props) {
     moduleKpiHint = "profile and platform controls";
   }
 
-  const selectedTitle =
+  const baseTitle =
     roleKey === "STUDENT" && selected.slug === "courses"
       ? "All Courses"
       : roleKey === "STUDENT" && selected.slug === "learning"
         ? "My Learning"
         : selected.title;
+  const selectedTitleKey =
+    selected.slug === "courses" && roleKey === "STUDENT"
+      ? "module.courses.student"
+      : selected.slug === "learning" && roleKey === "STUDENT"
+        ? "module.learning.student"
+        : selected.slug === "instructions" && roleKey === "STUDENT"
+          ? "module.instructions.student"
+          : selected.slug === "instructions" && (roleKey === "TEACHER" || roleKey === "DEPARTMENT_HEAD")
+            ? "module.instructions.teacher"
+            : `module.${selected.slug}`;
+  const selectedTitle = t(selectedTitleKey, undefined, baseTitle);
 
   return (
     <main className="min-h-screen lg:flex">
@@ -965,7 +1022,7 @@ export default async function DashboardPage({ params }: Props) {
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{selectedTitle}</h2>
             </div>
@@ -981,7 +1038,7 @@ export default async function DashboardPage({ params }: Props) {
           <section className="grid gap-4">
             <RoleOverview role={roleKey} name={session.user.name} overview={{ metrics: overviewMetrics, focus: overviewFocus }} />
             <section className="brand-card p-5">
-              <p className="brand-section-title">Announcements</p>
+              <p className="brand-section-title">{t("announcements")}</p>
               <div className="mt-3 space-y-2">
                 {overviewAnnouncements.length ? (
                   overviewAnnouncements.map((item) => (
@@ -994,7 +1051,7 @@ export default async function DashboardPage({ params }: Props) {
                     </Link>
                   ))
                 ) : (
-                  <p className="brand-muted text-sm">No announcements available right now.</p>
+                  <p className="brand-muted text-sm">{t("announcements.noneAvailable")}</p>
                 )}
               </div>
             </section>

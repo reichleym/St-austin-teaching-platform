@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { useLanguage } from "@/components/language-provider";
 
 type GradeBand = {
   min: string;
@@ -16,6 +17,7 @@ type LatePenaltyBand = {
 };
 
 export function AcademicPoliciesSettings() {
+  const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +51,7 @@ export function AcademicPoliciesSettings() {
             })
           : {};
         if (!response.ok || !result.settings) {
-          if (active) setError(result.error ?? "Unable to load academic policies.");
+          if (active) setError(result.error ?? t("error.loadAcademicPolicies"));
           return;
         }
         if (!active) return;
@@ -71,7 +73,7 @@ export function AcademicPoliciesSettings() {
           );
         }
       } catch {
-        if (active) setError("Unable to load academic policies.");
+        if (active) setError(t("error.loadAcademicPolicies"));
       } finally {
         if (active) setIsLoading(false);
       }
@@ -108,7 +110,7 @@ export function AcademicPoliciesSettings() {
       );
 
     if (!parsedGradeBands.length) {
-      setError("Add at least one valid grade scale band.");
+      setError(t("error.addGradeBand"));
       return;
     }
 
@@ -125,12 +127,12 @@ export function AcademicPoliciesSettings() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to update academic policies.");
+        setError(result.error ?? t("error.updateAcademicPolicies"));
         return;
       }
-      setSuccess("Academic policies updated.");
+      setSuccess(t("success.academicPoliciesUpdated"));
     } catch {
-      setError("Unable to update academic policies.");
+      setError(t("error.updateAcademicPolicies"));
     } finally {
       setIsSaving(false);
     }
@@ -139,24 +141,24 @@ export function AcademicPoliciesSettings() {
   return (
     <section className="grid gap-4">
       <article className="brand-card p-5">
-        <p className="brand-section-title">Academic Policies</p>
-        <p className="brand-muted mt-2 text-sm">Configure numeric-to-letter grade mapping and automatic late submission penalties.</p>
+        <p className="brand-section-title">{t("academicPolicies.title")}</p>
+        <p className="brand-muted mt-2 text-sm">{t("academicPolicies.subtitle")}</p>
       </article>
 
       <article className="brand-card p-5">
-        {isLoading ? <LoadingIndicator label="Loading academic policies..." /> : null}
+        {isLoading ? <LoadingIndicator label={t("loading.academicPolicies")} /> : null}
         <ToastMessage type="error" message={error} />
         <ToastMessage type="success" message={success} />
 
         {!isLoading ? (
           <form className="grid gap-4" onSubmit={onSave}>
             <div className="grid gap-2">
-              <p className="brand-label">Grade Scale Bands</p>
+              <p className="brand-label">{t("academicPolicies.gradeBands")}</p>
               <div className="hidden gap-2 text-xs font-semibold text-[#3a689f] md:grid md:grid-cols-[1fr_1fr_1fr_auto]">
-                <p>Min Percentage</p>
-                <p>Max Percentage</p>
-                <p>Letter Grade</p>
-                <p className="text-right">Action</p>
+                <p>{t("table.minPercentage")}</p>
+                <p>{t("table.maxPercentage")}</p>
+                <p>{t("table.letterGrade")}</p>
+                <p className="text-right">{t("table.action")}</p>
               </div>
               {gradeBands.map((band, index) => (
                 <div key={`grade_band_${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -164,8 +166,8 @@ export function AcademicPoliciesSettings() {
                     className="brand-input"
                     type="number"
                     step="0.01"
-                    placeholder="Min %"
-                    aria-label={`Grade band ${index + 1} minimum percentage`}
+                    placeholder={t("placeholder.minPercent")}
+                    aria-label={t("aria.gradeBandMin", { index: index + 1 })}
                     value={band.min}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
@@ -178,8 +180,8 @@ export function AcademicPoliciesSettings() {
                     className="brand-input"
                     type="number"
                     step="0.01"
-                    placeholder="Max %"
-                    aria-label={`Grade band ${index + 1} maximum percentage`}
+                    placeholder={t("placeholder.maxPercent")}
+                    aria-label={t("aria.gradeBandMax", { index: index + 1 })}
                     value={band.max}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
@@ -190,8 +192,8 @@ export function AcademicPoliciesSettings() {
                   />
                   <input
                     className="brand-input"
-                    placeholder="Letter (A, B+, etc.)"
-                    aria-label={`Grade band ${index + 1} letter grade`}
+                    placeholder={t("placeholder.letterGrade")}
+                    aria-label={t("aria.gradeBandLetter", { index: index + 1 })}
                     value={band.letter}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
@@ -205,7 +207,7 @@ export function AcademicPoliciesSettings() {
                     className="rounded-md border border-red-300 px-3 py-2 text-xs font-semibold text-red-700"
                     onClick={() => setGradeBands((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
                   >
-                    Remove
+                    {t("action.remove")}
                   </button>
                 </div>
               ))}
@@ -214,16 +216,16 @@ export function AcademicPoliciesSettings() {
                 className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold"
                 onClick={() => setGradeBands((prev) => [...prev, { min: "", max: "", letter: "" }])}
               >
-                Add Grade Band
+                {t("action.addGradeBand")}
               </button>
             </div>
 
             <div className="grid gap-2">
-              <p className="brand-label">Late Penalty Rules</p>
+              <p className="brand-label">{t("academicPolicies.lateRules")}</p>
               <div className="hidden gap-2 text-xs font-semibold text-[#3a689f] md:grid md:grid-cols-[1fr_1fr_auto]">
-                <p>Late Window (Hours)</p>
-                <p>Deduction (%)</p>
-                <p className="text-right">Action</p>
+                <p>{t("table.lateWindowHours")}</p>
+                <p>{t("table.deductionPercent")}</p>
+                <p className="text-right">{t("table.action")}</p>
               </div>
               {latePenaltyBands.map((rule, index) => (
                 <div key={`late_rule_${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
@@ -232,8 +234,8 @@ export function AcademicPoliciesSettings() {
                     type="number"
                     min="0"
                     step="1"
-                    placeholder="Window hours (e.g., 24)"
-                    aria-label={`Late penalty rule ${index + 1} window hours`}
+                    placeholder={t("placeholder.windowHours")}
+                    aria-label={t("aria.lateRuleWindow", { index: index + 1 })}
                     value={rule.windowHours}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
@@ -247,8 +249,8 @@ export function AcademicPoliciesSettings() {
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="Deduction %"
-                    aria-label={`Late penalty rule ${index + 1} deduction percentage`}
+                    placeholder={t("placeholder.deductionPercent")}
+                    aria-label={t("aria.lateRuleDeduction", { index: index + 1 })}
                     value={rule.deductionPercent}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
@@ -264,7 +266,7 @@ export function AcademicPoliciesSettings() {
                     className="rounded-md border border-red-300 px-3 py-2 text-xs font-semibold text-red-700"
                     onClick={() => setLatePenaltyBands((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
                   >
-                    Remove
+                    {t("action.remove")}
                   </button>
                 </div>
               ))}
@@ -273,12 +275,12 @@ export function AcademicPoliciesSettings() {
                 className="btn-brand-secondary w-fit px-3 py-1.5 text-xs font-semibold"
                 onClick={() => setLatePenaltyBands((prev) => [...prev, { windowHours: "", deductionPercent: "" }])}
               >
-                Add Late Rule
+                {t("action.addLateRule")}
               </button>
             </div>
 
             <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={isSaving}>
-              {isSaving ? "Saving Policies..." : "Save Academic Policies"}
+              {isSaving ? t("status.savingPolicies") : t("action.saveAcademicPolicies")}
             </button>
           </form>
         ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useLanguage } from "@/components/language-provider";
 
 function normalizeLabel(text: string | null | undefined) {
   if (!text) return "";
@@ -24,7 +25,9 @@ function titleCaseFromToken(token: string) {
     .join(" ");
 }
 
-function resolveControlLabel(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+type Translator = (key: string, vars?: Record<string, string | number>, fallback?: string) => string;
+
+function resolveControlLabel(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, t: Translator) {
   if (control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) {
     return "";
   }
@@ -51,20 +54,20 @@ function resolveControlLabel(control: HTMLInputElement | HTMLSelectElement | HTM
 
   if (control instanceof HTMLInputElement) {
     const type = control.type.toLowerCase();
-    if (type === "checkbox") return "Checkbox";
-    if (type === "radio") return "Radio option";
+    if (type === "checkbox") return t("aria.checkbox");
+    if (type === "radio") return t("aria.radioOption");
   }
 
-  return control.tagName === "SELECT" ? "Select option" : "Form field";
+  return control.tagName === "SELECT" ? t("aria.selectOption") : t("aria.formField");
 }
 
-function applyMissingControlLabels(root: ParentNode) {
+function applyMissingControlLabels(root: ParentNode, t: Translator) {
   const controls = root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
     "input:not([type='hidden']), select, textarea"
   );
 
   for (const control of controls) {
-    const label = resolveControlLabel(control);
+    const label = resolveControlLabel(control, t);
     if (label) {
       control.setAttribute("aria-label", label);
     }
@@ -72,8 +75,9 @@ function applyMissingControlLabels(root: ParentNode) {
 }
 
 export function FormLabelProvider() {
+  const { t } = useLanguage();
   useEffect(() => {
-    applyMissingControlLabels(document);
+    applyMissingControlLabels(document, t);
 
     let rafId = 0;
     const observer = new MutationObserver((mutations) => {
@@ -84,7 +88,7 @@ export function FormLabelProvider() {
         for (const mutation of mutations) {
           for (const node of mutation.addedNodes) {
             if (node instanceof HTMLElement) {
-              applyMissingControlLabels(node);
+              applyMissingControlLabels(node, t);
             }
           }
         }

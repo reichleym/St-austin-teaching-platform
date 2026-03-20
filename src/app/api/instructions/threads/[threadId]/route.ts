@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
 type FlatMessage = {
@@ -98,8 +99,12 @@ export async function PATCH(
 
     const thread = await prisma.instructionThread.findUniqueOrThrow({
       where: { id: threadId },
-      select: { isPinned: true, status: true },
+      select: { isPinned: true, status: true, course: { select: { endDate: true } } },
     });
+
+    if (isCourseExpired(thread.course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
 
     const data =
       action === "close"

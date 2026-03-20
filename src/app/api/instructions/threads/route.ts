@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
@@ -60,6 +61,17 @@ export async function POST(request: NextRequest) {
     if (!courseId?.trim()) return NextResponse.json({ error: "courseId is required." }, { status: 400 });
     if (!subject?.trim()) return NextResponse.json({ error: "subject is required." }, { status: 400 });
     if (!messageBody?.trim()) return NextResponse.json({ error: "message body is required." }, { status: 400 });
+
+    const course = await prisma.course.findUnique({
+      where: { id: courseId.trim() },
+      select: { endDate: true },
+    });
+    if (!course) {
+      return NextResponse.json({ error: "Course not found." }, { status: 404 });
+    }
+    if (isCourseExpired(course.endDate)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
 
     const enrollment = await prisma.enrollment.findUnique({
       where: { courseId_studentId: { courseId, studentId: user.id } },

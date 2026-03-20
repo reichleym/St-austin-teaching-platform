@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Role, UserStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     const [course, student] = await Promise.all([
       prisma.course.findUnique({
         where: { id: courseId },
-        select: { id: true, code: true, title: true, visibility: true },
+        select: { id: true, code: true, title: true, visibility: true, endDate: true },
       }),
       prisma.user.findUnique({
         where: { id: user.id },
@@ -132,6 +132,9 @@ export async function POST(request: NextRequest) {
 
     if (!course) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
+    }
+    if (isCourseExpired(course.endDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (course.visibility !== COURSE_VISIBILITY_PUBLISHED) {
       return NextResponse.json({ error: "Only published courses can be requested." }, { status: 400 });
@@ -212,6 +215,7 @@ export async function PATCH(request: NextRequest) {
         status: string;
         courseVisibility: string;
         studentStatus: string;
+        courseEndDate: Date | null;
       }>
     >`
       SELECT
@@ -220,6 +224,7 @@ export async function PATCH(request: NextRequest) {
         r."studentId",
         r."status",
         c."visibility"::text AS "courseVisibility",
+        c."endDate" AS "courseEndDate",
         u."status"::text AS "studentStatus"
       FROM "EnrollmentRequest" r
       JOIN "Course" c ON c."id" = r."courseId"
@@ -231,6 +236,9 @@ export async function PATCH(request: NextRequest) {
     const existing = rows[0];
     if (!existing) {
       return NextResponse.json({ error: "Request not found." }, { status: 404 });
+    }
+    if (isCourseExpired(existing.courseEndDate ?? null)) {
+      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
     }
     if (existing.status !== "PENDING") {
       return NextResponse.json({ error: "Request already reviewed." }, { status: 400 });

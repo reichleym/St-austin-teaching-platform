@@ -3,6 +3,7 @@ import "./globals.css";
 import { AppToastProvider } from "@/components/app-toast-provider";
 import { FormLabelProvider } from "@/components/form-label-provider";
 import { ToastProvider } from "@/components/toast-provider";
+import { LanguageProvider } from "@/components/language-provider";
 
 export const metadata: Metadata = {
   title: "St. Austin Teaching Platform",
@@ -17,12 +18,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased" suppressHydrationWarning>
-        <AppToastProvider>
-          <ToastProvider>
-            <FormLabelProvider />
-            {children}
-          </ToastProvider>
-        </AppToastProvider>
+        <LanguageProvider>
+          <AppToastProvider>
+            <ToastProvider>
+              <FormLabelProvider />
+              {children}
+            </ToastProvider>
+          </AppToastProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

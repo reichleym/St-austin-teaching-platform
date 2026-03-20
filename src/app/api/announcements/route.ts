@@ -3,7 +3,14 @@ import { NextResponse } from "next/server";
 import { requireAuthenticatedUser, PermissionError } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
-type AnnouncementAudienceValue = "BOTH" | "TEACHER_ONLY" | "STUDENT_ONLY";
+type AnnouncementAudienceValue =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
 
 function isAnnouncementAudienceCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
@@ -19,7 +26,22 @@ export async function GET() {
     const user = await requireAuthenticatedUser();
     const role = user.role === "SUPER_ADMIN" ? Role.SUPER_ADMIN : user.role;
     const now = new Date();
-    const allowedAudience: AnnouncementAudienceValue[] = role === Role.TEACHER ? ["BOTH", "TEACHER_ONLY"] : role === Role.STUDENT ? ["BOTH", "STUDENT_ONLY"] : ["BOTH"];
+    const allowedAudience: AnnouncementAudienceValue[] =
+      role === Role.TEACHER
+        ? ["TEACHER_ONLY", "BOTH", "TEACHER_DEPARTMENT_HEAD", "ALL"]
+        : role === Role.STUDENT
+          ? ["STUDENT_ONLY", "BOTH", "STUDENT_DEPARTMENT_HEAD", "ALL"]
+          : role === Role.DEPARTMENT_HEAD
+            ? ["DEPARTMENT_HEAD_ONLY", "TEACHER_DEPARTMENT_HEAD", "STUDENT_DEPARTMENT_HEAD", "ALL"]
+            : [
+                "BOTH",
+                "TEACHER_ONLY",
+                "STUDENT_ONLY",
+                "DEPARTMENT_HEAD_ONLY",
+                "TEACHER_DEPARTMENT_HEAD",
+                "STUDENT_DEPARTMENT_HEAD",
+                "ALL",
+              ];
 
     let announcements;
     try {
