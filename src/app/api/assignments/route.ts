@@ -607,7 +607,18 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: { course: { select: { id: true, teacherId: true, endDate: true } } },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            teacherId: true,
+            endDate: true,
+            teacher: { select: { name: true, email: true } },
+          },
+        },
+      },
     });
     if (!existing) {
       return NextResponse.json({ error: "Assignment not found." }, { status: 404 });
@@ -689,6 +700,7 @@ export async function PATCH(request: NextRequest) {
               code: true,
               title: true,
               teacherId: true,
+              endDate: true,
               teacher: { select: { name: true, email: true } },
             },
           },
@@ -704,6 +716,7 @@ export async function PATCH(request: NextRequest) {
               code: true,
               title: true,
               teacherId: true,
+              endDate: true,
               teacher: { select: { name: true, email: true } },
             },
           },
