@@ -37,7 +37,8 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
     return items.map((item) => {
       const hasChildren = (modulesByParent.get(item.slug) ?? []).length > 0;
       const firstChild = (modulesByParent.get(item.slug) ?? [])[0];
-      const itemHref = hasChildren && firstChild ? firstChild.href ?? `/dashboard/${firstChild.slug}` : item.href ?? `/dashboard/${item.slug}`;
+      const itemHref =
+        hasChildren && firstChild ? firstChild.href ?? `/dashboard/${firstChild.slug}` : item.href ?? `/dashboard/${item.slug}`;
       const active = item.slug === selectedSlug || hasSelectedDescendant(item.slug);
       const isTopLevel = depth === 0;
       const isExpanded = expanded[item.slug] ?? active;
@@ -62,42 +63,54 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
                       ? "module.instructions.teacher"
                       : `module.${item.slug}`;
             const title = t(translationKey, undefined, baseTitle);
+            const linkClasses = `${isTopLevel ? "brand-nav-link" : "brand-nav-sublink"} flex-1 ${
+              active
+                ? isTopLevel
+                  ? "brand-nav-link-active !text-white"
+                  : "brand-nav-sublink-active !text-[#002f74]"
+                : ""
+            }`;
+            const toggleExpanded = () =>
+              setExpanded((prev) => ({ ...prev, [item.slug]: !(prev[item.slug] ?? active) }));
+
             return (
-          <div className="flex items-center gap-2">
-            <Link
-              href={itemHref}
-              className={`${isTopLevel ? "brand-nav-link" : "brand-nav-sublink"} flex-1 ${
-                active
-                  ? isTopLevel
-                    ? "brand-nav-link-active !text-white"
-                    : "brand-nav-sublink-active !text-[#002f74]"
-                  : ""
-              }`}
-            >
-              {title}
-            </Link>
-            {hasChildren ? (
-              <button
-                type="button"
-                aria-label={t("toggleSubmenu", { name: title })}
-                aria-expanded={isExpanded}
-                onClick={() => setExpanded((prev) => ({ ...prev, [item.slug]: !isExpanded }))}
-                className={`inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[#0f3a74] transition ${
-                  isTopLevel ? "hover:bg-[#cfe4ff]" : "hover:bg-[#dcedff]"
-                }`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ) : null}
-          </div>
+              <div className="flex items-center gap-2">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={toggleExpanded}
+                    className={`${linkClasses} w-full border-0 bg-transparent text-left`}
+                  >
+                    {title}
+                  </button>
+                ) : (
+                  <Link href={itemHref} className={linkClasses}>
+                    {title}
+                  </Link>
+                )}
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    aria-label={t("toggleSubmenu", { name: title })}
+                    aria-expanded={isExpanded}
+                    onClick={toggleExpanded}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[#0f3a74] transition ${
+                      isTopLevel ? "hover:bg-[#cfe4ff]" : "hover:bg-[#dcedff]"
+                    }`}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
             );
           })()}
           {hasChildren && isExpanded ? (

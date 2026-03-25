@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { AssignmentStudentSubmission } from "@/components/assignment-student-submission";
-import { COURSE_VISIBILITY_PUBLISHED } from "@/lib/courses";
+import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 
 type Props = {
   params: Promise<{ module: string; id: string }>;
@@ -23,6 +23,7 @@ type AssignmentConfigRecord = {
   timerMinutes: number | null;
   startAt: Date | null;
   endAt: Date | null;
+  courseEndDate: Date | null;
 };
 
 const parseAssignmentType = (input: unknown): AssignmentType => {
@@ -63,6 +64,7 @@ async function getAssignmentConfig(assignmentId: string) {
       endAt: Date | null;
       courseId: string;
       courseVisibility: string | null;
+      courseEndDate: Date | null;
     }>
   >`
     SELECT
@@ -74,7 +76,8 @@ async function getAssignmentConfig(assignmentId: string) {
       cfg."startAt",
       a."dueAt" AS "endAt",
       a."courseId",
-      c."visibility"::text AS "courseVisibility"
+      c."visibility"::text AS "courseVisibility",
+      c."endDate" AS "courseEndDate"
     FROM "Assignment" a
     JOIN "Course" c ON c."id" = a."courseId"
     LEFT JOIN "AssignmentConfig" cfg ON cfg."assignmentId" = a."id"
@@ -98,6 +101,7 @@ async function getAssignmentConfig(assignmentId: string) {
     endAt: row.endAt ?? null,
     courseId: row.courseId,
     courseVisibility: row.courseVisibility,
+    courseEndDate: row.courseEndDate ?? null,
   } as AssignmentConfigRecord & { courseId: string; courseVisibility: string | null };
 }
 
@@ -186,6 +190,9 @@ export default async function AssignmentSubmitPage({ params }: Props) {
   }
 
   if (config.courseVisibility !== COURSE_VISIBILITY_PUBLISHED) {
+    redirect(`/dashboard/assessment/${assignment.id}`);
+  }
+  if (isCourseExpired(config.courseEndDate ?? null)) {
     redirect(`/dashboard/assessment/${assignment.id}`);
   }
 

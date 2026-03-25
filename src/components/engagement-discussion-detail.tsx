@@ -236,9 +236,9 @@ export function EngagementDiscussionDetail({ role, discussionId, courseId }: Pro
       <section className="brand-card p-5">
         <p className="brand-section-title">Discussion Workspace</p>
         <ToastMessage type="error" message={error || "Discussion not found."} />
-        <Link href="/dashboard/engagement" className="mt-3 inline-flex text-sm font-semibold text-[#1f518f] underline">
+        {/* <Link href="/dashboard/engagement" className="mt-3 inline-flex text-sm font-semibold text-[#1f518f] underline">
           Back to discussions
-        </Link>
+        </Link> */}
       </section>
     );
   }

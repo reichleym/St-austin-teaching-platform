@@ -14,6 +14,7 @@ type CourseOption = {
   id: string;
   code: string;
   title: string;
+  endDate: string | null;
   teacherId: string | null;
   teacher?: {
     name: string | null;
@@ -160,6 +161,13 @@ const toTimeInput = (value: string | null | undefined) => {
   const hours = String(parsed.getHours()).padStart(2, "0");
   const minutes = String(parsed.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
+};
+
+const isCourseExpiredForStudent = (endDate: string | null, nowMs: number) => {
+  if (!endDate) return false;
+  const endMs = new Date(endDate).getTime();
+  if (!Number.isFinite(endMs)) return false;
+  return nowMs > endMs;
 };
 
 const toBoundaryIso = (value: string, boundary: "start" | "end") => {
@@ -1415,8 +1423,13 @@ export function AssignmentsModule({ role }: Props) {
 
   const selectedAssignmentStartAt = selectedAssignment?.startAt ?? selectedAssignment?.config.startAt ?? null;
   const selectedAssignmentEndAt = selectedAssignment?.endAt ?? selectedAssignment?.dueAt ?? null;
+  const selectedCourseEndAt = selectedAssignment?.course.endDate ?? null;
   const selectedStartAtMs = selectedAssignmentStartAt ? new Date(selectedAssignmentStartAt).getTime() : NaN;
   const selectedEndAtMs = selectedAssignmentEndAt ? new Date(selectedAssignmentEndAt).getTime() : NaN;
+  const isCourseExpired =
+    isStudent && selectedCourseEndAt
+      ? isCourseExpiredForStudent(selectedCourseEndAt, nowTick)
+      : false;
   const isSubmissionBeforeWindow =
     isStudent && selectedAssignmentStartAt ? Number.isFinite(selectedStartAtMs) && nowTick < selectedStartAtMs : false;
   const isSubmissionAfterWindow =
@@ -1425,9 +1438,10 @@ export function AssignmentsModule({ role }: Props) {
 
   const studentCanSubmit = useMemo(() => {
     if (!isStudent || !selectedAssignment) return false;
+    if (isCourseExpired) return false;
     if (isSubmissionBlockedByWindow) return false;
     return studentAttemptCount < selectedAssignment.config.maxAttempts;
-  }, [isStudent, isSubmissionBlockedByWindow, selectedAssignment, studentAttemptCount]);
+  }, [isCourseExpired, isStudent, isSubmissionBlockedByWindow, selectedAssignment, studentAttemptCount]);
   const hasStartedTimedAttempt = !!studentQuizStartedAt;
 
   return (
@@ -1666,7 +1680,9 @@ export function AssignmentsModule({ role }: Props) {
               ) : null}
               {!submissionsLoading && !studentCanSubmit ? (
                 <p className="rounded-md border border-[#dbe9fb] bg-[#f8fbff] px-3 py-2 text-sm text-[#1f518f]">
-                  {isSubmissionBeforeWindow
+                  {isCourseExpired
+                    ? t("assignment.courseExpired")
+                    : isSubmissionBeforeWindow
                     ? t("assignment.submissionOpens", { date: formatDate(selectedAssignmentStartAt) })
                     : isSubmissionAfterWindow && !selectedAssignment.config.allowLateSubmissions
                       ? t("assignment.submissionClosed")

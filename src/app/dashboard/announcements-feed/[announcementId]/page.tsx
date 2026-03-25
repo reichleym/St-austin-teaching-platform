@@ -149,7 +149,7 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
       <div className="flex-1 space-y-6 p-6 lg:p-8">
         <DashboardTopbar name={session.user.name} email={session.user.email} role={roleKey} />
 
-        <section className="brand-glass brand-animate overflow-hidden p-6 lg:p-7">
+        <section className="brand-glass flex items-center justify-between brand-animate overflow-hidden p-6 lg:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <span className="brand-chip">
@@ -161,20 +161,32 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
               </h2>
             </div>
           </div>
+
+          <Link
+                                    href={`/dashboard/announcements-feed`}
+                                    aria-label="Back to announcement"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#9bbfed] bg-white text-[#1f518f] shadow-sm"
+                                  >
+                                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M15 18l-6-6 6-6" />
+                                    </svg>
+                                  </Link>
         </section>
 
-        <section className="brand-card p-5">
+        <section className="brand-glass flex items-center justify-between brand-animate overflow-hidden p-6 lg:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="brand-section-title">{announcement.title}</p>
               <p className="mt-1 text-xs text-[#3a689f]">{t(`audience.label.${announcement.audience}`)}</p>
             </div>
-            <Link
+            {/* <Link
               href="/dashboard/announcements-feed"
               className="text-xs font-semibold text-[#1f518f] underline"
             >
               {t("action.backToAnnouncements")}
-            </Link>
+            </Link> */}
+
+            
           </div>
 
           <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5d96]">{announcement.content}</p>

@@ -147,25 +147,6 @@ async function ensureTeacherIfProvided(teacherId: string | null) {
   return { ok: true as const, teacherId: teacher.id };
 }
 
-async function hasTimelineOverlap(params: {
-  teacherId: string;
-  startDate: Date;
-  endDate: Date;
-  excludeCourseId?: string;
-}) {
-  const overlap = await prisma.course.findFirst({
-    where: {
-      teacherId: params.teacherId,
-      ...(params.excludeCourseId ? { id: { not: params.excludeCourseId } } : {}),
-      startDate: { lte: params.endDate },
-      endDate: { gte: params.startDate },
-    },
-    select: { id: true, code: true, title: true },
-  });
-
-  return overlap;
-}
-
 async function canManageCourse(courseId: string, user: { id: string; role: Role | string }) {
   let course:
     | {
@@ -640,18 +621,6 @@ export async function POST(request: NextRequest) {
     }
     await ensureDepartmentHeadCourseSchema();
 
-    if (teacherId) {
-      const overlap = await hasTimelineOverlap({ teacherId, startDate, endDate });
-      if (overlap) {
-        return NextResponse.json(
-          {
-            error: `Teacher timeline overlaps with ${overlap.code} (${overlap.title}). Adjust dates or assignment.`,
-          },
-          { status: 409 }
-        );
-      }
-    }
-
     const code = await generateUniqueCourseCode(title);
 
     const created = await prisma.$transaction(async (tx) => {
@@ -837,9 +806,6 @@ export async function PATCH(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
     }
-    if (isCourseExpired(existing.endDate ?? null)) {
-      return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
-    }
 
     const data: Prisma.CourseUpdateInput = {};
 
@@ -908,23 +874,6 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Invalid course visibility value." }, { status: 400 });
       }
       data.visibility = visibility;
-      }
-    }
-
-    if (nextTeacherId && nextStartDate && nextEndDate) {
-      const overlap = await hasTimelineOverlap({
-        teacherId: nextTeacherId,
-        startDate: nextStartDate,
-        endDate: nextEndDate,
-        excludeCourseId: courseId,
-      });
-      if (overlap) {
-        return NextResponse.json(
-          {
-            error: `Teacher timeline overlaps with ${overlap.code} (${overlap.title}). Adjust dates or assignment.`,
-          },
-          { status: 409 }
-        );
       }
     }
 

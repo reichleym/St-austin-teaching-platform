@@ -5,6 +5,7 @@ import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { dashboardModules, type DashboardRole } from "@/lib/dashboard-modules";
 import { EngagementDiscussionDetail } from "@/components/engagement-discussion-detail";
 import { createServerTranslator } from "@/lib/i18n-server";
+import Link from "next/link";
 
 type EngagementDetailSearchParams = {
   courseId?: string;
@@ -57,7 +58,7 @@ export default async function EngagementDetailPage({ params, searchParams }: Pro
       <div className="flex-1 space-y-6 p-6 lg:p-8">
         <DashboardTopbar name={session.user.name} email={session.user.email} role={roleKey} />
 
-        <section className="brand-glass brand-animate overflow-hidden p-6 lg:p-7">
+        <section className="brand-glass flex items-center justify-between brand-animate overflow-hidden p-6 lg:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <span className="brand-chip">
@@ -67,6 +68,16 @@ export default async function EngagementDetailPage({ params, searchParams }: Pro
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{engagementTitle}</h2>
             </div>
           </div>
+
+          <Link
+                        href={`/dashboard/engagement`}
+                        aria-label="Back to engagement"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#9bbfed] bg-white text-[#1f518f] shadow-sm"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M15 18l-6-6 6-6" />
+                        </svg>
+                      </Link>
         </section>
 
         <EngagementDiscussionDetail

@@ -186,6 +186,7 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
         id: true,
         code: true,
         title: true,
+        endDate: true,
         teacherId: true,
         teacher: { select: { name: true, email: true } },
       },
@@ -200,6 +201,7 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
         id: true,
         code: true,
         title: true,
+        endDate: true,
         teacherId: true,
         teacher: { select: { name: true, email: true } },
       },
@@ -217,14 +219,15 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
       },
     },
     orderBy: [{ createdAt: "desc" }],
-    select: {
-      id: true,
-      code: true,
-      title: true,
-      teacherId: true,
-      teacher: { select: { name: true, email: true } },
-    },
-  });
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        endDate: true,
+        teacherId: true,
+        teacher: { select: { name: true, email: true } },
+      },
+    });
 }
 
 async function loadAssignmentConfigs(assignmentIds: string[]) {
@@ -396,6 +399,7 @@ export async function GET() {
                 id: true,
                 code: true,
                 title: true,
+                endDate: true,
                 teacherId: true,
                 teacher: { select: { name: true, email: true } },
               },
