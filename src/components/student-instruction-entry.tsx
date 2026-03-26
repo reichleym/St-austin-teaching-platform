@@ -5,6 +5,8 @@
 
 import { useEffect, useState } from "react";
 import { InstructionThreadsModule } from "./instruction-threads-module";
+import { useLanguage } from "@/components/language-provider";
+import { translateContent } from "@/lib/i18n";
 
 type Course = {
   id: string;
@@ -19,6 +21,7 @@ type Props = {
 };
 
 export function StudentInstructionEntry({ currentUserId, currentUserRole }: Props) {
+  const { t, language } = useLanguage();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
@@ -50,7 +53,7 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
   if (loading) {
     return (
       <section className="brand-card p-5">
-        <p className="brand-section-title">Ask Your Teacher</p>
+        <p className="brand-section-title">{t("instruction.askTeacher")}</p>
         <div className="mt-4 space-y-2 animate-pulse">
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border border-[#dbe9fb] bg-white/80 p-4">
@@ -67,12 +70,12 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
   if (!loading && courses.length === 0) {
     return (
       <section className="brand-card p-5">
-        <p className="brand-section-title">Ask Your Teacher</p>
+        <p className="brand-section-title">{t("instruction.askTeacher")}</p>
         <div className="brand-panel mt-4 py-12 text-center">
           <div className="mb-3 text-3xl">📚</div>
-          <p className="text-base font-semibold text-[#0b3e81]">No enrolled courses</p>
+          <p className="text-base font-semibold text-[#0b3e81]">{t("instruction.noEnrolledCourses")}</p>
           <p className="brand-muted mt-1 text-sm">
-            Enroll in a course to ask your teacher questions.
+            {t("instruction.enrollToAsk")}
           </p>
         </div>
       </section>
@@ -93,7 +96,7 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             <span className="font-medium">{selectedCourse?.code}</span>
-            <span className="text-[#6c8fbe]">— {selectedCourse?.title}</span>
+            <span className="text-[#6c8fbe]">— {translateContent(language, selectedCourse?.title ?? "")}</span>
           </button>
         )}
 
@@ -110,8 +113,8 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
   return (
     <section className="">
       <div className="mb-5">
-        <p className="brand-section-title">Ask Your Teacher</p>
-        <p className="brand-muted mt-2 text-sm">Select a course to view or post questions</p>
+        <p className="brand-section-title">{t("instruction.askTeacher")}</p>
+        <p className="brand-muted mt-2 text-sm">{t("instruction.selectCoursePrompt")}</p>
       </div>
 
       <div className="space-y-2">
@@ -125,7 +128,7 @@ export function StudentInstructionEntry({ currentUserId, currentUserRole }: Prop
               <div className="flex items-center gap-3">
                 <span className="brand-chip">{course.code}</span>
                 <span className="font-semibold text-[#0b3e81] transition-colors group-hover:text-[#083e8a]">
-                  {course.title}
+                  {translateContent(language, course.title)}
                 </span>
               </div>
               <svg

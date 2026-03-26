@@ -18,7 +18,8 @@ import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
 import { StudentProgressModule } from "@/components/student-progress-module";
-import { createServerTranslator } from "@/lib/i18n-server";
+import { translateContent } from "@/lib/i18n";
+import { createServerTranslator, getServerLanguage } from "@/lib/i18n-server";
 
 type Props = {
   params: Promise<{ module: string }>;
@@ -76,6 +77,7 @@ function isUserCountryStateCompatibilityError(error: unknown) {
 export default async function DashboardPage({ params }: Props) {
   const session = await auth();
   const t = await createServerTranslator();
+  const language = await getServerLanguage();
 
   if (!session?.user || session.user.status !== "ACTIVE") {
     redirect("/login");
@@ -737,10 +739,6 @@ export default async function DashboardPage({ params }: Props) {
     }
   }
 
-  let moduleKpiLabel = "Module Status";
-  let moduleKpiValue: string | number = 0;
-  let moduleKpiHint = "live count";
-
   const departmentHeadCourseIds =
     roleKey === "DEPARTMENT_HEAD"
       ? await prisma
@@ -762,10 +760,6 @@ export default async function DashboardPage({ params }: Props) {
           ? { id: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
           : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
   });
-  const availableCoursesCount =
-    roleKey === "STUDENT"
-      ? await prisma.course.count({ where: { visibility: "PUBLISHED" } })
-      : enrolledCoursesCount;
   const assignmentCount = await prisma.assignment.count({
     where:
       roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
@@ -855,142 +849,141 @@ export default async function DashboardPage({ params }: Props) {
   const overviewMetrics =
     roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? [
-          { label: "Announcements", value: announcementCount, delta: "available for your role", href: "/dashboard/announcements" },
-          { label: "Courses", value: enrolledCoursesCount, delta: "institution total", href: "/dashboard/courses" },
-          { label: "Grade Edit Requests", value: pendingGradeEditCount, delta: "pending review", href: "/dashboard/assessment" },
-          { label: "Enrollment Requests", value: pendingEnrollmentRequestCount, delta: "pending approval", href: "/dashboard/courses/enrollment-requests" },
+          { label: t("metric.announcements"), value: announcementCount, delta: t("metric.announcements.delta"), href: "/dashboard/announcements" },
+          { label: t("metric.courses"), value: enrolledCoursesCount, delta: t("metric.courses.delta"), href: "/dashboard/courses" },
+          { label: t("metric.gradeEdit"), value: pendingGradeEditCount, delta: t("metric.gradeEdit.delta"), href: "/dashboard/assessment" },
+          {
+            label: t("metric.enrollmentRequests"),
+            value: pendingEnrollmentRequestCount,
+            delta: t("metric.enrollmentRequests.delta"),
+            href: "/dashboard/courses/enrollment-requests",
+          },
         ]
       : roleKey === "DEPARTMENT_HEAD"
         ? [
-            { label: "Courses Overseen", value: enrolledCoursesCount, delta: "assigned coverage", href: "/dashboard/courses" },
-          { label: "Discussion Board", value: engagementDiscussionCount, delta: "active discussions", href: "/dashboard/engagement" },
-            { label: "Assignments", value: assignmentCount, delta: "in assigned courses", href: "/dashboard/assessment" },
+            { label: t("metric.coursesOverseen"), value: enrolledCoursesCount, delta: t("metric.coursesOverseen.delta"), href: "/dashboard/courses" },
+            { label: t("metric.engagement"), value: engagementDiscussionCount, delta: t("metric.engagement.delta"), href: "/dashboard/engagement" },
+            { label: t("metric.assignments"), value: assignmentCount, delta: t("metric.assignments.deltaDept"), href: "/dashboard/assessment" },
           ]
         : roleKey === "TEACHER"
           ? [
-              { label: "Assigned Courses", value: enrolledCoursesCount, delta: "currently assigned", href: "/dashboard/courses" },
-              { label: "Submissions Pending", value: pendingSubmissionCount, delta: "awaiting grading", href: "/dashboard/assessment" },
-              { label: "Assignments", value: assignmentCount, delta: "in your courses", href: "/dashboard/assessment" },
+              { label: t("metric.assignedCourses"), value: enrolledCoursesCount, delta: t("metric.assignedCourses.delta"), href: "/dashboard/courses" },
+              { label: t("metric.submissionsPending"), value: pendingSubmissionCount, delta: t("metric.submissionsPending.delta"), href: "/dashboard/assessment" },
+              { label: t("metric.assignments"), value: assignmentCount, delta: t("metric.assignments.deltaTeacher"), href: "/dashboard/assessment" },
             ]
           : [
-              { label: "Enrolled Courses", value: enrolledCoursesCount, delta: "active enrollments", href: "/dashboard/learning" },
-              { label: "Assignments", value: assignmentCount, delta: "available to submit", href: "/dashboard/assessment" },
-              { label: "Announcements", value: announcementCount, delta: "for your role", href: "/dashboard/announcements-feed" },
+              { label: t("metric.enrolledCourses"), value: enrolledCoursesCount, delta: t("metric.enrolledCourses.delta"), href: "/dashboard/learning" },
+              { label: t("metric.assignments"), value: assignmentCount, delta: t("metric.assignments.deltaStudent"), href: "/dashboard/assessment" },
+              { label: t("metric.announcements"), value: announcementCount, delta: t("metric.announcements.deltaStudent"), href: "/dashboard/announcements-feed" },
             ];
   const overviewFocus =
     roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
       ? [
           {
-            title: `Review ${pendingGradeEditCount} Grade Edit Request${pendingGradeEditCount === 1 ? "" : "s"}`,
-            detail: "Published grade changes require admin approval and full audit logging.",
+            title: t("overview.dynamic.superAdmin.gradeEdit.title", {
+              count: pendingGradeEditCount,
+              suffix: pendingGradeEditCount === 1 ? "" : "s",
+            }),
+            detail: t("overview.dynamic.superAdmin.gradeEdit.detail"),
             priority: (pendingGradeEditCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
           },
           {
-            title: `Resolve ${pendingEnrollmentRequestCount} Enrollment Request${pendingEnrollmentRequestCount === 1 ? "" : "s"}`,
-            detail: "Pending course enrollment approvals impact learner access.",
+            title: t("overview.dynamic.superAdmin.enrollment.title", {
+              count: pendingEnrollmentRequestCount,
+              suffix: pendingEnrollmentRequestCount === 1 ? "" : "s",
+            }),
+            detail: t("overview.dynamic.superAdmin.enrollment.detail"),
             priority: (pendingEnrollmentRequestCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
           },
           {
-            title: `${enrolledCoursesCount} Active Course${enrolledCoursesCount === 1 ? "" : "s"} in Governance`,
-            detail: "Monitor assignment, discussion, and policy alignment across courses.",
+            title: t("overview.dynamic.superAdmin.courses.title", {
+              count: enrolledCoursesCount,
+              suffix: enrolledCoursesCount === 1 ? "" : "s",
+            }),
+            detail: t("overview.dynamic.superAdmin.courses.detail"),
             priority: "Medium" as "High" | "Medium" | "Low",
           },
         ]
       : roleKey === "DEPARTMENT_HEAD"
         ? [
             {
-              title: `${enrolledCoursesCount} Course${enrolledCoursesCount === 1 ? "" : "s"} Under Oversight`,
-              detail: "Review instructor timelines and weekly module release cadence.",
+              title: t("overview.dynamic.departmentHead.courses.title", {
+                count: enrolledCoursesCount,
+                suffix: enrolledCoursesCount === 1 ? "" : "s",
+              }),
+              detail: t("overview.dynamic.departmentHead.courses.detail"),
               priority: (enrolledCoursesCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
             },
             {
-              title: `${engagementDiscussionCount} Discussion${engagementDiscussionCount === 1 ? "" : "s"} Active`,
-              detail: "Ensure participation requirements are being met.",
+              title: t("overview.dynamic.departmentHead.discussions.title", {
+                count: engagementDiscussionCount,
+                suffix: engagementDiscussionCount === 1 ? "" : "s",
+              }),
+              detail: t("overview.dynamic.departmentHead.discussions.detail"),
               priority: (engagementDiscussionCount > 0 ? "Medium" : "Low") as "High" | "Medium" | "Low",
             },
             {
-              title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Progress`,
-              detail: "Confirm grading pace and late policy adherence.",
+              title: t("overview.dynamic.departmentHead.assignments.title", {
+                count: assignmentCount,
+                suffix: assignmentCount === 1 ? "" : "s",
+              }),
+              detail: t("overview.dynamic.departmentHead.assignments.detail"),
               priority: "Low" as "High" | "Medium" | "Low",
             },
           ]
         : roleKey === "TEACHER"
           ? [
               {
-                title: `${pendingSubmissionCount} Submission${pendingSubmissionCount === 1 ? "" : "s"} Awaiting Grading`,
-                detail: "Prioritize grading queue to keep learner feedback turnaround on track.",
+                title: t("overview.dynamic.teacher.submissions.title", {
+                  count: pendingSubmissionCount,
+                  suffix: pendingSubmissionCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.teacher.submissions.detail"),
                 priority: (pendingSubmissionCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
               },
               {
-                title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} in Course Scope`,
-                detail: "Review due dates and attempt settings for upcoming assessment windows.",
+                title: t("overview.dynamic.teacher.assignments.title", {
+                  count: assignmentCount,
+                  suffix: assignmentCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.teacher.assignments.detail"),
                 priority: "Medium" as "High" | "Medium" | "Low",
               },
               {
-                title: `${engagementDiscussionCount} Discussion Topic${engagementDiscussionCount === 1 ? "" : "s"} Active`,
-                detail: "Track missing discussion participation and follow up with students.",
+                title: t("overview.dynamic.teacher.discussions.title", {
+                  count: engagementDiscussionCount,
+                  suffix: engagementDiscussionCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.teacher.discussions.detail"),
                 priority: "Medium" as "High" | "Medium" | "Low",
               },
             ]
           : [
               {
-                title: `${assignmentCount} Assignment${assignmentCount === 1 ? "" : "s"} Pending`,
-                detail: "Focus on due assignments and maintain timely submissions.",
+                title: t("overview.dynamic.student.assignments.title", {
+                  count: assignmentCount,
+                  suffix: assignmentCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.student.assignments.detail"),
                 priority: (assignmentCount > 0 ? "High" : "Low") as "High" | "Medium" | "Low",
               },
               {
-                title: `${enrolledCoursesCount} Enrolled Course${enrolledCoursesCount === 1 ? "" : "s"}`,
-                detail: "Open modules in your enrolled courses to maintain progress.",
+                title: t("overview.dynamic.student.courses.title", {
+                  count: enrolledCoursesCount,
+                  suffix: enrolledCoursesCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.student.courses.detail"),
                 priority: "Medium" as "High" | "Medium" | "Low",
               },
               {
-                title: `${announcementCount} Announcement${announcementCount === 1 ? "" : "s"} Available`,
-                detail: "Review updates from faculty and administration.",
+                title: t("overview.dynamic.student.announcements.title", {
+                  count: announcementCount,
+                  suffix: announcementCount === 1 ? "" : "s",
+                }),
+                detail: t("overview.dynamic.student.announcements.detail"),
                 priority: "Low" as "High" | "Medium" | "Low",
               },
             ];
-
-  if (selected.slug === "announcements" || selected.slug === "announcements-feed" || selected.slug === "overview") {
-    moduleKpiLabel = "Announcements";
-    moduleKpiValue = announcementCount;
-    moduleKpiHint = "available for your role";
-  } else if (selected.slug === "courses") {
-    moduleKpiLabel = roleKey === "STUDENT" ? "Available Courses" : "Courses";
-    moduleKpiValue = roleKey === "STUDENT" ? availableCoursesCount : enrolledCoursesCount;
-    moduleKpiHint = "in this module";
-  } else if (selected.slug === "learning") {
-    moduleKpiLabel = "My Learning";
-    moduleKpiValue = enrolledCoursesCount;
-    moduleKpiHint = "in this module";
-  } else if (selected.slug === "progress") {
-    moduleKpiLabel = "Courses";
-    moduleKpiValue = roleKey === "STUDENT" ? enrolledCoursesCount : availableCoursesCount;
-    moduleKpiHint = "available for progress";
-  } else if (selected.slug === "assessment") {
-    moduleKpiLabel = "Assignments";
-    moduleKpiValue = assignmentCount;
-    moduleKpiHint = "in this module";
-  } else if (selected.slug === "engagement") {
-    moduleKpiLabel = "Discussions";
-    moduleKpiValue = engagementDiscussionCount;
-    moduleKpiHint = "in this module";
-  } else if (selected.slug === "view-teachers") {
-    moduleKpiLabel = "Teachers";
-    moduleKpiValue = teacherList.length;
-    moduleKpiHint = "total records";
-  } else if (selected.slug === "view-students") {
-    moduleKpiLabel = "Students";
-    moduleKpiValue = studentList.length;
-    moduleKpiHint = "total records";
-  } else if (selected.slug === "view-department-heads") {
-    moduleKpiLabel = "Department Heads";
-    moduleKpiValue = departmentHeadList.length;
-    moduleKpiHint = "total records";
-  } else if (selected.slug === "system-settings" || selected.slug === "admin-profile" || selected.slug === "academic-policies") {
-    moduleKpiLabel = "Settings";
-    moduleKpiValue = "Admin";
-    moduleKpiHint = "profile and platform controls";
-  }
 
   const baseTitle =
     roleKey === "STUDENT" && selected.slug === "courses"
@@ -1047,7 +1040,7 @@ export default async function DashboardPage({ params }: Props) {
                       href={`/dashboard/${announcementModuleSlug}#announcement-${item.id}`}
                       className="block rounded-lg border border-[#cee2fb] bg-white/75 px-3 py-2 text-sm font-semibold text-[#1f508f] transition hover:bg-[#e8f3ff]"
                     >
-                      {item.title}
+                      {translateContent(language, item.title)}
                     </Link>
                   ))
                 ) : (

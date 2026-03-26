@@ -5,11 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { ThreadSummary } from "@/types/instruction-threads";
 import { NewThreadModal } from "./instruction-new-thread-modal";
 import { ThreadDetailView } from "./instruction-thread-detail";
+import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 const STATUS_CONFIG = {
-  OPEN: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-400", label: "Open" },
-  ANSWERED: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-400", label: "Answered" },
-  CLOSED: { bg: "bg-slate-100", text: "text-slate-500", border: "border-slate-200", dot: "bg-slate-400", label: "Closed" },
+  OPEN: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-400" },
+  ANSWERED: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-400" },
+  CLOSED: { bg: "bg-slate-100", text: "text-slate-500", border: "border-slate-200", dot: "bg-slate-400" },
 } as const;
 
 type Props = {
@@ -19,6 +21,7 @@ type Props = {
 };
 
 export function InstructionThreadsModule({ courseId, currentUserId, currentUserRole }: Props) {
+  const { t, language } = useLanguage();
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,14 +36,14 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
     try {
       const res = await fetch(`/api/instructions/threads?courseId=${courseId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load.");
+      if (!res.ok) throw new Error(data.error ?? t("instruction.failedLoad"));
       setThreads(data.threads);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load threads.");
+      setError(err instanceof Error ? err.message : t("instruction.failedLoadThreads"));
     } finally {
       setLoading(false);
     }
-  }, [courseId]);
+  }, [courseId, t]);
 
   useEffect(() => { loadThreads(); }, [loadThreads]);
 
@@ -63,14 +66,14 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
       {/* Section header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="brand-section-title">Ask Your Teacher</p>
+          <p className="brand-section-title">{t("instruction.askTeacher")}</p>
           <p className="brand-muted mt-2 text-sm">
             {loading ? (
               <span className="inline-flex items-center">
                 <span className="h-3 w-20 animate-pulse rounded bg-slate-200" />
-                <span className="sr-only">Loading threads</span>
+                <span className="sr-only">{t("instruction.loadingThreads")}</span>
               </span>
-            ) : `${threads.length} thread${threads.length !== 1 ? "s" : ""}`}
+            ) : t(threads.length === 1 ? "instruction.threadCount.one" : "instruction.threadCount.other", { count: threads.length })}
           </p>
         </div>
         {isStudent && (
@@ -81,7 +84,7 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Ask a Question
+            {t("instruction.askQuestion")}
           </button>
         )}
       </div>
@@ -109,10 +112,10 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
       {!loading && !error && threads.length === 0 && (
         <div className="brand-panel py-14 text-center">
           <div className="mb-3 text-3xl">💬</div>
-          <p className="text-base font-semibold text-[#0b3e81]">No questions yet</p>
+          <p className="text-base font-semibold text-[#0b3e81]">{t("instruction.noQuestionsYet")}</p>
           {isStudent && (
             <p className="brand-muted mt-1 text-sm">
-              Tap &ldquo;Ask a Question&rdquo; to get started.
+              {t("instruction.askQuestionHint")}
             </p>
           )}
         </div>
@@ -134,35 +137,35 @@ export function InstructionThreadsModule({ courseId, currentUserId, currentUserR
                     {/* Badges */}
                     <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                       {thread.isPinned && (
-                        <span className="brand-chip">Pinned</span>
+                        <span className="brand-chip">{t("instruction.badgePinned")}</span>
                       )}
                       {!thread.isPrivate && (
-                        <span className="brand-chip brand-chip-accent">Public</span>
+                        <span className="brand-chip brand-chip-accent">{t("instruction.badgePublic")}</span>
                       )}
                       <span
                         className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold
                           ${s.bg} ${s.text} ${s.border}`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-                        {s.label}
+                        {t(`instruction.status.${thread.status.toLowerCase()}`)}
                       </span>
                     </div>
 
                     <p className="truncate text-sm font-semibold text-[#0b3e81] transition-colors group-hover:text-[#083e8a]">
-                      {thread.subject}
+                      {translateContent(language, thread.subject)}
                     </p>
 
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[#3a689f]">
-                      <span>{thread.student.name ?? "Student"}</span>
+                      <span>{thread.student.name ?? t("student.label")}</span>
                       {thread.module && (
                         <>
                           <span>·</span>
-                          <span className="text-[#2f5d96]">📚 {thread.module.title}</span>
+                          <span className="text-[#2f5d96]">📚 {translateContent(language, thread.module.title)}</span>
                         </>
                       )}
                       <span>·</span>
                       <span>
-                        {new Date(thread.updatedAt).toLocaleDateString("en-US", {
+                        {new Date(thread.updatedAt).toLocaleDateString(getLanguageLocale(language), {
                           month: "short",
                           day: "numeric",
                         })}

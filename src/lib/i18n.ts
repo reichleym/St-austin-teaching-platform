@@ -2,6 +2,10 @@ export const supportedLanguages = ["en", "fr"] as const;
 export type Language = (typeof supportedLanguages)[number];
 
 export const defaultLanguage: Language = "en";
+const languageLocales: Record<Language, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+};
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
@@ -90,6 +94,10 @@ const translations: Record<Language, Record<string, string>> = {
     "metric.submissionsPending.delta": "awaiting grading",
     "metric.enrolledCourses": "Enrolled Courses",
     "metric.enrolledCourses.delta": "active enrollments",
+    "metric.enrollmentRequests": "Enrollment Requests",
+    "metric.enrollmentRequests.delta": "pending approval",
+    "metric.engagement": "Discussion Board",
+    "metric.engagement.delta": "active discussions",
     "overview.departmentHead.heading": "Department Oversight Hub",
     "overview.departmentHead.summary":
       "Monitor assigned courses, instructor progress, engagement signals, and academic follow-through.",
@@ -97,6 +105,42 @@ const translations: Record<Language, Record<string, string>> = {
     "overview.teacher.summary": "Course delivery, grading throughput, engagement signals, and learner support workflow.",
     "overview.student.heading": "Student Learning Hub",
     "overview.student.summary": "Academic progress, deadlines, attendance performance, and personal learning actions.",
+    "overview.dynamic.superAdmin.gradeEdit.title": "Review {count} Grade Edit Request{suffix}",
+    "overview.dynamic.superAdmin.gradeEdit.detail":
+      "Published grade changes require admin approval and full audit logging.",
+    "overview.dynamic.superAdmin.enrollment.title": "Resolve {count} Enrollment Request{suffix}",
+    "overview.dynamic.superAdmin.enrollment.detail":
+      "Pending course enrollment approvals impact learner access.",
+    "overview.dynamic.superAdmin.courses.title": "{count} Active Course{suffix} in Governance",
+    "overview.dynamic.superAdmin.courses.detail":
+      "Monitor assignment, discussion, and policy alignment across courses.",
+    "overview.dynamic.departmentHead.courses.title": "{count} Course{suffix} Under Oversight",
+    "overview.dynamic.departmentHead.courses.detail":
+      "Review instructor timelines and weekly module release cadence.",
+    "overview.dynamic.departmentHead.discussions.title": "{count} Discussion{suffix} Active",
+    "overview.dynamic.departmentHead.discussions.detail":
+      "Ensure participation requirements are being met.",
+    "overview.dynamic.departmentHead.assignments.title": "{count} Assignment{suffix} in Progress",
+    "overview.dynamic.departmentHead.assignments.detail":
+      "Confirm grading pace and late policy adherence.",
+    "overview.dynamic.teacher.submissions.title": "{count} Submission{suffix} Awaiting Grading",
+    "overview.dynamic.teacher.submissions.detail":
+      "Prioritize grading queue to keep learner feedback turnaround on track.",
+    "overview.dynamic.teacher.assignments.title": "{count} Assignment{suffix} in Course Scope",
+    "overview.dynamic.teacher.assignments.detail":
+      "Review due dates and attempt settings for upcoming assessment windows.",
+    "overview.dynamic.teacher.discussions.title": "{count} Discussion Topic{suffix} Active",
+    "overview.dynamic.teacher.discussions.detail":
+      "Track missing discussion participation and follow up with students.",
+    "overview.dynamic.student.assignments.title": "{count} Assignment{suffix} Pending",
+    "overview.dynamic.student.assignments.detail":
+      "Focus on due assignments and maintain timely submissions.",
+    "overview.dynamic.student.courses.title": "{count} Enrolled Course{suffix}",
+    "overview.dynamic.student.courses.detail":
+      "Open modules in your enrolled courses to maintain progress.",
+    "overview.dynamic.student.announcements.title": "{count} Announcement{suffix} Available",
+    "overview.dynamic.student.announcements.detail":
+      "Review updates from faculty and administration.",
     "focus.superAdmin.userAccess.title": "User & access governance",
     "focus.superAdmin.userAccess.detail": "Enrollment lifecycle and access policy enforcement are active for this cycle.",
     "focus.superAdmin.academic.title": "Academic oversight approvals",
@@ -178,6 +222,8 @@ const translations: Record<Language, Record<string, string>> = {
     "label.enrollmentStatus": "Enrollment Status",
     "label.role": "Role",
     "label.assignedDepartmentHead": "Assigned Department Head",
+    "label.subject": "Subject",
+    "label.module": "Module",
     "placeholder.fullName": "Full name",
     "placeholder.phoneNumber": "Phone number",
     "placeholder.country": "Country",
@@ -250,6 +296,7 @@ const translations: Record<Language, Record<string, string>> = {
     "action.addGradeBand": "Add Grade Band",
     "action.addLateRule": "Add Late Rule",
     "action.saveAcademicPolicies": "Save Academic Policies",
+    "action.sendMessage": "Send Message",
     "audience.teacherOnly": "Teachers Only",
     "audience.studentOnly": "Students Only",
     "audience.departmentHeadOnly": "Department Heads Only",
@@ -265,6 +312,8 @@ const translations: Record<Language, Record<string, string>> = {
     "audience.label.STUDENT_DEPARTMENT_HEAD": "Students + Department Heads",
     "audience.label.ALL": "Teachers + Students + Department Heads",
     "error.createAnnouncement": "Unable to create announcement.",
+    "error.loadEngagement": "Unable to load engagement module.",
+    "error.createDiscussion": "Unable to create discussion.",
     "error.updateAnnouncement": "Unable to update announcement.",
     "error.deleteAnnouncement": "Unable to delete announcement.",
     "error.loadAdminProfile": "Unable to load admin profile.",
@@ -389,10 +438,123 @@ const translations: Record<Language, Record<string, string>> = {
     "visibility.published": "PUBLISHED",
     "common.na": "N/A",
     "common.no": "No",
+    "common.yes": "Yes",
+    "common.unknown": "Unknown",
+    "common.unread": "Unread",
     activeModule: "Active Module",
     "announcements.noneAvailable": "No announcements available right now.",
+    "engagement.topicsTitle": "Discussion Topics",
+    "engagement.createTitle": "Create Discussion Topic",
+    "engagement.discussionTitleLabel": "Discussion Title",
+    "engagement.promptLabel": "Prompt",
+    "engagement.selectModule": "Select module",
+    "engagement.openAt": "Open At",
+    "engagement.closeAt": "Close At",
+    "engagement.allowLate": "Allow late",
+    "engagement.gradedDiscussion": "Graded discussion",
+    "engagement.createTopic": "Create Topic",
+    "engagement.createModuleFirst":
+      "Create course modules first. Discussion topics require a module link.",
+    "engagement.noTopics": "No discussion topics yet.",
+    "engagement.loading": "Loading discussions...",
+    "engagement.moduleRequired": "Module link is required.",
+    "engagement.completed": "Completed",
+    "engagement.partial": "Partial",
+    "engagement.missing": "Missing",
+    "engagement.gradedWithPoints": "Graded ({points} pts)",
+    "engagement.ungraded": "Ungraded",
+    "engagement.locked": "Locked",
+    "engagement.open": "Open",
     "student.label": "Student",
     "teacher.label": "Teacher",
+    "login.badge": "Login",
+    "login.accessPortal": "Access Portal",
+    "login.title": "Teacher & Student Login",
+    "login.subtitle": "Sign in as Teacher, Department Head, or Student.",
+    "login.adminHint": "Super Admin login is available at /admin/login.",
+    "login.errorInactive": "This account is inactive. Contact your administrator.",
+    "login.errorInvalidCredentials": "Invalid email or student ID or password.",
+    "login.errorIncorrectUserType": "Incorrect user type selected.",
+    "login.errorEmailNotVerified": "Please verify your email before logging in.",
+    "login.errorGeneric": "Unable to sign in right now.",
+    "login.errorResendVerification": "Unable to resend verification email.",
+    "login.infoVerificationGenerated": "Verification link generated: {url}",
+    "login.infoVerificationSent": "Verification email sent. Please check your inbox.",
+    "login.resending": "Resending...",
+    "login.resendVerification": "Resend verification email",
+    "login.signingIn": "Signing in...",
+    "login.signInAs": "Sign in as",
+    "login.forgotPassword": "Forgot Password?",
+    "login.registerStudent": "Register as Student",
+    "login.signupClosed": "Student self-signup is closed. Please request an invite from Admin.",
+    "login.success": "Logged in successfully.",
+    "instruction.askTeacher": "Ask Your Teacher",
+    "instruction.selectCoursePrompt": "Select a course to view or post questions",
+    "instruction.noEnrolledCourses": "No enrolled courses",
+    "instruction.enrollToAsk": "Enroll in a course to ask your teacher questions.",
+    "instruction.loadingThreads": "Loading threads",
+    "instruction.threadCount.one": "{count} thread",
+    "instruction.threadCount.other": "{count} threads",
+    "instruction.askQuestion": "Ask a Question",
+    "instruction.noQuestionsYet": "No questions yet",
+    "instruction.askQuestionHint": "Tap \"Ask a Question\" to get started.",
+    "instruction.badgePinned": "Pinned",
+    "instruction.badgePublic": "Public",
+    "instruction.status.open": "Open",
+    "instruction.status.answered": "Answered",
+    "instruction.status.closed": "Closed",
+    "instruction.reply": "Reply",
+    "instruction.cancelReply": "Cancel",
+    "instruction.backToQuestions": "Back to questions",
+    "instruction.threadTitle": "Thread",
+    "instruction.by": "by {name}",
+    "instruction.threadClosedNotice": "This thread is closed and no longer accepts replies.",
+    "instruction.addReply": "Add a reply",
+    "instruction.writeReply": "Write your reply...",
+    "instruction.writeReplyCompact": "Write a reply...",
+    "instruction.posting": "Posting...",
+    "instruction.postReply": "Post Reply",
+    "instruction.deleteMessage": "Delete",
+    "instruction.deleteConfirm": "Delete this message?",
+    "instruction.teacherBadge": "Teacher",
+    "instruction.threadNotFound": "Thread not found.",
+    "instruction.goBack": "Go back",
+    "instruction.failedLoad": "Failed to load.",
+    "instruction.failedLoadThreads": "Failed to load threads.",
+    "instruction.failedLoadThread": "Failed to load thread.",
+    "instruction.failedPost": "Failed to post.",
+    "instruction.failedGeneric": "Something went wrong.",
+    "instruction.pin": "Pin",
+    "instruction.unpin": "Unpin",
+    "instruction.close": "Close",
+    "oversight.summaryTitle": "Oversight Summary",
+    "oversight.noCoursesAssigned": "No courses assigned yet.",
+    "oversight.messageTeacher": "Message a Teacher",
+    "oversight.recentMessages": "Recent Messages Sent",
+    "oversight.noMessages": "No messages sent yet.",
+    "oversight.errorLoad": "Unable to load oversight data.",
+    "oversight.errorSelectCourse": "Select a course before sending a message.",
+    "oversight.errorSubjectBodyRequired": "Subject and message are required.",
+    "oversight.errorSendMessage": "Unable to send message.",
+    "oversight.messageSent": "Message sent to the course teacher.",
+    "oversight.sending": "Sending...",
+    "oversight.sendingTo": "Sending to",
+    "oversight.noAssignedTeacher": "This course has no assigned teacher.",
+    "oversight.unassigned": "Unassigned",
+    "oversight.enrolledStudents": "Enrolled Students",
+    "oversight.assignmentCount": "Assignments",
+    "oversight.submissionCount": "Submissions",
+    "oversight.gradesPublished": "Grades Published",
+    "oversight.averageGrade": "Average Grade",
+    "messages.departmentHeadTitle": "Department Head Messages",
+    "messages.loading": "Loading messages...",
+    "messages.errorLoad": "Unable to load messages.",
+    "messages.none": "No messages yet.",
+    "messages.from": "From",
+    "messages.sent": "Sent",
+    "messages.read": "Read",
+    "messages.markRead": "Mark as read",
+    "messages.marking": "Marking...",
     "action.manage": "Manage",
     "action.addQuestion": "Add Question",
     "action.createAssignment": "Create Assignment",
@@ -693,6 +855,10 @@ const translations: Record<Language, Record<string, string>> = {
     "metric.submissionsPending.delta": "en attente de correction",
     "metric.enrolledCourses": "Cours inscrits",
     "metric.enrolledCourses.delta": "inscriptions actives",
+    "metric.enrollmentRequests": "Demandes d'inscription",
+    "metric.enrollmentRequests.delta": "en attente d'approbation",
+    "metric.engagement": "Forum de discussion",
+    "metric.engagement.delta": "discussions actives",
     "overview.departmentHead.heading": "Centre de supervision du département",
     "overview.departmentHead.summary":
       "Suivez les cours assignés, la progression des enseignants, les signaux d'engagement et le suivi académique.",
@@ -700,6 +866,54 @@ const translations: Record<Language, Record<string, string>> = {
     "overview.teacher.summary": "Diffusion des cours, rythme de correction, signaux d'engagement et flux de soutien aux apprenants.",
     "overview.student.heading": "Centre d'apprentissage des étudiants",
     "overview.student.summary": "Progression académique, échéances, assiduité et actions d'apprentissage personnelles.",
+    "overview.dynamic.superAdmin.gradeEdit.title":
+      "Réviser {count} demande{suffix} de modification de note",
+    "overview.dynamic.superAdmin.gradeEdit.detail":
+      "Les changements de notes publiées nécessitent une approbation administrateur et une traçabilité complète.",
+    "overview.dynamic.superAdmin.enrollment.title":
+      "Traiter {count} demande{suffix} d'inscription",
+    "overview.dynamic.superAdmin.enrollment.detail":
+      "Les validations d'inscription en attente affectent l'accès des apprenants.",
+    "overview.dynamic.superAdmin.courses.title":
+      "{count} cours actif{suffix} sous gouvernance",
+    "overview.dynamic.superAdmin.courses.detail":
+      "Surveillez les devoirs, les discussions et l'alignement des politiques à travers les cours.",
+    "overview.dynamic.departmentHead.courses.title":
+      "{count} cours sous supervision",
+    "overview.dynamic.departmentHead.courses.detail":
+      "Passez en revue les calendriers des enseignants et le rythme de publication hebdomadaire des modules.",
+    "overview.dynamic.departmentHead.discussions.title":
+      "{count} discussion{suffix} active{suffix}",
+    "overview.dynamic.departmentHead.discussions.detail":
+      "Assurez-vous que les exigences de participation sont respectées.",
+    "overview.dynamic.departmentHead.assignments.title":
+      "{count} devoir{suffix} en cours",
+    "overview.dynamic.departmentHead.assignments.detail":
+      "Confirmez le rythme de correction et le respect des politiques de retard.",
+    "overview.dynamic.teacher.submissions.title":
+      "{count} soumission{suffix} en attente de correction",
+    "overview.dynamic.teacher.submissions.detail":
+      "Priorisez la file de correction pour maintenir un retour rapide aux apprenants.",
+    "overview.dynamic.teacher.assignments.title":
+      "{count} devoir{suffix} dans le périmètre du cours",
+    "overview.dynamic.teacher.assignments.detail":
+      "Vérifiez les dates d'échéance et les paramètres de tentative pour les prochaines évaluations.",
+    "overview.dynamic.teacher.discussions.title":
+      "{count} sujet{suffix} de discussion actif{suffix}",
+    "overview.dynamic.teacher.discussions.detail":
+      "Suivez les participations manquantes au forum et relancez les étudiants.",
+    "overview.dynamic.student.assignments.title":
+      "{count} devoir{suffix} en attente",
+    "overview.dynamic.student.assignments.detail":
+      "Concentrez-vous sur les devoirs à rendre et maintenez des soumissions ponctuelles.",
+    "overview.dynamic.student.courses.title":
+      "{count} cours inscrit{suffix}",
+    "overview.dynamic.student.courses.detail":
+      "Ouvrez les modules de vos cours inscrits pour maintenir votre progression.",
+    "overview.dynamic.student.announcements.title":
+      "{count} annonce{suffix} disponible{suffix}",
+    "overview.dynamic.student.announcements.detail":
+      "Consultez les mises à jour du corps enseignant et de l'administration.",
     "focus.superAdmin.userAccess.title": "Gouvernance des utilisateurs et accès",
     "focus.superAdmin.userAccess.detail":
       "Le cycle d'inscription et l'application des politiques d'accès sont actifs pour cette période.",
@@ -785,6 +999,8 @@ const translations: Record<Language, Record<string, string>> = {
     "label.enrollmentStatus": "Statut d'inscription",
     "label.role": "Rôle",
     "label.assignedDepartmentHead": "Chef de département assigné",
+    "label.subject": "Sujet",
+    "label.module": "Module",
     "placeholder.fullName": "Nom complet",
     "placeholder.phoneNumber": "Numéro de téléphone",
     "placeholder.country": "Pays",
@@ -857,6 +1073,7 @@ const translations: Record<Language, Record<string, string>> = {
     "action.addGradeBand": "Ajouter une tranche",
     "action.addLateRule": "Ajouter une règle",
     "action.saveAcademicPolicies": "Enregistrer les politiques académiques",
+    "action.sendMessage": "Envoyer le message",
     "audience.teacherOnly": "Enseignants seulement",
     "audience.studentOnly": "Étudiants seulement",
     "audience.departmentHeadOnly": "Chefs de département seulement",
@@ -872,6 +1089,8 @@ const translations: Record<Language, Record<string, string>> = {
     "audience.label.STUDENT_DEPARTMENT_HEAD": "Étudiants + Chefs de département",
     "audience.label.ALL": "Enseignants + Étudiants + Chefs de département",
     "error.createAnnouncement": "Impossible de créer l'annonce.",
+    "error.loadEngagement": "Impossible de charger le module de discussion.",
+    "error.createDiscussion": "Impossible de créer la discussion.",
     "error.updateAnnouncement": "Impossible de mettre à jour l'annonce.",
     "error.deleteAnnouncement": "Impossible de supprimer l'annonce.",
     "error.loadAdminProfile": "Impossible de charger le profil administrateur.",
@@ -998,10 +1217,123 @@ const translations: Record<Language, Record<string, string>> = {
     "visibility.published": "PUBLIÉ",
     "common.na": "N/D",
     "common.no": "Non",
+    "common.yes": "Oui",
+    "common.unknown": "Inconnu",
+    "common.unread": "Non lu",
     activeModule: "Module actif",
     "announcements.noneAvailable": "Aucune annonce disponible pour le moment.",
+    "engagement.topicsTitle": "Sujets de discussion",
+    "engagement.createTitle": "Créer un sujet de discussion",
+    "engagement.discussionTitleLabel": "Titre de la discussion",
+    "engagement.promptLabel": "Invite",
+    "engagement.selectModule": "Sélectionner un module",
+    "engagement.openAt": "Ouvre le",
+    "engagement.closeAt": "Ferme le",
+    "engagement.allowLate": "Autoriser les retards",
+    "engagement.gradedDiscussion": "Discussion notée",
+    "engagement.createTopic": "Créer le sujet",
+    "engagement.createModuleFirst":
+      "Créez d'abord des modules de cours. Les sujets de discussion nécessitent un lien vers un module.",
+    "engagement.noTopics": "Aucun sujet de discussion pour le moment.",
+    "engagement.loading": "Chargement des discussions...",
+    "engagement.moduleRequired": "Le lien du module est requis.",
+    "engagement.completed": "Terminés",
+    "engagement.partial": "Partiels",
+    "engagement.missing": "Manquants",
+    "engagement.gradedWithPoints": "Notée ({points} pts)",
+    "engagement.ungraded": "Non notée",
+    "engagement.locked": "Verrouillée",
+    "engagement.open": "Ouverte",
     "student.label": "Étudiant",
     "teacher.label": "Enseignant",
+    "login.badge": "Connexion",
+    "login.accessPortal": "Portail d'accès",
+    "login.title": "Connexion enseignant et étudiant",
+    "login.subtitle": "Connectez-vous en tant qu'enseignant, chef de département ou étudiant.",
+    "login.adminHint": "La connexion Super Admin est disponible sur /admin/login.",
+    "login.errorInactive": "Ce compte est inactif. Contactez votre administrateur.",
+    "login.errorInvalidCredentials": "Email, identifiant étudiant ou mot de passe invalide.",
+    "login.errorIncorrectUserType": "Le type d'utilisateur sélectionné est incorrect.",
+    "login.errorEmailNotVerified": "Veuillez vérifier votre email avant de vous connecter.",
+    "login.errorGeneric": "Impossible de vous connecter pour le moment.",
+    "login.errorResendVerification": "Impossible de renvoyer l'email de vérification.",
+    "login.infoVerificationGenerated": "Lien de vérification généré : {url}",
+    "login.infoVerificationSent": "Email de vérification envoyé. Veuillez vérifier votre boîte de réception.",
+    "login.resending": "Renvoi...",
+    "login.resendVerification": "Renvoyer l'email de vérification",
+    "login.signingIn": "Connexion...",
+    "login.signInAs": "Se connecter en tant que",
+    "login.forgotPassword": "Mot de passe oublié ?",
+    "login.registerStudent": "S'inscrire comme étudiant",
+    "login.signupClosed": "L'auto-inscription des étudiants est fermée. Veuillez demander une invitation à l'administration.",
+    "login.success": "Connexion réussie.",
+    "instruction.askTeacher": "Demandez à votre professeur",
+    "instruction.selectCoursePrompt": "Sélectionnez un cours pour voir ou publier des questions",
+    "instruction.noEnrolledCourses": "Aucun cours suivi",
+    "instruction.enrollToAsk": "Inscrivez-vous à un cours pour poser des questions à votre professeur.",
+    "instruction.loadingThreads": "Chargement des discussions",
+    "instruction.threadCount.one": "{count} discussion",
+    "instruction.threadCount.other": "{count} discussions",
+    "instruction.askQuestion": "Poser une question",
+    "instruction.noQuestionsYet": "Aucune question pour le moment",
+    "instruction.askQuestionHint": "Appuyez sur \"Poser une question\" pour commencer.",
+    "instruction.badgePinned": "Épinglé",
+    "instruction.badgePublic": "Public",
+    "instruction.status.open": "Ouvert",
+    "instruction.status.answered": "Répondu",
+    "instruction.status.closed": "Fermé",
+    "instruction.reply": "Répondre",
+    "instruction.cancelReply": "Annuler",
+    "instruction.backToQuestions": "Retour aux questions",
+    "instruction.threadTitle": "Discussion",
+    "instruction.by": "par {name}",
+    "instruction.threadClosedNotice": "Cette discussion est fermée et n'accepte plus de réponses.",
+    "instruction.addReply": "Ajouter une réponse",
+    "instruction.writeReply": "Écrivez votre réponse...",
+    "instruction.writeReplyCompact": "Écrire une réponse...",
+    "instruction.posting": "Publication...",
+    "instruction.postReply": "Publier la réponse",
+    "instruction.deleteMessage": "Supprimer",
+    "instruction.deleteConfirm": "Supprimer ce message ?",
+    "instruction.teacherBadge": "Professeur",
+    "instruction.threadNotFound": "Discussion introuvable.",
+    "instruction.goBack": "Retour",
+    "instruction.failedLoad": "Impossible de charger.",
+    "instruction.failedLoadThreads": "Impossible de charger les discussions.",
+    "instruction.failedLoadThread": "Impossible de charger la discussion.",
+    "instruction.failedPost": "Impossible de publier.",
+    "instruction.failedGeneric": "Une erreur s'est produite.",
+    "instruction.pin": "Épingler",
+    "instruction.unpin": "Désépingler",
+    "instruction.close": "Fermer",
+    "oversight.summaryTitle": "Résumé du suivi",
+    "oversight.noCoursesAssigned": "Aucun cours assigné pour le moment.",
+    "oversight.messageTeacher": "Envoyer un message à un enseignant",
+    "oversight.recentMessages": "Messages récents envoyés",
+    "oversight.noMessages": "Aucun message envoyé pour le moment.",
+    "oversight.errorLoad": "Impossible de charger les données de suivi.",
+    "oversight.errorSelectCourse": "Sélectionnez un cours avant d'envoyer un message.",
+    "oversight.errorSubjectBodyRequired": "Le sujet et le message sont requis.",
+    "oversight.errorSendMessage": "Impossible d'envoyer le message.",
+    "oversight.messageSent": "Message envoyé à l'enseignant du cours.",
+    "oversight.sending": "Envoi...",
+    "oversight.sendingTo": "Envoi à",
+    "oversight.noAssignedTeacher": "Ce cours n'a pas d'enseignant assigné.",
+    "oversight.unassigned": "Non assigné",
+    "oversight.enrolledStudents": "Étudiants inscrits",
+    "oversight.assignmentCount": "Devoirs",
+    "oversight.submissionCount": "Rendus",
+    "oversight.gradesPublished": "Notes publiées",
+    "oversight.averageGrade": "Moyenne",
+    "messages.departmentHeadTitle": "Messages des chefs de département",
+    "messages.loading": "Chargement des messages...",
+    "messages.errorLoad": "Impossible de charger les messages.",
+    "messages.none": "Aucun message pour le moment.",
+    "messages.from": "De",
+    "messages.sent": "Envoyé",
+    "messages.read": "Lu",
+    "messages.markRead": "Marquer comme lu",
+    "messages.marking": "Marquage...",
     "action.manage": "Gérer",
     "action.addQuestion": "Ajouter une question",
     "action.createAssignment": "Créer un devoir",
@@ -1216,6 +1548,53 @@ const translations: Record<Language, Record<string, string>> = {
 };
 
 const missingKeyCache = new Set<string>();
+const contentTranslations: Record<Language, Record<string, string>> = {
+  en: {},
+  fr: {
+    "Introduction to Computer Science": "Introduction à l'informatique",
+    "Foundational concepts in programming and problem solving.":
+      "Concepts fondamentaux de programmation et de résolution de problèmes.",
+    "Calculus II": "Calcul II",
+    "Integration techniques, sequences, and series.": "Techniques d'intégration, suites et séries.",
+    "Data Structures": "Structures de données",
+    "Arrays, linked lists, trees, graphs, and algorithms.": "Tableaux, listes chaînées, arbres, graphes et algorithmes.",
+    "Getting Started with Programming": "Premiers pas en programmation",
+    "Setting up your environment and writing your first program.":
+      "Configuration de votre environnement et écriture de votre premier programme.",
+    "Installing VS Code": "Installer VS Code",
+    "Step-by-step guide to installing and configuring VS Code.":
+      "Guide pas à pas pour installer et configurer VS Code.",
+    "Hello World in Python": "Hello World en Python",
+    "Write and run your first Python program.": "Écrivez et exécutez votre premier programme Python.",
+    "Control Flow": "Contrôle du flux",
+    "If-statements, loops, and functions.": "Instructions conditionnelles, boucles et fonctions.",
+    "If / Else Statements": "Instructions if / else",
+    "Learn how to branch code execution.": "Apprenez à orienter l'exécution du code.",
+    "Homework 1: Variables & Types": "Devoir 1 : Variables et types",
+    "Complete all exercises in Chapter 1.": "Terminez tous les exercices du chapitre 1.",
+    "Homework 2: Loops": "Devoir 2 : Boucles",
+    "Implement 5 loop-based problems.": "Implémentez 5 exercices basés sur les boucles.",
+    "Week 1 Introductions": "Présentations de la semaine 1",
+    "Introduce yourself to the class!": "Présentez-vous à la classe !",
+    "Welcome to the New Semester!": "Bienvenue pour le nouveau semestre !",
+    "We are excited to kick off the Spring 2025 semester. Please review your course materials.":
+      "Nous sommes ravis de lancer le semestre du printemps 2025. Veuillez consulter vos supports de cours.",
+    "System Maintenance – Saturday": "Maintenance du système - Samedi",
+    "The platform will be offline for maintenance from 2–4 AM Saturday.":
+      "La plateforme sera indisponible pour maintenance samedi de 2 h à 4 h.",
+    "Error running Hello World": "Erreur lors de l'exécution de Hello World",
+    "I get a SyntaxError when I run the Hello World script. What am I doing wrong?":
+      "J'obtiens une SyntaxError lorsque j'exécute le script Hello World. Qu'est-ce que je fais mal ?",
+    "Make sure you are using Python 3 and that you saved the file with a .py extension. Also check your indentation!":
+      "Assurez-vous d'utiliser Python 3 et d'avoir enregistré le fichier avec l'extension .py. Vérifiez aussi votre indentation !",
+    "That fixed it, thank you!": "Cela a résolu le problème, merci !",
+    "When will Module 2 be available?": "Quand le module 2 sera-t-il disponible ?",
+    "Hi, I finished Module 1. When can I access Module 2?":
+      "Bonjour, j'ai terminé le module 1. Quand pourrai-je accéder au module 2 ?",
+    "I believe my answer for question 3 deserves full credit.":
+      "Je pense que ma réponse à la question 3 mérite tous les points.",
+  },
+};
 
 const humanizeKey = (key: string) => {
   const segment = key.split(".").pop() ?? key;
@@ -1230,7 +1609,6 @@ const logMissing = (language: Language, key: string) => {
   const cacheKey = `${language}:${key}`;
   if (missingKeyCache.has(cacheKey)) return;
   missingKeyCache.add(cacheKey);
-  // eslint-disable-next-line no-console
   console.warn(`[i18n] Missing translation for "${key}" in "${language}". Falling back.`);
 };
 
@@ -1257,4 +1635,15 @@ export function translate(
   }
   if (!vars) return template;
   return template.replace(/\{(\w+)\}/g, (_, token: string) => String(vars[token] ?? ""));
+}
+
+export function getLanguageLocale(language: Language) {
+  return languageLocales[language] ?? languageLocales[defaultLanguage];
+}
+
+export function translateContent(language: Language, value: string | null | undefined) {
+  if (value === null || value === undefined) return value ?? "";
+  if (language === defaultLanguage) return value;
+  const table = contentTranslations[language] ?? {};
+  return table[value] ?? value;
 }

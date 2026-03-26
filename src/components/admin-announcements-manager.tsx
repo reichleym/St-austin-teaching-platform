@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 type Audience =
   | "BOTH"
@@ -35,11 +36,11 @@ type EditDraft = {
   expiresAt: string;
 };
 
-function formatDate(value: string | null, noExpiryLabel: string) {
+function formatDate(value: string | null, noExpiryLabel: string, locale: string) {
   if (!value) return noExpiryLabel;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return noExpiryLabel;
-  return date.toLocaleString("en-GB", {
+  return date.toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -58,7 +59,8 @@ function toDateTimeLocalValue(value: string | null) {
 }
 
 export function AdminAnnouncementsManager({ initialAnnouncements, detailBaseHref }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const locale = getLanguageLocale(language);
   const [items, setItems] = useState(initialAnnouncements);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -339,15 +341,15 @@ export function AdminAnnouncementsManager({ initialAnnouncements, detailBaseHref
                   ) : (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-base font-semibold text-[#0b3e81]">{item.title}</p>
+                        <p className="text-base font-semibold text-[#0b3e81]">{translateContent(language, item.title)}</p>
                         <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-xs font-semibold text-[#1f518f]">
                           {t(`audience.label.${item.audience}`)}
                         </span>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{item.content}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{translateContent(language, item.content)}</p>
                       <div className="mt-2 text-xs text-[#3f70ae]">
-                        <p>{t("created")}: {formatDate(item.createdAt, t("noExpiry"))}</p>
-                        <p>{t("expires")}: {formatDate(item.expiresAt, t("noExpiry"))}</p>
+                        <p>{t("created")}: {formatDate(item.createdAt, t("noExpiry"), locale)}</p>
+                        <p>{t("expires")}: {formatDate(item.expiresAt, t("noExpiry"), locale)}</p>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <Link

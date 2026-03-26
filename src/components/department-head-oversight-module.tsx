@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 type CourseOverview = {
   id: string;
@@ -29,11 +30,11 @@ type SentMessage = {
   readAt: string | null;
 };
 
-const formatDateTime = (value: string | null) => {
+const formatDateTime = (value: string | null, locale: string) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-GB", {
+  return date.toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -44,7 +45,8 @@ const formatDateTime = (value: string | null) => {
 };
 
 export function DepartmentHeadOversightModule() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const locale = getLanguageLocale(language);
   const [courses, setCourses] = useState<CourseOverview[]>([]);
   const [messages, setMessages] = useState<SentMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,13 +67,13 @@ export function DepartmentHeadOversightModule() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { courses?: CourseOverview[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load oversight data.");
+        setError(result.error ?? t("oversight.errorLoad"));
         return;
       }
       setCourses(result.courses ?? []);
       setCourseId((prev) => prev || result.courses?.[0]?.id || "");
     } catch {
-      setError("Unable to load oversight data.");
+      setError(t("oversight.errorLoad"));
     } finally {
       setLoading(false);
     }
@@ -85,12 +87,12 @@ export function DepartmentHeadOversightModule() {
         ? (JSON.parse(raw) as { messages?: SentMessage[]; error?: string })
         : {};
       if (!response.ok) {
-        setMessageError(result.error ?? t("loading.messages"));
+        setMessageError(result.error ?? t("messages.errorLoad"));
         return;
       }
       setMessages(result.messages ?? []);
     } catch {
-      setMessageError("Unable to load messages.");
+      setMessageError(t("messages.errorLoad"));
     }
   };
 
@@ -109,11 +111,11 @@ export function DepartmentHeadOversightModule() {
     setMessageError("");
     setMessageInfo("");
     if (!courseId) {
-      setMessageError("Select a course before sending a message.");
+      setMessageError(t("oversight.errorSelectCourse"));
       return;
     }
     if (!subject.trim() || !body.trim()) {
-      setMessageError("Subject and message are required.");
+      setMessageError(t("oversight.errorSubjectBodyRequired"));
       return;
     }
     setPendingSend(true);
@@ -126,15 +128,15 @@ export function DepartmentHeadOversightModule() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setMessageError(result.error ?? "Unable to send message.");
+        setMessageError(result.error ?? t("oversight.errorSendMessage"));
         return;
       }
       setSubject("");
       setBody("");
-      setMessageInfo("Message sent to the course teacher.");
+      setMessageInfo(t("oversight.messageSent"));
       await loadMessages();
     } catch {
-      setMessageError("Unable to send message.");
+      setMessageError(t("oversight.errorSendMessage"));
     } finally {
       setPendingSend(false);
     }
@@ -143,7 +145,7 @@ export function DepartmentHeadOversightModule() {
   return (
     <section className="grid gap-4">
       <section className="brand-card p-5">
-        <p className="brand-section-title">Oversight Summary</p>
+        <p className="brand-section-title">{t("oversight.summaryTitle")}</p>
         {loading ? (
           <div className="mt-3">
             <LoadingIndicator label={t("loading.departmentHeadCourses")} />
@@ -151,7 +153,7 @@ export function DepartmentHeadOversightModule() {
         ) : null}
         <ToastMessage type="error" message={error} />
         {!loading && !courses.length ? (
-          <p className="brand-muted mt-3 text-sm">No courses assigned yet.</p>
+          <p className="brand-muted mt-3 text-sm">{t("oversight.noCoursesAssigned")}</p>
         ) : null}
         {courses.length ? (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -160,17 +162,17 @@ export function DepartmentHeadOversightModule() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#3b6aa5]">
                   {course.code}
                 </p>
-                <p className="text-lg font-semibold text-[#0d3f80]">{course.title}</p>
+                <p className="text-lg font-semibold text-[#0d3f80]">{translateContent(language, course.title)}</p>
                 <p className="mt-1 text-xs text-[#3a689f]">
-                  Teacher: {course.teacher?.name || "Unassigned"} {course.teacher ? `(${course.teacher.email})` : ""}
+                  {t("teacher.label")}: {course.teacher?.name || t("oversight.unassigned")} {course.teacher ? `(${course.teacher.email})` : ""}
                 </p>
                 <div className="mt-3 grid gap-2 text-sm text-[#2f5f98]">
-                  <span>Enrolled Students: {course.enrollmentCount}</span>
-                  <span>Assignments: {course.assignmentCount}</span>
-                  <span>Submissions: {course.submissionCount}</span>
-                  <span>Grades Published: {course.gradedCount}</span>
+                  <span>{t("oversight.enrolledStudents")}: {course.enrollmentCount}</span>
+                  <span>{t("oversight.assignmentCount")}: {course.assignmentCount}</span>
+                  <span>{t("oversight.submissionCount")}: {course.submissionCount}</span>
+                  <span>{t("oversight.gradesPublished")}: {course.gradedCount}</span>
                   <span>
-                    Average Grade: {course.averageGrade !== null ? course.averageGrade.toFixed(1) : "N/A"}
+                    {t("oversight.averageGrade")}: {course.averageGrade !== null ? course.averageGrade.toFixed(1) : t("common.na")}
                   </span>
                 </div>
               </article>
@@ -180,66 +182,66 @@ export function DepartmentHeadOversightModule() {
       </section>
 
       <section className="brand-card p-5">
-        <p className="brand-section-title">Message a Teacher</p>
+        <p className="brand-section-title">{t("oversight.messageTeacher")}</p>
         <form className="mt-3 grid gap-3" onSubmit={onSendMessage}>
           <label className="grid gap-1.5">
-            <span className="brand-label">Course</span>
+            <span className="brand-label">{t("label.course")}</span>
             <select
               className="brand-input"
               value={courseId}
               onChange={(event) => setCourseId(event.currentTarget.value)}
               required
             >
-              <option value="">Select course</option>
+              <option value="">{t("assignment.selectCourse")}</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
-                  {course.code} - {course.title}
+                  {course.code} - {translateContent(language, course.title)}
                 </option>
               ))}
             </select>
           </label>
           {selectedCourse?.teacher ? (
             <p className="text-xs text-[#3a689f]">
-              Sending to: {selectedCourse.teacher.name || "Teacher"} ({selectedCourse.teacher.email})
+              {t("oversight.sendingTo")}: {selectedCourse.teacher.name || t("teacher.label")} ({selectedCourse.teacher.email})
             </p>
           ) : (
-            <p className="text-xs text-amber-700">This course has no assigned teacher.</p>
+            <p className="text-xs text-amber-700">{t("oversight.noAssignedTeacher")}</p>
           )}
           <label className="grid gap-1.5">
-            <span className="brand-label">Subject</span>
+            <span className="brand-label">{t("label.subject")}</span>
             <input className="brand-input" value={subject} onChange={(event) => setSubject(event.currentTarget.value)} required />
           </label>
           <label className="grid gap-1.5">
-            <span className="brand-label">Message</span>
+            <span className="brand-label">{t("label.message")}</span>
             <textarea className="brand-input min-h-[110px]" value={body} onChange={(event) => setBody(event.currentTarget.value)} required />
           </label>
           <ToastMessage type="error" message={messageError} />
           <ToastMessage type="success" message={messageInfo} />
           <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" disabled={pendingSend || !selectedCourse?.teacher}>
-            {pendingSend ? "Sending..." : "Send Message"}
+            {pendingSend ? t("oversight.sending") : t("action.sendMessage")}
           </button>
         </form>
       </section>
 
       <section className="brand-card p-5">
-        <p className="brand-section-title">Recent Messages Sent</p>
+        <p className="brand-section-title">{t("oversight.recentMessages")}</p>
         {messages.length ? (
           <div className="mt-3 space-y-3">
             {messages.map((message) => (
               <article key={message.id} className="rounded-md border border-[#dbe9fb] bg-white/80 p-3">
-                <p className="text-sm font-semibold text-[#0d3f80]">{message.subject}</p>
+                <p className="text-sm font-semibold text-[#0d3f80]">{translateContent(language, message.subject)}</p>
                 <p className="mt-1 text-xs text-[#3a689f]">
-                  Course: {message.courseTitle} | Teacher: {message.recipientName || "Teacher"} ({message.recipientEmail})
+                  {t("label.course")}: {translateContent(language, message.courseTitle)} | {t("teacher.label")}: {message.recipientName || t("teacher.label")} ({message.recipientEmail})
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5f98]">{message.body}</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5f98]">{translateContent(language, message.body)}</p>
                 <p className="mt-2 text-xs text-[#3a689f]">
-                  Sent: {formatDateTime(message.createdAt)} | Read: {message.readAt ? formatDateTime(message.readAt) : "Unread"}
+                  {t("messages.sent")}: {formatDateTime(message.createdAt, locale)} | {t("messages.read")}: {message.readAt ? formatDateTime(message.readAt, locale) : t("common.unread")}
                 </p>
               </article>
             ))}
           </div>
         ) : (
-          <p className="brand-muted mt-3 text-sm">No messages sent yet.</p>
+          <p className="brand-muted mt-3 text-sm">{t("oversight.noMessages")}</p>
         )}
       </section>
     </section>
