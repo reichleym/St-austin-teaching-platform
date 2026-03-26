@@ -1070,54 +1070,57 @@ export default async function DashboardPage({ params }: Props) {
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
-              <p className="brand-section-title">Add Teacher</p>
+              <p className="brand-section-title">{t("adminUsers.addTeacher")}</p>
               <Link
                 href="/dashboard/admin/invitations?role=TEACHER"
                 className="btn-brand-primary mt-2 inline-flex px-4 py-2 text-sm font-semibold no-underline"
               >
-                Send Invite
+                {t("action.sendInvite")}
               </Link>
             </article>
             <AdminUserManagementTable
               key="teachers-table"
-              title="Teachers"
-              emptyText="No teachers found yet."
+              entityKey="teacher"
+              title={t("module.view-teachers")}
+              emptyText={t("course.noTeachersMatch", undefined, "No teachers found yet.")}
               users={serializedTeacherList}
             />
           </section>
         ) : selected.slug === "view-students" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
-              <p className="brand-section-title">Add Student</p>
+              <p className="brand-section-title">{t("adminUsers.addStudent")}</p>
               <Link
                 href="/dashboard/admin/invitations?role=STUDENT"
                 className="btn-brand-primary mt-2 inline-flex px-4 py-2 text-sm font-semibold no-underline"
               >
-                Send Invite
+                {t("action.sendInvite")}
               </Link>
             </article>
             <AdminUserManagementTable
               key="students-table"
-              title="Students"
-              emptyText="No students found yet."
+              entityKey="student"
+              title={t("module.view-students")}
+              emptyText={t("course.noStudents", undefined, "No students found yet.")}
               users={serializedStudentList}
             />
           </section>
         ) : selected.slug === "view-department-heads" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
-              <p className="brand-section-title">Add Department Head</p>
+              <p className="brand-section-title">{t("adminUsers.addDepartmentHead")}</p>
               <Link
                 href="/dashboard/admin/invitations?role=DEPARTMENT_HEAD"
                 className="btn-brand-primary mt-2 inline-flex px-4 py-2 text-sm font-semibold no-underline"
               >
-                Send Invite
+                {t("action.sendInvite")}
               </Link>
             </article>
             <AdminUserManagementTable
               key="department-heads-table"
-              title="Department Heads"
-              emptyText="No department heads found yet."
+              entityKey="departmentHead"
+              title={t("module.view-department-heads")}
+              emptyText={t("course.noDepartmentHeads", undefined, "No department heads found yet.")}
               users={serializedDepartmentHeadList}
             />
           </section>

@@ -136,8 +136,11 @@ export default async function AnnouncementsFeedPage() {
     createdAt: item.createdAt.toISOString(),
   }));
 
-  const moduleTitle =
-    dashboardModules.find((item) => item.slug === "announcements-feed")?.title ?? t("announcements");
+  const moduleTitle = t(
+    "module.announcements-feed",
+    undefined,
+    dashboardModules.find((item) => item.slug === "announcements-feed")?.title ?? t("announcements")
+  );
 
   return (
     <main className="min-h-screen lg:flex">
@@ -151,7 +154,7 @@ export default async function AnnouncementsFeedPage() {
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{moduleTitle}</h2>
             </div>

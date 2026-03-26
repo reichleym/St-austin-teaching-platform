@@ -109,8 +109,11 @@ export default async function AnnouncementsPage() {
     createdAt: item.createdAt.toISOString(),
   }));
 
-  const moduleTitle =
-    dashboardModules.find((item) => item.slug === "announcements")?.title ?? t("announcements");
+  const moduleTitle = t(
+    "module.announcements",
+    undefined,
+    dashboardModules.find((item) => item.slug === "announcements")?.title ?? t("announcements")
+  );
 
   return (
     <main className="min-h-screen lg:flex">
@@ -124,7 +127,7 @@ export default async function AnnouncementsPage() {
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">{moduleTitle}</h2>
             </div>

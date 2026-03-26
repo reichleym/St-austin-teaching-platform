@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
+import { translateContent } from "@/lib/i18n";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -56,6 +58,7 @@ type Props = {
 const formatStudentLabel = (student: StudentOption) => `${student.name || "Student"} - ${student.email}`;
 
 export function StudentProgressModule({ role, courseId }: Props) {
+  const { t, language } = useLanguage();
   const canSelectStudent = role === "TEACHER" || role === "SUPER_ADMIN" || role === "ADMIN";
   const isStudent = role === "STUDENT";
   const canPickCourse = !courseId;
@@ -85,7 +88,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as ProgressResponse) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load progress data.");
+        setError(result.error ?? t("error.loadProgressData"));
       }
       const nextCourses = result.courses ?? [];
       setCourses(nextCourses);
@@ -95,11 +98,11 @@ export function StudentProgressModule({ role, courseId }: Props) {
         setSelectedCourseId((prev) => prev || queryCourseId);
       }
     } catch {
-      setError("Unable to load progress data.");
+      setError(t("error.loadProgressData"));
     } finally {
       setLoading(false);
     }
-  }, [courseId, isStudent, queryCourseId]);
+  }, [courseId, isStudent, queryCourseId, t]);
 
   const loadCourse = useCallback(async (courseId: string) => {
     if (!courseId) return;
@@ -110,7 +113,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as ProgressResponse) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load course progress.");
+        setError(result.error ?? t("error.loadCourseProgress"));
       }
       const courseStudents = result.students ?? [];
       setStudents(courseStudents);
@@ -128,11 +131,11 @@ export function StudentProgressModule({ role, courseId }: Props) {
         });
       }
     } catch {
-      setError("Unable to load course progress.");
+      setError(t("error.loadCourseProgress"));
     } finally {
       setLoading(false);
     }
-  }, [canSelectStudent, isStudent, queryStudentId]);
+  }, [canSelectStudent, isStudent, queryStudentId, t]);
 
   const loadStudentProgress = useCallback(async (courseId: string, studentId: string) => {
     if (!courseId || !studentId) return;
@@ -146,16 +149,16 @@ export function StudentProgressModule({ role, courseId }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as ProgressResponse) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load student progress.");
+        setError(result.error ?? t("error.loadStudentProgress"));
       }
       setProgress(result.progress ?? null);
       setStudents(result.students ?? []);
     } catch {
-      setError("Unable to load student progress.");
+      setError(t("error.loadStudentProgress"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const applyCompletion = async (payload: { courseId?: string; moduleId?: string }) => {
     if (!selectedCourseId || !selectedStudentId) return;
@@ -176,12 +179,12 @@ export function StudentProgressModule({ role, courseId }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to update completion.");
+        setError(result.error ?? t("error.updateCompletion"));
         return;
       }
       await loadStudentProgress(selectedCourseId, selectedStudentId);
     } catch {
-      setError("Unable to update completion.");
+      setError(t("error.updateCompletion"));
     } finally {
       setPendingCompletionKey("");
     }
@@ -223,42 +226,42 @@ export function StudentProgressModule({ role, courseId }: Props) {
   return (
     <section className="grid gap-4">
       <section className="brand-card p-5">
-        <p className="brand-section-title">Student Progress</p>
+        <p className="brand-section-title">{t("progress.title")}</p>
         <p className="brand-muted mt-2 text-sm">
           {canSelectStudent
             ? canPickCourse
-              ? "Pick a course and student to review their progress."
-              : "Select a student to review their progress in this course."
-            : "Track your learning progress across lessons."}
+              ? t("progress.pickCourseStudent")
+              : t("progress.selectStudentPrompt")
+            : t("progress.trackOwn")}
         </p>
         <ToastMessage type="error" message={error} />
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {canPickCourse ? (
             <label className="grid gap-1.5">
-              <span className="brand-label">Course</span>
+              <span className="brand-label">{t("label.course")}</span>
               <select
                 className="brand-input"
                 value={selectedCourseId}
                 onChange={(event) => setSelectedCourseId(event.currentTarget.value)}
               >
-                <option value="">Select a course</option>
+                <option value="">{t("progress.selectCourse")}</option>
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>
-                    {course.code} - {course.title}
+                    {course.code} - {translateContent(language, course.title)}
                   </option>
                 ))}
               </select>
             </label>
           ) : (
             <div className="grid gap-1.5">
-              <span className="brand-label">Course</span>
+              <span className="brand-label">{t("label.course")}</span>
               <div className="brand-input flex items-center bg-[#f4f9ff] text-[#0b3e81]">
                 {selectedCourse ? (
-                  `${selectedCourse.code} - ${selectedCourse.title}`
+                  `${selectedCourse.code} - ${translateContent(language, selectedCourse.title)}`
                 ) : (
                   <span className="inline-flex items-center">
                     <span className="h-4 w-44 animate-pulse rounded bg-slate-200" />
-                    <span className="sr-only">Loading course</span>
+                    <span className="sr-only">{t("common.loadingCourse")}</span>
                   </span>
                 )}
               </div>
@@ -266,14 +269,14 @@ export function StudentProgressModule({ role, courseId }: Props) {
           )}
           {canSelectStudent ? (
             <label className="grid gap-1.5">
-              <span className="brand-label">Student</span>
+              <span className="brand-label">{t("label.student")}</span>
               <select
                 className="brand-input"
                 value={selectedStudentId}
                 onChange={(event) => setSelectedStudentId(event.currentTarget.value)}
                 disabled={!selectedCourseId || !students.length}
               >
-                <option value="">Select a student</option>
+                <option value="">{t("progress.selectStudent")}</option>
                 {students.map((student) => (
                   <option key={student.id} value={student.id}>
                     {formatStudentLabel(student)}
@@ -287,7 +290,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
 
       {loading ? (
         <section className="brand-card p-5">
-          <LoadingIndicator label="Loading progress..." />
+          <LoadingIndicator label={t("progress.loading")} />
         </section>
       ) : null}
 
@@ -295,12 +298,12 @@ export function StudentProgressModule({ role, courseId }: Props) {
         <>
           <section className="grid gap-4 md:grid-cols-3">
             <article className="brand-card p-5">
-              <p className="brand-section-title">Course</p>
+              <p className="brand-section-title">{t("label.course")}</p>
               <p className="mt-2 text-sm font-semibold text-[#0b3e81]">
-                {progress.course.code} - {progress.course.title}
+                {progress.course.code} - {translateContent(language, progress.course.title)}
               </p>
               <p className="brand-muted mt-1 text-xs">
-                {canSelectStudent && selectedStudent ? formatStudentLabel(selectedStudent) : "Your progress"}
+                {canSelectStudent && selectedStudent ? formatStudentLabel(selectedStudent) : t("progress.yourProgress")}
               </p>
               {canSelectStudent && selectedStudent ? (
                 <button
@@ -309,47 +312,47 @@ export function StudentProgressModule({ role, courseId }: Props) {
                   disabled={!selectedStudentId || pendingCompletionKey === "course"}
                   onClick={() => setCompletionDialog({ type: "course" })}
                 >
-                  {pendingCompletionKey === "course" ? "Saving..." : "Mark Course Complete"}
+                  {pendingCompletionKey === "course" ? t("status.saving") : t("progress.markCourseComplete")}
                 </button>
               ) : null}
             </article>
             <article className="brand-card p-5">
-              <p className="brand-section-title">Completion</p>
+              <p className="brand-section-title">{t("progress.completion")}</p>
               <p className="mt-2 text-3xl font-bold text-[#0b3e81]">{progress.totals.progressPercent}%</p>
-              <p className="brand-muted mt-1 text-xs">Overall course completion</p>
+              <p className="brand-muted mt-1 text-xs">{t("progress.overallCourseCompletion")}</p>
             </article>
             <article className="brand-card p-5">
-              <p className="brand-section-title">Lessons</p>
+              <p className="brand-section-title">{t("progress.lessons")}</p>
               <p className="mt-2 text-3xl font-bold text-[#0b3e81]">
                 {progress.totals.completedLessons}/{progress.totals.totalLessons}
               </p>
-              <p className="brand-muted mt-1 text-xs">Lessons completed</p>
+              <p className="brand-muted mt-1 text-xs">{t("progress.lessonsCompleted")}</p>
             </article>
           </section>
 
           <section className="brand-card p-5">
-            <p className="brand-section-title">Module Progress</p>
+            <p className="brand-section-title">{t("progress.moduleProgress")}</p>
             {progress.modules.length ? (
               <div className="mt-3 overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                      <th className="px-3 py-2 font-semibold">Module</th>
-                      <th className="px-3 py-2 font-semibold">Lessons</th>
-                      <th className="px-3 py-2 font-semibold">Completed</th>
-                      <th className="px-3 py-2 font-semibold">Progress</th>
-                      <th className="px-3 py-2 font-semibold">Access</th>
-                      {canSelectStudent ? <th className="px-3 py-2 font-semibold">Actions</th> : null}
+                      <th className="px-3 py-2 font-semibold">{t("label.module")}</th>
+                      <th className="px-3 py-2 font-semibold">{t("progress.lessons")}</th>
+                      <th className="px-3 py-2 font-semibold">{t("engagement.completed")}</th>
+                      <th className="px-3 py-2 font-semibold">{t("table.progress")}</th>
+                      <th className="px-3 py-2 font-semibold">{t("progress.access")}</th>
+                      {canSelectStudent ? <th className="px-3 py-2 font-semibold">{t("table.actions")}</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {progress.modules.map((module) => (
                       <tr key={module.id} className="border-b border-[#e7f0fc] text-[#0d3f80]">
-                        <td className="px-3 py-2 font-semibold">{module.position + 1}. {module.title}</td>
+                        <td className="px-3 py-2 font-semibold">{module.position + 1}. {translateContent(language, module.title)}</td>
                         <td className="px-3 py-2">{module.totalLessons}</td>
                         <td className="px-3 py-2">{module.completedLessons}</td>
                         <td className="px-3 py-2">{module.progressPercent}%</td>
-                        <td className="px-3 py-2">{module.accessState}</td>
+                        <td className="px-3 py-2">{t(`progress.access.${module.accessState}`)}</td>
                         {canSelectStudent ? (
                           <td className="px-3 py-2">
                             <button
@@ -360,7 +363,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
                                 setCompletionDialog({ type: "module", moduleId: module.id, moduleTitle: module.title })
                               }
                             >
-                              {pendingCompletionKey === `module:${module.id}` ? "Saving..." : "Mark Module Complete"}
+                              {pendingCompletionKey === `module:${module.id}` ? t("status.saving") : t("progress.markModuleComplete")}
                             </button>
                           </td>
                         ) : null}
@@ -370,7 +373,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
                 </table>
               </div>
             ) : (
-              <p className="brand-muted mt-3 text-sm">No lessons configured for this course yet.</p>
+              <p className="brand-muted mt-3 text-sm">{t("progress.noLessons")}</p>
             )}
           </section>
         </>
@@ -378,7 +381,7 @@ export function StudentProgressModule({ role, courseId }: Props) {
 
       {!loading && selectedCourseId && canSelectStudent && students.length === 0 ? (
         <section className="brand-card p-5">
-          <p className="brand-muted text-sm">No active students are enrolled in this course yet.</p>
+          <p className="brand-muted text-sm">{t("progress.noActiveStudents")}</p>
         </section>
       ) : null}
 
@@ -386,28 +389,34 @@ export function StudentProgressModule({ role, courseId }: Props) {
         <section className="brand-card p-5">
           <p className="brand-muted text-sm">
             {canSelectStudent && !selectedStudentId
-              ? "Select a student to view progress."
-              : "Progress data will appear once the course has lessons and completions."}
+              ? t("progress.selectStudentToView")
+              : t("progress.awaitingData")}
           </p>
         </section>
       ) : null}
 
       {!loading && !selectedCourseId && courses.length === 0 && canPickCourse ? (
         <section className="brand-card p-5">
-          <p className="brand-muted text-sm">No courses are available for progress tracking yet.</p>
+          <p className="brand-muted text-sm">{t("progress.noCourses")}</p>
         </section>
       ) : null}
       <ConfirmModal
         open={!!completionDialog}
-        title="Confirm Completion"
+        title={t("progress.confirmTitle")}
         message={
           completionDialog
             ? completionDialog.type === "course"
-              ? `Mark ${selectedCourse?.code} - ${selectedCourse?.title} complete for ${selectedStudent ? formatStudentLabel(selectedStudent) : "this student"}? This will mark every module complete.`
-              : `Mark ${completionDialog.moduleTitle} complete for ${selectedStudent ? formatStudentLabel(selectedStudent) : "this student"}?`
+              ? t("progress.confirmCourseMessage", {
+                  course: selectedCourse ? `${selectedCourse.code} - ${translateContent(language, selectedCourse.title)}` : "",
+                  student: selectedStudent ? formatStudentLabel(selectedStudent) : t("label.student"),
+                })
+              : t("progress.confirmModuleMessage", {
+                  module: translateContent(language, completionDialog.moduleTitle),
+                  student: selectedStudent ? formatStudentLabel(selectedStudent) : t("label.student"),
+                })
             : ""
         }
-        confirmLabel="Mark Complete"
+        confirmLabel={t("action.markComplete")}
         onCancel={() => setCompletionDialog(null)}
         onConfirm={() => {
           const dialog = completionDialog;

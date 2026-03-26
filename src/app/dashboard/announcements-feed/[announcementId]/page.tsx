@@ -157,7 +157,7 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">
                 {t("announcement.detailsTitle")}
@@ -167,7 +167,7 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
 
           <Link
                                     href={`/dashboard/announcements-feed`}
-                                    aria-label="Back to announcement"
+                                    aria-label={t("action.backToAnnouncements")}
                                     className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#9bbfed] bg-white text-[#1f518f] shadow-sm"
                                   >
                                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">

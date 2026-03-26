@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
+import { translateContent } from "@/lib/i18n";
 
 type Props = {
   id: string;
@@ -13,13 +14,13 @@ type Props = {
 
 export function AnnouncementDetailActions({ id, title, backHref }: Props) {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
   const onDelete = async () => {
     setError("");
-    const confirmMessage = t("announcement.deleteMessage", { title });
+    const confirmMessage = t("announcement.deleteMessage", { title: translateContent(language, title) });
     if (!window.confirm(confirmMessage)) return;
     setPending(true);
     try {

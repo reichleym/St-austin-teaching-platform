@@ -70,7 +70,7 @@ export default async function AnnouncementDetailPage({ params }: Props) {
             <div>
               <span className="brand-chip">
                 <span className="brand-accent-dot" />
-                Active Module
+                {t("activeModule")}
               </span>
               <h2 className="brand-title brand-title-gradient mt-3 text-4xl font-black">
                 {t("announcement.detailsTitle")}

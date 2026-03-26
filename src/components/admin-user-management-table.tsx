@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale } from "@/lib/i18n";
 
 type UserStatus = "ACTIVE" | "DISABLED";
 
@@ -28,6 +30,7 @@ type ManagedUser = {
 };
 
 type Props = {
+  entityKey: "teacher" | "student" | "departmentHead";
   title: string;
   emptyText: string;
   users: ManagedUser[];
@@ -50,10 +53,10 @@ type LocationOption = {
   code: string;
 };
 
-function formatDate(value: string) {
+function formatDate(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-GB", {
+  return date.toLocaleString(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -63,11 +66,9 @@ function formatDate(value: string) {
   });
 }
 
-function formatRoleLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-export function AdminUserManagementTable({ title, emptyText, users }: Props) {
+export function AdminUserManagementTable({ entityKey, title, emptyText, users }: Props) {
+  const { t, language } = useLanguage();
+  const locale = getLanguageLocale(language);
   const [rows, setRows] = useState(users);
   const [quickEditId, setQuickEditId] = useState<string | null>(null);
   const [quickDraft, setQuickDraft] = useState<Draft>({
@@ -306,14 +307,14 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
       const result = raw ? (JSON.parse(raw) as { error?: string; user?: ManagedUser }) : {};
 
       if (!response.ok || !result.user) {
-        setError(result.error ?? "Unable to update user.");
+        setError(result.error ?? t("error.updateUser"));
         return false;
       }
 
       setRows((prev) => prev.map((item) => (item.id === result.user!.id ? result.user! : item)));
       return true;
     } catch {
-      setError("Unable to update user.");
+      setError(t("error.updateUser"));
       return false;
     }
   };
@@ -339,17 +340,25 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
 
   const isStudentFullEdit = fullEditUser?.role === "STUDENT";
   const isTeacherFullEdit = fullEditUser?.role === "TEACHER" || fullEditUser?.role === "DEPARTMENT_HEAD";
-  const viewTitle = title.toLowerCase();
-  const isStudentView = viewTitle.includes("student");
-  const isDepartmentHeadView = viewTitle.includes("department");
-  const isTeacherView = viewTitle.includes("teacher");
-  const isAdminView = viewTitle.includes("admin");
-  const entityLabel = isDepartmentHeadView ? "Department Heads" : isTeacherView ? "Teachers" : isAdminView ? "Admins" : "Students";
-  const totalLabel = `Total ${entityLabel}`;
-  const activeLabel = `Active ${entityLabel}`;
+  const isStudentView = entityKey === "student";
+  const isDepartmentHeadView = entityKey === "departmentHead";
+  const totalLabel =
+    entityKey === "teacher"
+      ? t("adminUsers.totalTeachers")
+      : entityKey === "departmentHead"
+        ? t("adminUsers.totalDepartmentHeads")
+        : t("adminUsers.totalStudents");
+  const activeLabel =
+    entityKey === "teacher"
+      ? t("adminUsers.activeTeachers")
+      : entityKey === "departmentHead"
+        ? t("adminUsers.activeDepartmentHeads")
+        : t("adminUsers.activeStudents");
   const searchPlaceholder = isStudentView
-    ? "Search by name, email, phone, or student ID"
-    : "Search by name, email, or phone";
+    ? t("placeholder.studentSearch")
+    : isDepartmentHeadView
+      ? t("placeholder.departmentHeadSearch")
+      : t("placeholder.teacherSearch");
 
   return (
     <section className="grid gap-4">
@@ -369,7 +378,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
           <p className="brand-section-title">{title}</p>
           <div className="mt-3 flex justify-end">
             <label className="grid gap-1.5">
-              <span className="brand-label">Search Users</span>
+              <span className="brand-label">{t("adminUsers.searchUsers")}</span>
               <input
                 className="brand-input w-[220px] max-w-full"
                 type="search"
@@ -385,12 +394,12 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
             <table className="mt-3 min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-[#d2e4fb] text-[#285f9f]">
-                  <th className="px-3 py-2 font-semibold">Name</th>
-                  {isStudentView ? <th className="px-3 py-2 font-semibold">Student ID</th> : null}
-                  <th className="px-3 py-2 font-semibold">Email</th>
-                  <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 font-semibold">Created</th>
-                  <th className="px-3 py-2 font-semibold">Actions</th>
+                  <th className="px-3 py-2 font-semibold">{t("table.name")}</th>
+                  {isStudentView ? <th className="px-3 py-2 font-semibold">{t("table.studentId", undefined, "Student ID")}</th> : null}
+                  <th className="px-3 py-2 font-semibold">{t("table.email")}</th>
+                  <th className="px-3 py-2 font-semibold">{t("table.status")}</th>
+                  <th className="px-3 py-2 font-semibold">{t("table.created")}</th>
+                  <th className="px-3 py-2 font-semibold">{t("table.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -410,7 +419,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                             }}
                           />
                         ) : (
-                          user.name?.trim() || "No name"
+                          user.name?.trim() || t("label.unnamed")
                         )}
                       </td>
                       {isStudentView ? (
@@ -443,14 +452,14 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                               setQuickDraft((prev) => ({ ...prev, status: value }));
                             }}
                           >
-                            <option value={USER_STATUS.ACTIVE}>ACTIVE</option>
-                            <option value={USER_STATUS.DISABLED}>DISABLED</option>
+                            <option value={USER_STATUS.ACTIVE}>{t("status.active")}</option>
+                            <option value={USER_STATUS.DISABLED}>{t("status.disabled")}</option>
                           </select>
                         ) : (
-                          user.status
+                          user.status === USER_STATUS.ACTIVE ? t("status.active") : t("status.disabled")
                         )}
                       </td>
-                      <td className="px-3 py-2">{formatDate(user.createdAt)}</td>
+                      <td className="px-3 py-2">{formatDate(user.createdAt, locale)}</td>
                       <td className="px-3 py-2">
                         {quickEditing ? (
                           <div className="flex items-center gap-2">
@@ -459,14 +468,14 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                               onClick={() => onQuickSave(user.id)}
                               disabled={isQuickSaving}
                             >
-                              {isQuickSaving ? "Saving..." : "Save"}
+                              {isQuickSaving ? t("status.saving") : t("action.save")}
                             </button>
                             <button
                               className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                               onClick={onQuickCancel}
                               disabled={isQuickSaving}
                             >
-                              Cancel
+                              {t("action.cancel")}
                             </button>
                           </div>
                         ) : (
@@ -476,20 +485,20 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                                 href={`/dashboard/progress?studentId=${encodeURIComponent(user.id)}`}
                                 className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                               >
-                                Progress
+                                {t("table.progress")}
                               </Link>
                             ) : null}
                             <button
                               className="rounded-md border border-[#9bbfed] px-3 py-1.5 text-xs font-semibold text-[#1f518f]"
                               onClick={() => onQuickEdit(user)}
                             >
-                              Quick Edit
+                              {t("action.quickEdit")}
                             </button>
                             <button
                               className="rounded-md bg-[#0b3e81] px-3 py-1.5 text-xs font-semibold text-white"
                               onClick={() => onFullEdit(user)}
                             >
-                              Edit
+                              {t("action.edit")}
                             </button>
                           </div>
                         )}
@@ -506,16 +515,19 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
           {totalFiltered ? (
             <div className="mt-4 flex flex-col gap-3 text-sm md:flex-row md:items-center md:justify-between">
               <p className="text-[#1f518f]">
-                Total: <span className="font-semibold">{rows.length}</span> | Showing:{" "}
-                <span className="font-semibold">{totalFiltered ? `${pageStart + 1}-${pageEnd}` : "0"}</span> of{" "}
-                <span className="font-semibold">{totalFiltered}</span>
+                {t("adminUsers.totalShowing", {
+                  total: rows.length,
+                  from: totalFiltered ? pageStart + 1 : 0,
+                  to: pageEnd,
+                  filtered: totalFiltered,
+                })}
               </p>
               <div className="flex items-center gap-2 text-[#1f518f]">
                 <label className="inline-flex items-center gap-2">
-                  <span>Show</span>
+                  <span>{t("adminUsers.show")}</span>
                   <select
                     className="brand-input min-w-[92px]"
-                    aria-label="Rows per page"
+                    aria-label={t("adminUsers.pageOf", { page: safePage, total: pageCount })}
                     value={pageSize}
                     onChange={(event) => setPageSize(Number(event.currentTarget.value))}
                   >
@@ -528,21 +540,21 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               </div>
               <div className="flex items-center gap-2">
                 <p className="text-[#1f518f]">
-                  Page <span className="font-semibold">{safePage}</span> of <span className="font-semibold">{pageCount}</span>
+                  {t("adminUsers.pageOf", { page: safePage, total: pageCount })}
                 </p>
                 <button
                   className="rounded-md border border-[#9bbfed] px-3 py-1.5 font-semibold text-[#1f518f] disabled:opacity-50"
                   disabled={safePage <= 1}
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                 >
-                  Previous
+                  {t("action.previous", undefined, "Previous")}
                 </button>
                 <button
                   className="rounded-md border border-[#9bbfed] px-3 py-1.5 font-semibold text-[#1f518f] disabled:opacity-50"
                   disabled={safePage >= pageCount}
                   onClick={() => setCurrentPage((prev) => Math.min(pageCount, prev + 1))}
                 >
-                  Next
+                  {t("action.next", undefined, "Next")}
                 </button>
               </div>
             </div>
@@ -552,10 +564,10 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
 
       {fullEditUser ? (
         <section className="brand-card p-5">
-          <p className="brand-section-title">Edit User</p>
+          <p className="brand-section-title">{t("adminUsers.editUser")}</p>
           <div className="mt-3 grid gap-4 md:grid-cols-2">
             <label className="grid gap-1.5">
-              <span className="brand-label">Name</span>
+              <span className="brand-label">{t("table.name")}</span>
               <input
                 className="brand-input"
                 value={fullDraft.name}
@@ -566,7 +578,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Email</span>
+              <span className="brand-label">{t("table.email")}</span>
               <input
                 className="brand-input"
                 type="email"
@@ -589,11 +601,11 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   }}
                   placeholder="STU-0001"
                 />
-                <span className="text-xs text-[#3a689f]">Assigned by admin during registration.</span>
+                <span className="text-xs text-[#3a689f]">{t("adminUsers.assignedByAdmin")}</span>
               </label>
             ) : null}
             <label className="grid gap-1.5">
-              <span className="brand-label">Status</span>
+              <span className="brand-label">{t("table.status")}</span>
               <select
                 className="brand-input"
                 value={fullDraft.status}
@@ -602,13 +614,13 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   setFullDraft((prev) => ({ ...prev, status: value }));
                 }}
               >
-                <option value={USER_STATUS.ACTIVE}>ACTIVE</option>
-                <option value={USER_STATUS.DISABLED}>DISABLED</option>
+                <option value={USER_STATUS.ACTIVE}>{t("status.active")}</option>
+                <option value={USER_STATUS.DISABLED}>{t("status.disabled")}</option>
               </select>
             </label>
             {isStudentFullEdit || isTeacherFullEdit ? (
               <label className="grid gap-1.5">
-                <span className="brand-label">Phone</span>
+                <span className="brand-label">{t("label.phoneNumber")}</span>
                 <input
                   className="brand-input"
                   value={fullDraft.phone}
@@ -621,7 +633,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
             ) : null}
             {isStudentFullEdit ? (
               <label className="grid gap-1.5">
-                <span className="brand-label">Guardian Name</span>
+                <span className="brand-label">{t("label.fullName", undefined, "Guardian Name")}</span>
                 <input
                   className="brand-input"
                   value={fullDraft.guardianName}
@@ -634,7 +646,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
             ) : null}
             {isStudentFullEdit ? (
               <label className="grid gap-1.5">
-                <span className="brand-label">Guardian Phone</span>
+                <span className="brand-label">{t("label.phoneNumber", undefined, "Guardian Phone")}</span>
                 <input
                   className="brand-input"
                   value={fullDraft.guardianPhone}
@@ -646,7 +658,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               </label>
             ) : null}
             <label className="grid gap-1.5">
-              <span className="brand-label">Country</span>
+              <span className="brand-label">{t("label.country")}</span>
               <select
                 className="brand-input"
                 value={fullDraft.country}
@@ -661,7 +673,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                   }
                 }}
               >
-                <option value="">Select country</option>
+                <option value="">{t("adminUsers.selectCountry")}</option>
                 {visibleCountries.map((country) => (
                   <option key={country.code} value={country.name}>
                     {country.name}
@@ -670,12 +682,12 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               </select>
               {isCountriesLoading ? (
                 <div className="mt-2">
-                  <LoadingIndicator label="Loading countries..." lines={1} />
+                  <LoadingIndicator label={t("adminUsers.loadingCountries")} lines={1} />
                 </div>
               ) : null}
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">State</span>
+              <span className="brand-label">{t("label.state")}</span>
               <select
                 className="brand-input"
                 value={fullDraft.state}
@@ -685,7 +697,7 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
                 }}
                 disabled={!fullDraft.country || isStatesLoading}
               >
-                <option value="">Select state</option>
+                <option value="">{t("adminUsers.selectState")}</option>
                 {visibleStates.map((state) => (
                   <option key={state.code} value={state.name}>
                     {state.name}
@@ -694,33 +706,33 @@ export function AdminUserManagementTable({ title, emptyText, users }: Props) {
               </select>
               {isStatesLoading ? (
                 <div className="mt-2">
-                  <LoadingIndicator label="Loading states..." lines={1} />
+                  <LoadingIndicator label={t("adminUsers.loadingStates")} lines={1} />
                 </div>
               ) : null}
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Role</span>
-              <input className="brand-input" value={formatRoleLabel(fullEditUser.role)} disabled />
+              <span className="brand-label">{t("label.role")}</span>
+              <input className="brand-input" value={fullEditUser.role.replace(/_/g, " ")} disabled />
             </label>
             <label className="grid gap-1.5 md:col-span-2">
-              <span className="brand-label">User ID</span>
+              <span className="brand-label">{t("label.userId")}</span>
               <input className="brand-input" value={fullEditUser.id} disabled />
             </label>
             <label className="grid gap-1.5 md:col-span-2">
-              <span className="brand-label">Created</span>
-              <input className="brand-input" value={formatDate(fullEditUser.createdAt)} disabled />
+              <span className="brand-label">{t("table.created")}</span>
+              <input className="brand-input" value={formatDate(fullEditUser.createdAt, locale)} disabled />
             </label>
           </div>
           <div className="mt-4 flex items-center gap-2">
             <button className="btn-brand-primary px-2 py-2 text-sm font-semibold" onClick={onFullSave} disabled={isFullSaving}>
-              {isFullSaving ? "Saving..." : "Save Changes"}
+              {isFullSaving ? t("status.saving") : t("action.saveChanges")}
             </button>
             <button
               className="rounded-md border border-[#9bbfed] px-4 py-2 text-sm font-semibold text-[#1f518f]"
               onClick={onFullCancel}
               disabled={isFullSaving}
             >
-              Close
+              {t("action.close")}
             </button>
           </div>
         </section>
