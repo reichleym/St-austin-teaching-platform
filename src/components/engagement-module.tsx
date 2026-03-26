@@ -7,6 +7,7 @@ import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { useLanguage } from "@/components/language-provider";
 import { AppRole, formatDateTime } from "@/components/engagement-shared";
+import { translateContent } from "@/lib/i18n";
 
 type CourseOption = {
   id: string;
@@ -62,7 +63,7 @@ type Props = {
 };
 
 export function EngagementModule({ role }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const router = useRouter();
   const canModerate = role === "SUPER_ADMIN" || role === "ADMIN" || role === "TEACHER";
 
@@ -95,7 +96,7 @@ export function EngagementModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as EngagementResponse) : ({} as EngagementResponse);
       if (!response.ok) {
-        setError(result.error ?? "Unable to load engagement module.");
+        setError(result.error ?? t("error.loadEngagement"));
         return;
       }
       setCourses(result.courses ?? []);
@@ -103,11 +104,11 @@ export function EngagementModule({ role }: Props) {
       setDiscussions(result.discussions ?? []);
       setSelectedCourseId(result.selectedCourseId ?? "");
     } catch {
-      setError("Unable to load engagement module.");
+      setError(t("error.loadEngagement"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -116,7 +117,7 @@ export function EngagementModule({ role }: Props) {
   const onCreateDiscussion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedCourseId || !createModuleId) {
-      setError("Module link is required.");
+      setError(t("engagement.moduleRequired"));
       return;
     }
     setPending("create-discussion");
@@ -141,7 +142,7 @@ export function EngagementModule({ role }: Props) {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { error?: string; discussionId?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to create discussion.");
+        setError(result.error ?? t("error.createDiscussion"));
         return;
       }
       setCreateTitle("");
@@ -159,7 +160,7 @@ export function EngagementModule({ role }: Props) {
       }
       await load(selectedCourseId);
     } catch {
-      setError("Unable to create discussion.");
+      setError(t("error.createDiscussion"));
     } finally {
       setPending("");
     }
@@ -169,9 +170,9 @@ export function EngagementModule({ role }: Props) {
     <section className="grid gap-4">
       <section className="brand-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="brand-section-title">Discussion Topics</p>
+          <p className="brand-section-title">{t("engagement.topicsTitle")}</p>
           <label className="grid gap-1.5">
-            <span className="brand-label">Course</span>
+            <span className="brand-label">{t("label.course")}</span>
             <select
               className="brand-input w-[320px]"
               value={selectedCourseId}
@@ -183,7 +184,7 @@ export function EngagementModule({ role }: Props) {
             >
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
-                  {course.code} - {course.title}
+                  {course.code} - {translateContent(language, course.title)}
                 </option>
               ))}
             </select>
@@ -193,49 +194,49 @@ export function EngagementModule({ role }: Props) {
         <ToastMessage type="error" message={error} />
         {loading ? (
           <div className="mt-3">
-            <LoadingIndicator label="Loading discussions..." />
+            <LoadingIndicator label={t("engagement.loading")} />
           </div>
         ) : null}
 
         {canModerate ? (
           <form className="mt-4 grid gap-2 rounded-md border border-[#dbe9fb] p-3" onSubmit={onCreateDiscussion}>
-            <p className="brand-label">Create Discussion Topic</p>
+            <p className="brand-label">{t("engagement.createTitle")}</p>
             <label className="grid gap-1.5">
-              <span className="brand-label">Discussion Title</span>
-              <input className="brand-input" placeholder={t('placeholder.discussionTitle')} value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
+              <span className="brand-label">{t("engagement.discussionTitleLabel")}</span>
+              <input className="brand-input" placeholder={t("placeholder.discussionTitle")} value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} required />
             </label>
             <label className="grid gap-1.5">
-              <span className="brand-label">Prompt</span>
-              <textarea className="brand-input min-h-[84px]" placeholder={t('placeholder.promptQuestion')} value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
+              <span className="brand-label">{t("engagement.promptLabel")}</span>
+              <textarea className="brand-input min-h-[84px]" placeholder={t("placeholder.promptQuestion")} value={createPrompt} onChange={(event) => setCreatePrompt(event.currentTarget.value)} required />
             </label>
             <div className="grid gap-2 md:grid-cols-3">
               <label className="grid gap-1">
-                <span className="brand-label">Module</span>
+                <span className="brand-label">{t("label.module")}</span>
                 <select className="brand-input" value={createModuleId} onChange={(event) => setCreateModuleId(event.currentTarget.value)}>
-                  <option value="">Select module</option>
+                  <option value="">{t("engagement.selectModule")}</option>
                   {modules.map((module) => (
                     <option key={module.id} value={module.id}>
-                      {module.title}
+                      {translateContent(language, module.title)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="grid gap-1">
-                <span className="brand-label">Open At</span>
+                <span className="brand-label">{t("engagement.openAt")}</span>
                 <input className="brand-input" type="datetime-local" value={createOpenAt} onChange={(event) => setCreateOpenAt(event.currentTarget.value)} required />
               </label>
               <label className="grid gap-1">
-                <span className="brand-label">Close At</span>
+                <span className="brand-label">{t("engagement.closeAt")}</span>
                 <input className="brand-input" type="datetime-local" value={createCloseAt} onChange={(event) => setCreateCloseAt(event.currentTarget.value)} required />
               </label>
             </div>
             <div className="grid gap-2 md:grid-cols-3">
               <label className="brand-input inline-flex items-center gap-2">
-                <input type="checkbox" checked={createAllowLate} onChange={(event) => setCreateAllowLate(event.currentTarget.checked)} /> Allow late
+                <input type="checkbox" checked={createAllowLate} onChange={(event) => setCreateAllowLate(event.currentTarget.checked)} /> {t("engagement.allowLate")}
               </label>
               <label className="brand-input inline-flex items-center gap-2">
                 <input type="checkbox" checked={createIsGraded} onChange={(event) => setCreateIsGraded(event.currentTarget.checked)} />
-                Graded discussion
+                {t("engagement.gradedDiscussion")}
               </label>
               <input
                 className="brand-input"
@@ -244,15 +245,15 @@ export function EngagementModule({ role }: Props) {
                 step={1}
                 value={createMaxPoints}
                 onChange={(event) => setCreateMaxPoints(event.currentTarget.value)}
-                placeholder={t('placeholder.maxPoints')}
+                placeholder={t("placeholder.maxPoints")}
                 disabled={!createIsGraded}
                 required={createIsGraded}
               />
             </div>
             <button className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold" disabled={pending === "create-discussion" || !createModuleId || !modules.length}>
-              {pending === "create-discussion" ? "Creating..." : "Create Topic"}
+              {pending === "create-discussion" ? t("status.creating") : t("engagement.createTopic")}
             </button>
-            {!modules.length ? <p className="text-xs text-red-600">Create course modules first. Discussion topics require a module link.</p> : null}
+            {!modules.length ? <p className="text-xs text-red-600">{t("engagement.createModuleFirst")}</p> : null}
           </form>
         ) : null}
 
@@ -264,22 +265,22 @@ export function EngagementModule({ role }: Props) {
               className="block rounded-md border border-[#dbe9fb] p-3 transition hover:border-[#8fb5ea] hover:bg-[#f6faff]"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[#0d3f80]">{discussion.title}</p>
+                <p className="text-sm font-semibold text-[#0d3f80]">{translateContent(language, discussion.title)}</p>
                 <div className="flex items-center gap-2 text-xs text-[#2f5f98]">
-                  <span>Completed: {discussion.stats.completed}</span>
-                  <span>Partial: {discussion.stats.partial}</span>
-                  <span>Missing: {discussion.stats.notParticipated}</span>
+                  <span>{t("engagement.completed")}: {discussion.stats.completed}</span>
+                  <span>{t("engagement.partial")}: {discussion.stats.partial}</span>
+                  <span>{t("engagement.missing")}: {discussion.stats.notParticipated}</span>
                 </div>
               </div>
-              <p className="mt-1 text-xs text-[#3768ac]">{discussion.prompt}</p>
+              <p className="mt-1 text-xs text-[#3768ac]">{translateContent(language, discussion.prompt)}</p>
               <p className="mt-1 text-xs text-[#3a689f]">
-                Open: {formatDateTime(discussion.openAt)} | Close: {formatDateTime(discussion.closeAt)} |{" "}
-                {discussion.isGraded ? `Graded (${discussion.maxPoints ?? 0} pts)` : "Ungraded"} |{" "}
-                {discussion.isLocked ? "Locked" : "Open"}
+                {t("engagement.openAt")}: {formatDateTime(discussion.openAt)} | {t("engagement.closeAt")}: {formatDateTime(discussion.closeAt)} |{" "}
+                {discussion.isGraded ? t("engagement.gradedWithPoints", { points: discussion.maxPoints ?? 0 }) : t("engagement.ungraded")} |{" "}
+                {discussion.isLocked ? t("engagement.locked") : t("engagement.open")}
               </p>
             </Link>
           ))}
-          {!loading && !discussions.length ? <p className="brand-muted text-sm">No discussion topics yet.</p> : null}
+          {!loading && !discussions.length ? <p className="brand-muted text-sm">{t("engagement.noTopics")}</p> : null}
         </div>
       </section>
     </section>

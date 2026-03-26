@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
+import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 type InboxMessage = {
   id: string;
@@ -17,11 +19,11 @@ type InboxMessage = {
   readAt: string | null;
 };
 
-const formatDateTime = (value: string | null) => {
+const formatDateTime = (value: string | null, locale: string) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("en-GB", {
+  return date.toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -32,6 +34,8 @@ const formatDateTime = (value: string | null) => {
 };
 
 export function TeacherMessagesModule() {
+  const { t, language } = useLanguage();
+  const locale = getLanguageLocale(language);
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,12 +49,12 @@ export function TeacherMessagesModule() {
       const raw = await response.text();
       const result = raw ? (JSON.parse(raw) as { messages?: InboxMessage[]; error?: string }) : {};
       if (!response.ok) {
-        setError(result.error ?? "Unable to load messages.");
+        setError(result.error ?? t("messages.errorLoad"));
         return;
       }
       setMessages(result.messages ?? []);
     } catch {
-      setError("Unable to load messages.");
+      setError(t("messages.errorLoad"));
     } finally {
       setLoading(false);
     }
@@ -77,27 +81,27 @@ export function TeacherMessagesModule() {
 
   return (
     <section className="brand-card p-5">
-      <p className="brand-section-title">Department Head Messages</p>
-      {loading ? <div className="mt-3"><LoadingIndicator label="Loading messages..." /></div> : null}
+      <p className="brand-section-title">{t("messages.departmentHeadTitle")}</p>
+      {loading ? <div className="mt-3"><LoadingIndicator label={t("messages.loading")} /></div> : null}
       <ToastMessage type="error" message={error} />
-      {!loading && !messages.length ? <p className="brand-muted mt-3 text-sm">No messages yet.</p> : null}
+      {!loading && !messages.length ? <p className="brand-muted mt-3 text-sm">{t("messages.none")}</p> : null}
       {messages.length ? (
         <div className="mt-4 space-y-3">
           {messages.map((message) => (
             <article key={message.id} className="rounded-md border border-[#dbe9fb] bg-white/80 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[#0d3f80]">{message.subject}</p>
+                  <p className="text-sm font-semibold text-[#0d3f80]">{translateContent(language, message.subject)}</p>
                   <p className="mt-1 text-xs text-[#3a689f]">
-                    Course: {message.courseTitle} | From: {message.senderName || "Department Head"} ({message.senderEmail})
+                    {t("label.course")}: {translateContent(language, message.courseTitle)} | {t("messages.from")}: {message.senderName || t("role.department_head")} ({message.senderEmail})
                   </p>
                 </div>
                 <div className="text-xs text-[#3a689f]">
-                  <p>Sent: {formatDateTime(message.createdAt)}</p>
-                  <p>Read: {message.readAt ? formatDateTime(message.readAt) : "Unread"}</p>
+                  <p>{t("messages.sent")}: {formatDateTime(message.createdAt, locale)}</p>
+                  <p>{t("messages.read")}: {message.readAt ? formatDateTime(message.readAt, locale) : t("common.unread")}</p>
                 </div>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5f98]">{message.body}</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5f98]">{translateContent(language, message.body)}</p>
               {!message.readAt ? (
                 <button
                   type="button"
@@ -105,7 +109,7 @@ export function TeacherMessagesModule() {
                   onClick={() => markRead(message.id)}
                   disabled={pendingId === message.id}
                 >
-                  {pendingId === message.id ? "Marking..." : "Mark as read"}
+                  {pendingId === message.id ? t("messages.marking") : t("messages.markRead")}
                 </button>
               ) : null}
             </article>

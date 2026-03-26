@@ -9,6 +9,7 @@ import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/l
 import { toast } from "@/lib/toast";
 import { PasswordField } from "@/components/password-field";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
 
 type Props = {
   callbackUrl: string;
@@ -21,15 +22,8 @@ type LoginFailureCode =
   | "INCORRECT_USER_TYPE"
   | "EMAIL_NOT_VERIFIED";
 
-function getLoginErrorMessage(code: LoginFailureCode | string | undefined) {
-  if (code === "INACTIVE_ACCOUNT") return "This account is inactive. Contact your administrator.";
-  if (code === "INVALID_CREDENTIALS") return "Invalid email or student ID or password.";
-  if (code === "INCORRECT_USER_TYPE") return "Incorrect user type selected.";
-  if (code === "EMAIL_NOT_VERIFIED") return "Please verify your email before logging in.";
-  return "Unable to sign in right now.";
-}
-
 export default function LoginClient({ callbackUrl }: Props) {
+  const { t } = useLanguage();
   const router = useRouter();
   const [error, setError] = useState("");
   const [resendError, setResendError] = useState("");
@@ -41,6 +35,13 @@ export default function LoginClient({ callbackUrl }: Props) {
   const [selectedLoginAs, setSelectedLoginAs] = useState<"STUDENT" | "TEACHER" | "DEPARTMENT_HEAD">("STUDENT");
   const studentSignupCutoff = getStudentSelfSignupCutoffLabel();
   const studentSelfSignupAllowed = isStudentSelfSignupAllowed();
+  const getLoginErrorMessage = (code: LoginFailureCode | string | undefined) => {
+    if (code === "INACTIVE_ACCOUNT") return t("login.errorInactive");
+    if (code === "INVALID_CREDENTIALS") return t("login.errorInvalidCredentials");
+    if (code === "INCORRECT_USER_TYPE") return t("login.errorIncorrectUserType");
+    if (code === "EMAIL_NOT_VERIFIED") return t("login.errorEmailNotVerified");
+    return t("login.errorGeneric");
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -101,11 +102,11 @@ export default function LoginClient({ callbackUrl }: Props) {
 
     if (!result || result.error) {
       setActiveLoginAs(null);
-      setError("Unable to sign in right now.");
+      setError(t("login.errorGeneric"));
       return;
     }
 
-    toast.success("Logged in successfully.");
+    toast.success(t("login.success"));
     router.push(result.url ?? targetCallbackUrl);
     router.refresh();
   };
@@ -126,16 +127,16 @@ export default function LoginClient({ callbackUrl }: Props) {
       const result = raw ? (JSON.parse(raw) as { ok?: boolean; error?: string; warning?: string; verifyUrl?: string }) : {};
 
       if (!response.ok) {
-        setResendError(result.error ?? "Unable to resend verification email.");
+        setResendError(result.error ?? t("login.errorResendVerification"));
         return;
       }
 
       const infoMessage = result.verifyUrl
-        ? `Verification link generated: ${result.verifyUrl}`
-        : "Verification email sent. Please check your inbox.";
+        ? t("login.infoVerificationGenerated", { url: result.verifyUrl })
+        : t("login.infoVerificationSent");
       setResendInfo(result.warning ? `${infoMessage} ${result.warning}` : infoMessage);
     } catch {
-      setResendError("Unable to resend verification email.");
+      setResendError(t("login.errorResendVerification"));
     } finally {
       setIsResendPending(false);
     }
@@ -146,22 +147,23 @@ export default function LoginClient({ callbackUrl }: Props) {
       <div className="brand-glass brand-animate p-6">
         <div className="mb-5 flex items-center justify-between rounded-xl border border-[#c0daf8] bg-white/70 p-3">
           <Image src="/logo/image.png" alt="St. Austin logo" width={132} height={62} />
-          <span className="brand-chip">Login</span>
+          <span className="brand-chip">{t("login.badge")}</span>
         </div>
         <span className="brand-chip brand-chip-accent">
           <span className="brand-accent-dot" />
-          Access Portal
+          {t("login.accessPortal")}
         </span>
-        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">Teacher & Student Login</h1>
-        <p className="brand-muted mt-2 text-sm">Sign in as Teacher or Student.</p>
-        <p className="mt-1 text-xs text-[#3768ac]">Super Admin login is available at /admin/login.</p>
+        <h1 className="brand-title brand-title-gradient text-3xl font-semibold">{t("login.title")}</h1>
+        <p className="brand-muted mt-2 text-sm">{t("login.subtitle")}</p>
+        <p className="mt-1 text-xs text-[#3768ac]">{t("login.adminHint")}</p>
         <p className="brand-muted mt-1 text-xs">
           {/* Teachers are invite-only. Student self-signup is open until {studentSignupCutoff}. */}
+          {studentSignupCutoff ? "" : ""}
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-4">
           <label className="grid gap-1">
-            <span className="text-sm font-medium text-[#0f3a74]">Email</span>
+            <span className="text-sm font-medium text-[#0f3a74]">{t("label.email", undefined, "Email")}</span>
             <input
               className="brand-input"
               type="text"
@@ -172,14 +174,14 @@ export default function LoginClient({ callbackUrl }: Props) {
           </label>
 
           <PasswordField
-            label="Password"
+            label={t("password")}
             name="password"
             required
             autoComplete="current-password"
           />
           <div className="-mt-2 text-right">
             <Link href="/forgot-password" className="text-xs font-semibold text-[#1f518f] underline">
-              Forgot Password?
+              {t("login.forgotPassword")}
             </Link>
           </div>
 
@@ -192,7 +194,7 @@ export default function LoginClient({ callbackUrl }: Props) {
                 disabled={isResendPending}
                 className="w-fit text-sm font-semibold text-[#1f518f] underline disabled:opacity-60"
               >
-                {isResendPending ? "Resending..." : "Resend verification email"}
+                {isResendPending ? t("login.resending") : t("login.resendVerification")}
               </button>
               <ToastMessage type="error" message={resendError} />
               <ToastMessage type="success" message={resendInfo} />
@@ -210,11 +212,11 @@ export default function LoginClient({ callbackUrl }: Props) {
               onClick={() => setSelectedLoginAs("STUDENT")}
             >
               {isPending && activeLoginAs === "STUDENT" ? (
-                "Signing in..."
+                t("login.signingIn")
               ) : (
                 <>
-                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
-                  <span className="block text-sm font-semibold">Student</span>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">{t("login.signInAs")}</span>
+                  <span className="block text-sm font-semibold">{t("role.student")}</span>
                 </>
               )}
             </button>
@@ -228,11 +230,11 @@ export default function LoginClient({ callbackUrl }: Props) {
               onClick={() => setSelectedLoginAs("DEPARTMENT_HEAD")}
             >
               {isPending && activeLoginAs === "DEPARTMENT_HEAD" ? (
-                "Signing in..."
+                t("login.signingIn")
               ) : (
                 <>
-                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
-                  <span className="block text-sm font-semibold">Department Head</span>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">{t("login.signInAs")}</span>
+                  <span className="block text-sm font-semibold">{t("role.department_head")}</span>
                 </>
               )}
             </button>
@@ -246,11 +248,11 @@ export default function LoginClient({ callbackUrl }: Props) {
               onClick={() => setSelectedLoginAs("TEACHER")}
             >
               {isPending && activeLoginAs === "TEACHER" ? (
-                "Signing in..."
+                t("login.signingIn")
               ) : (
                 <>
-                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">Sign in as</span>
-                  <span className="block text-sm font-semibold">Teacher</span>
+                  <span className="block text-[10px] uppercase tracking-[0.2em] opacity-80">{t("login.signInAs")}</span>
+                  <span className="block text-sm font-semibold">{t("role.teacher")}</span>
                 </>
               )}
             </button>
@@ -260,10 +262,10 @@ export default function LoginClient({ callbackUrl }: Props) {
         <div className="mt-4 text-sm">
           {studentSelfSignupAllowed ? (
             <Link href="/register/student" className="font-semibold underline">
-              Register as Student
+              {t("login.registerStudent")}
             </Link>
           ) : (
-            <p className="text-[#3768ac]">Student self-signup is closed. Please request an invite from Admin.</p>
+            <p className="text-[#3768ac]">{t("login.signupClosed")}</p>
           )}
         </div>
       </div>

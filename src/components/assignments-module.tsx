@@ -7,6 +7,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { toast } from "@/lib/toast";
 import { useLanguage } from "@/components/language-provider";
+import { translateContent } from "@/lib/i18n";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -251,7 +252,7 @@ const isPublishedOrLockedState = (state: string) =>
   state === "PUBLISHED";
 
 export function AssignmentsModule({ role }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const canManage = role === "TEACHER";
@@ -268,6 +269,7 @@ export function AssignmentsModule({ role }: Props) {
     return t("plagiarism.low");
   };
   const isTeacher = role === "TEACHER";
+  const translateText = (value: string | null | undefined) => translateContent(language, value);
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isAdminReadOnly = role === "SUPER_ADMIN" || role === "ADMIN" || role === "DEPARTMENT_HEAD";
   const showInlineDetails = false;
@@ -1461,10 +1463,10 @@ export function AssignmentsModule({ role }: Props) {
             {gradeEditRequests.map((request) => (
               <article key={request.id} className="rounded-md border border-[#dbe9fb] p-3">
                 <p className="text-sm font-semibold text-[#0d3f80]">
-                  {request.assignment?.title ?? t("assignment.label")} - {request.student?.name || request.student?.email || t("student.label")}
+                  {translateText(request.assignment?.title) || t("assignment.label")} - {request.student?.name || request.student?.email || t("student.label")}
                 </p>
                 <p className="mt-1 text-xs text-[#3a689f]">
-                  {t("gradeEdit.reason")}: {request.reason}
+                  {t("gradeEdit.reason")}: {translateText(request.reason)}
                 </p>
                 <p className="mt-1 text-xs text-[#3a689f]">
                   {t("gradeEdit.proposed")}: {request.proposedPoints ?? t("gradeEdit.na")} | {t("gradeEdit.requestedBy")}:{" "}
@@ -1577,10 +1579,10 @@ export function AssignmentsModule({ role }: Props) {
                   className={`border-b border-[#e7f0fc] text-[#0d3f80] transition ${selectedAssignmentId === item.id ? "bg-[#f4f9ff]" : "hover:bg-[#f8fbff]"} ${canManage || isStudent || isAdminReadOnly ? "cursor-pointer" : ""}`}
                   onClick={() => router.push(`/dashboard/assessment/${item.id}`)}
                 >
-                  <td className="px-3 py-2">{item.course.code} - {item.course.title}</td>
+                  <td className="px-3 py-2">{item.course.code} - {translateText(item.course.title)}</td>
                   <td className="px-3 py-2">
-                    <p>{item.title}</p>
-                    {item.description ? <p className="mt-1 text-xs text-[#3768ac]">{item.description}</p> : null}
+                    <p>{translateText(item.title)}</p>
+                    {item.description ? <p className="mt-1 text-xs text-[#3768ac]">{translateText(item.description)}</p> : null}
                   </td>
                   <td className="px-3 py-2">{t(`assignment.type.${item.config.assignmentType.toLowerCase()}`)}</td>
                   <td className="px-3 py-2">
@@ -1654,7 +1656,7 @@ export function AssignmentsModule({ role }: Props) {
       {selectedAssignment && showInlineDetails ? (
         <section className="brand-card min-w-0 overflow-hidden p-5">
           <p className="brand-section-title">
-            {t("assignment.workspace")}: {selectedAssignment.title}
+            {t("assignment.workspace")}: {translateText(selectedAssignment.title)}
           </p>
           <p className="brand-muted mt-2 break-words text-sm">
             {t("assignment.submissionTypes")}: {selectedAssignment.config.allowedSubmissionTypes.length
@@ -1724,7 +1726,7 @@ export function AssignmentsModule({ role }: Props) {
                   {quizQuestions.map((question, index) => (
                     <div key={question.id} className="rounded-md border border-[#dbe9fb] p-3">
                       <p className="text-sm font-semibold text-[#0d3f80]">
-                        {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt} ({question.points} {t("assignment.points")})
+                        {t("assignment.questionPrefix", { index: index + 1 })} {translateText(question.prompt)} ({question.points} {t("assignment.points")})
                       </p>
                       {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? (
                         <label className="mt-2 grid gap-1.5">
@@ -1754,7 +1756,7 @@ export function AssignmentsModule({ role }: Props) {
                                   }));
                                 }}
                               />
-                              <span>{option}</span>
+                              <span>{translateText(option)}</span>
                             </label>
                           ))}
                         </div>
@@ -1912,7 +1914,7 @@ export function AssignmentsModule({ role }: Props) {
                   <div key={question.id} className="rounded-md border border-[#e7f0fc] p-2">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-[#0d3f80]">
-                        {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt}
+                        {t("assignment.questionPrefix", { index: index + 1 })} {translateText(question.prompt)}
                       </p>
                       <div className="flex items-center gap-2">
                         <button
@@ -2085,7 +2087,7 @@ export function AssignmentsModule({ role }: Props) {
                       {submissions.map((submission) => (
                         <tr key={submission.id} className="border-b border-[#e7f0fc] text-[#0d3f80]">
                           <td className="px-3 py-2">
-                            {selectedAssignment?.course.code} - {selectedAssignment?.course.title}
+                            {selectedAssignment?.course.code} - {translateText(selectedAssignment?.course.title)}
                           </td>
                           <td className="px-3 py-2">
                             {selectedAssignment?.course.teacher?.name || selectedAssignment?.course.teacher?.email || t("course.unassigned")}
@@ -2146,7 +2148,7 @@ export function AssignmentsModule({ role }: Props) {
                     </p>
                   ) : null}
                   {submission.textResponse ? (
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{submission.textResponse}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-[#0d3f80]">{translateText(submission.textResponse)}</p>
                   ) : null}
                   {submission.fileUrl ? (
                     <a
@@ -2309,7 +2311,7 @@ export function AssignmentsModule({ role }: Props) {
               <select className="brand-input" aria-label={t("label.course")} value={createCourseId} onChange={(event) => setCreateCourseId(event.currentTarget.value)} required>
                 <option value="">{t("assignment.selectCourse")}</option>
                 {courses.map((course) => (
-                  <option key={course.id} value={course.id}>{course.code} - {course.title}</option>
+                  <option key={course.id} value={course.id}>{course.code} - {translateText(course.title)}</option>
                 ))}
               </select>
             </label>
@@ -2519,7 +2521,7 @@ export function AssignmentsModule({ role }: Props) {
                       <div key={`${question.prompt}_${index}`} className="rounded-md border border-[#e7f0fc] p-2">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-[#0d3f80]">
-                            {t("assignment.questionPrefix", { index: index + 1 })} {question.prompt}
+                            {t("assignment.questionPrefix", { index: index + 1 })} {translateText(question.prompt)}
                           </p>
                           <button
                             type="button"
@@ -2618,7 +2620,7 @@ export function AssignmentsModule({ role }: Props) {
                   <option value="">{t("assignment.noModuleLink")}</option>
                   {(structureByCourseId[createCourseId] ?? []).map((module) => (
                     <option key={module.id} value={module.id}>
-                      {module.title}
+                      {translateText(module.title)}
                     </option>
                   ))}
                 </select>
@@ -2637,7 +2639,7 @@ export function AssignmentsModule({ role }: Props) {
                     .find((module) => module.id === createModuleId)
                     ?.lessons.map((lesson) => (
                       <option key={lesson.id} value={lesson.id}>
-                        {lesson.title}
+                        {translateText(lesson.title)}
                       </option>
                     )) ?? null}
                 </select>
@@ -2828,7 +2830,7 @@ export function AssignmentsModule({ role }: Props) {
                   <option value="">{t("assignment.noModuleLink")}</option>
                   {(structureByCourseId[editAssignment?.courseId ?? ""] ?? []).map((module) => (
                     <option key={module.id} value={module.id}>
-                      {module.title}
+                      {translateText(module.title)}
                     </option>
                   ))}
                 </select>
@@ -2847,7 +2849,7 @@ export function AssignmentsModule({ role }: Props) {
                     .find((module) => module.id === editModuleId)
                     ?.lessons.map((lesson) => (
                       <option key={lesson.id} value={lesson.id}>
-                        {lesson.title}
+                        {translateText(lesson.title)}
                       </option>
                     )) ?? null}
                 </select>

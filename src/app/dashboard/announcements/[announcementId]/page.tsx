@@ -3,18 +3,19 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminRole } from "@/lib/permissions";
-import { createServerTranslator } from "@/lib/i18n-server";
+import { createServerTranslator, getServerLanguage } from "@/lib/i18n-server";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { AnnouncementDetailActions } from "@/components/announcement-detail-actions";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 type Props = {
   params: Promise<{ announcementId: string }>;
 };
 
-const formatDate = (value: Date | null) => {
+const formatDate = (value: Date | null, locale: string) => {
   if (!value) return "-";
-  return value.toLocaleString("en-GB", {
+  return value.toLocaleString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -27,6 +28,8 @@ const formatDate = (value: Date | null) => {
 export default async function AnnouncementDetailPage({ params }: Props) {
   const session = await auth();
   const t = await createServerTranslator();
+  const language = await getServerLanguage();
+  const locale = getLanguageLocale(language);
 
   if (!session?.user || session.user.status !== "ACTIVE") {
     redirect("/login");
@@ -79,7 +82,7 @@ export default async function AnnouncementDetailPage({ params }: Props) {
         <section className="brand-card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="brand-section-title">{announcement.title}</p>
+              <p className="brand-section-title">{translateContent(language, announcement.title)}</p>
               <p className="mt-1 text-xs text-[#3a689f]">{t(`audience.label.${announcement.audience}`)}</p>
             </div>
             <Link
@@ -90,11 +93,11 @@ export default async function AnnouncementDetailPage({ params }: Props) {
             </Link>
           </div>
 
-          <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5d96]">{announcement.content}</p>
+          <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5d96]">{translateContent(language, announcement.content)}</p>
 
           <div className="mt-4 grid gap-1 text-xs text-[#3f70ae]">
-            <span>{t("posted")}: {formatDate(announcement.createdAt)}</span>
-            <span>{t("expires")}: {formatDate(announcement.expiresAt)}</span>
+            <span>{t("posted")}: {formatDate(announcement.createdAt, locale)}</span>
+            <span>{t("expires")}: {formatDate(announcement.expiresAt, locale)}</span>
           </div>
 
           <div className="mt-4">

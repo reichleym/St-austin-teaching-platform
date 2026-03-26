@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 type Audience =
   | "BOTH"
@@ -27,13 +28,13 @@ type Props = {
 };
 
 export function AnnouncementsFeed({ announcements, detailBaseHref }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const detailBase = detailBaseHref ?? "";
   const formatDateLabel = (value: string | null) => {
     if (!value) return t("noExpiry");
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return t("noExpiry");
-    return date.toLocaleString("en-GB", {
+    return date.toLocaleString(getLanguageLocale(language), {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -59,13 +60,13 @@ export function AnnouncementsFeed({ announcements, detailBaseHref }: Props) {
                     href={`${detailBase}/${item.id}`}
                     className="text-base font-semibold text-[#0b3e81] underline decoration-transparent transition hover:decoration-current"
                   >
-                    {item.title}
+                    {translateContent(language, item.title)}
                   </Link>
                 ) : (
-                  <p className="text-base font-semibold text-[#0b3e81]">{item.title}</p>
+                  <p className="text-base font-semibold text-[#0b3e81]">{translateContent(language, item.title)}</p>
                 )}
               </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{item.content}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-[#2f5d96]">{translateContent(language, item.content)}</p>
               <div className="mt-2 text-xs text-[#3f70ae]">
                 <p>{t("posted")}: {formatDateLabel(item.createdAt)}</p>
                 <p>{t("expires")}: {formatDateLabel(item.expiresAt)}</p>

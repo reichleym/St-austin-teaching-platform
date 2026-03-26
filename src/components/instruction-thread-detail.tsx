@@ -3,6 +3,8 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import type { MessageNode, ThreadDetail } from "@/types/instruction-threads";
+import { useLanguage } from "@/components/language-provider";
+import { getLanguageLocale, translateContent } from "@/lib/i18n";
 
 // ─── Reply Box ────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ function ReplyBox({
   compact?: boolean;
   onSuccess: () => void;
 }) {
+  const { t } = useLanguage();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -34,11 +37,11 @@ function ReplyBox({
           body: JSON.stringify({ threadId, parentId, body: body.trim() }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to post.");
+        if (!res.ok) throw new Error(data.error ?? t("instruction.failedPost"));
         setBody("");
         onSuccess();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong.");
+        setError(err instanceof Error ? err.message : t("instruction.failedGeneric"));
       }
     });
   }
@@ -48,7 +51,7 @@ function ReplyBox({
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder={compact ? "Write a reply..." : "Write your reply..."}
+        placeholder={compact ? t("instruction.writeReplyCompact") : t("instruction.writeReply")}
         rows={compact ? 2 : 3}
         className={`brand-input resize-none text-sm ${compact ? "min-h-[70px]" : "min-h-[110px]"}`}
       />
@@ -64,7 +67,7 @@ function ReplyBox({
           className={`btn-brand-primary font-semibold disabled:opacity-60
             ${compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}`}
         >
-          {isPending ? "Posting..." : "Post Reply"}
+          {isPending ? t("instruction.posting") : t("instruction.postReply")}
         </button>
       </div>
     </form>
@@ -88,6 +91,7 @@ function MessageBubble({
   onRefresh: () => void;
   depth?: number;
 }) {
+  const { t, language } = useLanguage();
   const [showReply, setShowReply] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -101,7 +105,7 @@ function MessageBubble({
     : "?";
 
   function handleDelete() {
-    if (!confirm("Delete this message?")) return;
+    if (!confirm(t("instruction.deleteConfirm"))) return;
     startTransition(async () => {
       await fetch(`/api/instructions/messages?messageId=${message.id}`, { method: "DELETE" });
       onRefresh();
@@ -130,17 +134,17 @@ function MessageBubble({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-[#0b3e81]">
-                {message.author.name ?? "Unknown"}
+                {message.author.name ?? t("common.unknown")}
               </span>
               {isTeacher && (
-                <span className="brand-chip">Teacher</span>
+                <span className="brand-chip">{t("instruction.teacherBadge")}</span>
               )}
             </div>
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-3">
             <span className="text-xs text-[#6c8fbe]">
-              {new Date(message.createdAt).toLocaleDateString("en-US", {
+              {new Date(message.createdAt).toLocaleDateString(getLanguageLocale(language), {
                 month: "short",
                 day: "numeric",
                 hour: "2-digit",
@@ -153,7 +157,7 @@ function MessageBubble({
                 disabled={isPending}
                 className="text-xs text-[#6c8fbe] transition-colors hover:text-[#b21d1d]"
               >
-                Delete
+                {t("instruction.deleteMessage")}
               </button>
             )}
           </div>
@@ -164,7 +168,7 @@ function MessageBubble({
           className={`whitespace-pre-wrap text-sm leading-relaxed
             ${isDeleted ? "italic text-[#7c99c6]" : "text-[#2f5d96]"}`}
         >
-          {message.body}
+          {translateContent(language, message.body)}
         </p>
 
         {/* Reply button */}
@@ -176,7 +180,7 @@ function MessageBubble({
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
             </svg>
-            {showReply ? "Cancel" : "Reply"}
+            {showReply ? t("instruction.cancelReply") : t("instruction.reply")}
           </button>
         )}
       </div>
@@ -252,6 +256,7 @@ type Props = {
 };
 
 export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onBack }: Props) {
+  const { t, language } = useLanguage();
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -263,14 +268,14 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
     try {
       const res = await fetch(`/api/instructions/threads/${threadId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load thread.");
+      if (!res.ok) throw new Error(data.error ?? t("instruction.failedLoadThread"));
       setThread(data.thread);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load thread.");
+      setError(err instanceof Error ? err.message : t("instruction.failedLoadThread"));
     } finally {
       setLoading(false);
     }
-  }, [threadId]);
+  }, [threadId, t]);
 
   useEffect(() => { loadThread(); }, [loadThread]);
 
@@ -289,7 +294,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   if (loading) {
     return (
       <section className="brand-card p-5">
-        <p className="brand-section-title">Thread</p>
+        <p className="brand-section-title">{t("instruction.threadTitle")}</p>
         <div className="mt-4 space-y-3 animate-pulse">
           <div className="h-5 w-32 rounded bg-slate-200" />
           <div className="h-28 rounded-xl border border-[#dbe9fb] bg-white/80" />
@@ -302,9 +307,9 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   if (error || !thread) {
     return (
       <section className="brand-card p-5 text-center">
-        <p className="text-sm text-[#9c1e1e]">{error ?? "Thread not found."}</p>
+        <p className="text-sm text-[#9c1e1e]">{error ?? t("instruction.threadNotFound")}</p>
         <button onClick={onBack} className="mt-3 text-sm font-semibold text-[#1f518f] underline">
-          Go back
+          {t("instruction.goBack")}
         </button>
       </section>
     );
@@ -323,7 +328,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
-        Back to questions
+        {t("instruction.backToQuestions")}
       </button>
 
       {/* Thread header card */}
@@ -336,29 +341,29 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
                   ${s.bg} ${s.text} ${s.border}`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-                {s.label}
+                {t(`instruction.status.${thread.status.toLowerCase()}`)}
               </span>
               {thread.isPinned && (
-                <span className="brand-chip">Pinned</span>
+                <span className="brand-chip">{t("instruction.badgePinned")}</span>
               )}
               {!thread.isPrivate && (
-                <span className="brand-chip brand-chip-accent">Public</span>
+                <span className="brand-chip brand-chip-accent">{t("instruction.badgePublic")}</span>
               )}
             </div>
 
-            <h2 className="text-lg font-bold text-[#0b3e81]">{thread.subject}</h2>
+            <h2 className="text-lg font-bold text-[#0b3e81]">{translateContent(language, thread.subject)}</h2>
 
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#3a689f]">
-              <span>by {thread.student.name ?? "Student"}</span>
+              <span>{t("instruction.by", { name: thread.student.name ?? t("student.label") })}</span>
               {thread.module && (
                 <>
                   <span>·</span>
-                  <span className="text-[#2f5d96]">📚 {thread.module.title}</span>
+                  <span className="text-[#2f5d96]">📚 {translateContent(language, thread.module.title)}</span>
                 </>
               )}
               <span>·</span>
               <span>
-                {new Date(thread.createdAt).toLocaleDateString("en-US", {
+                {new Date(thread.createdAt).toLocaleDateString(getLanguageLocale(language), {
                   year: "numeric",
                   month: "short",
                   day: "numeric",
@@ -378,7 +383,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
                     ? "border-[#b8d3fb] bg-[#eef6ff] text-[#1f518f] hover:border-[#8fb7eb]"
                     : "border-[#dbe9fb] bg-white/80 text-[#2f5d96] hover:border-[#8fb7eb]"}`}
               >
-                {thread.isPinned ? "Unpin" : "Pin"}
+                {thread.isPinned ? t("instruction.unpin") : t("instruction.pin")}
               </button>
               {thread.status !== "CLOSED" && (
                 <button
@@ -386,7 +391,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
                   disabled={actionPending}
                   className="rounded-md border border-[#f1c4c4] bg-white/80 px-3 py-1.5 text-xs font-semibold text-[#a12525] transition-colors hover:bg-[#fff1f1]"
                 >
-                  Close
+                  {t("instruction.close")}
                 </button>
               )}
             </div>
@@ -411,14 +416,14 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
       {/* Closed notice */}
       {thread.status === "CLOSED" && (
         <div className="brand-panel mb-5 px-5 py-4 text-center text-sm text-[#5c7cab]">
-          This thread is closed and no longer accepts replies.
+          {t("instruction.threadClosedNotice")}
         </div>
       )}
 
       {/* Top-level reply box */}
       {canReply && (
         <div className="brand-panel p-4">
-          <p className="brand-section-title mb-3">Add a reply</p>
+          <p className="brand-section-title mb-3">{t("instruction.addReply")}</p>
           <ReplyBox threadId={threadId} parentId={null} onSuccess={loadThread} />
         </div>
       )}
