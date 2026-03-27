@@ -39,6 +39,19 @@ function isAnnouncementTableMissingError(error: unknown) {
   return error.message.includes("The table `public.Announcement` does not exist");
 }
 
+function isAnnouncementLocalizationCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `sourceLanguage`") ||
+    error.message.includes("Unknown field `translations`") ||
+    error.message.includes("Unknown argument `sourceLanguage`") ||
+    error.message.includes("Unknown argument `translations`")
+  );
+}
+
 export default async function AnnouncementsPage() {
   const session = await auth();
   const t = await createServerTranslator();
@@ -81,22 +94,28 @@ export default async function AnnouncementsPage() {
   } catch (error) {
     if (isAnnouncementTableMissingError(error)) {
       adminAnnouncements = [];
-    } else if (isAnnouncementAudienceCompatibilityError(error)) {
+    } else if (
+      isAnnouncementAudienceCompatibilityError(error) ||
+      isAnnouncementLocalizationCompatibilityError(error)
+    ) {
       try {
         const legacyAnnouncements = await prisma.announcement.findMany({
           orderBy: { createdAt: "desc" },
           take: 200,
-            select: {
-              id: true,
-              title: true,
-              content: true,
-              sourceLanguage: true,
-              translations: true,
-              expiresAt: true,
-              createdAt: true,
-            },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            expiresAt: true,
+            createdAt: true,
+          },
         });
-        adminAnnouncements = legacyAnnouncements.map((item) => ({ ...item, audience: "BOTH" }));
+        adminAnnouncements = legacyAnnouncements.map((item) => ({
+          ...item,
+          sourceLanguage: "en",
+          translations: null,
+          audience: "BOTH",
+        }));
       } catch (legacyError) {
         if (isAnnouncementTableMissingError(legacyError)) {
           adminAnnouncements = [];

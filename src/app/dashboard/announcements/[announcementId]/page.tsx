@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +14,49 @@ import { getAnnouncementLocalization } from "@/lib/announcement-translations";
 type Props = {
   params: Promise<{ announcementId: string }>;
 };
+
+type AnnouncementAudienceValue =
+  | "BOTH"
+  | "TEACHER_ONLY"
+  | "STUDENT_ONLY"
+  | "DEPARTMENT_HEAD_ONLY"
+  | "TEACHER_DEPARTMENT_HEAD"
+  | "STUDENT_DEPARTMENT_HEAD"
+  | "ALL";
+
+function isAnnouncementAudienceCompatibilityError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `audience`") ||
+    error.message.includes("Unknown argument `audience`") ||
+    (error.message.includes("Invalid value for argument `audience`") &&
+      error.message.includes("AnnouncementAudience")) ||
+    (error.message.includes("Invalid value for argument `in`") &&
+      error.message.includes("AnnouncementAudience")) ||
+    error.message.toLowerCase().includes("invalid input value for enum \"announcementaudience\"")
+  );
+}
+
+function isAnnouncementTableMissingError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return error.message.includes("The table `public.Announcement` does not exist");
+}
+
+function isAnnouncementLocalizationCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `sourceLanguage`") ||
+    error.message.includes("Unknown field `translations`") ||
+    error.message.includes("Unknown argument `sourceLanguage`") ||
+    error.message.includes("Unknown argument `translations`")
+  );
+}
 
 const formatDate = (value: Date | null, locale: string) => {
   if (!value) return "-";
@@ -43,19 +87,62 @@ export default async function AnnouncementDetailPage({ params }: Props) {
   }
 
   const { announcementId } = await params;
-  const announcement = await prisma.announcement.findUnique({
-    where: { id: announcementId },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      sourceLanguage: true,
-      translations: true,
-      audience: true,
-      expiresAt: true,
-      createdAt: true,
-    },
-  });
+  let announcement:
+    | {
+        id: string;
+        title: string;
+        content: string;
+        sourceLanguage: string;
+        translations: unknown;
+        audience: AnnouncementAudienceValue;
+        expiresAt: Date | null;
+        createdAt: Date;
+      }
+    | null = null;
+
+  try {
+    announcement = await prisma.announcement.findUnique({
+      where: { id: announcementId },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        sourceLanguage: true,
+        translations: true,
+        audience: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
+  } catch (error) {
+    if (isAnnouncementTableMissingError(error)) {
+      announcement = null;
+    } else if (
+      isAnnouncementAudienceCompatibilityError(error) ||
+      isAnnouncementLocalizationCompatibilityError(error)
+    ) {
+      const legacy = await prisma.announcement.findUnique({
+        where: { id: announcementId },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          expiresAt: true,
+          createdAt: true,
+        },
+      });
+      announcement = legacy
+        ? {
+            ...legacy,
+            sourceLanguage: "en",
+            translations: null,
+            audience: "BOTH",
+          }
+        : null;
+    } else {
+      throw error;
+    }
+  }
 
   if (!announcement) {
     notFound();

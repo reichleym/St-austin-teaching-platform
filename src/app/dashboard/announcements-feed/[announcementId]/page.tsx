@@ -44,6 +44,19 @@ function isAnnouncementTableMissingError(error: unknown) {
   return error.message.includes("The table `public.Announcement` does not exist");
 }
 
+function isAnnouncementLocalizationCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `sourceLanguage`") ||
+    error.message.includes("Unknown field `translations`") ||
+    error.message.includes("Unknown argument `sourceLanguage`") ||
+    error.message.includes("Unknown argument `translations`")
+  );
+}
+
 const formatDate = (value: Date | null, locale: string) => {
   if (!value) return "-";
   return value.toLocaleString(locale, {
@@ -126,7 +139,10 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
   } catch (error) {
     if (isAnnouncementTableMissingError(error)) {
       announcement = null;
-    } else if (isAnnouncementAudienceCompatibilityError(error)) {
+    } else if (
+      isAnnouncementAudienceCompatibilityError(error) ||
+      isAnnouncementLocalizationCompatibilityError(error)
+    ) {
       announcement = await prisma.announcement.findFirst({
         where: {
           id: announcementId,
@@ -137,12 +153,19 @@ export default async function AnnouncementFeedDetailPage({ params }: Props) {
           id: true,
           title: true,
           content: true,
-          sourceLanguage: true,
-          translations: true,
           expiresAt: true,
           createdAt: true,
         },
-      }).then((item) => (item ? { ...item, audience: "BOTH" as AnnouncementAudienceValue } : null));
+      }).then((item) =>
+        item
+          ? {
+              ...item,
+              sourceLanguage: "en",
+              translations: null,
+              audience: "BOTH" as AnnouncementAudienceValue,
+            }
+          : null
+      );
     } else {
       throw error;
     }
