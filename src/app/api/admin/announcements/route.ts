@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
     if (localizedPayload.error) {
       return NextResponse.json({ error: localizedPayload.error }, { status: 400 });
     }
+    const localizedData = localizedPayload.data;
+    if (!localizedData) {
+      return NextResponse.json({ error: "Unable to prepare localized announcement data." }, { status: 400 });
+    }
     if (body.expiresAt !== undefined && expiresAt === undefined) {
       return NextResponse.json({ error: "Invalid expiresAt value." }, { status: 400 });
     }
@@ -93,10 +97,10 @@ export async function POST(request: NextRequest) {
       announcement = await prisma.$transaction(async (tx) => {
         const created = await tx.announcement.create({
           data: {
-            title: localizedPayload.data.title,
-            content: localizedPayload.data.content,
-            sourceLanguage: localizedPayload.data.sourceLanguage,
-            translations: localizedPayload.data.translations,
+            title: localizedData.title,
+            content: localizedData.content,
+            sourceLanguage: localizedData.sourceLanguage,
+            translations: localizedData.translations,
             isGlobal: true,
             audience,
             expiresAt,
@@ -123,10 +127,10 @@ export async function POST(request: NextRequest) {
       announcement = await prisma.$transaction(async (tx) => {
         const created = await tx.announcement.create({
           data: {
-            title: localizedPayload.data.title,
-            content: localizedPayload.data.content,
-            sourceLanguage: localizedPayload.data.sourceLanguage,
-            translations: localizedPayload.data.translations,
+            title: localizedData.title,
+            content: localizedData.content,
+            sourceLanguage: localizedData.sourceLanguage,
+            translations: localizedData.translations,
             isGlobal: true,
             expiresAt,
             createdById: superAdmin.id,
