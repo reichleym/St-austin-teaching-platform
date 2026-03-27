@@ -459,6 +459,19 @@ async function seedAnnouncements(adminId) {
       title: "Welcome to the New Semester!",
       content:
         "We are excited to kick off the Spring 2025 semester. Please review your course materials.",
+      sourceLanguage: "en",
+      translations: {
+        en: {
+          title: "Welcome to the New Semester!",
+          content:
+            "We are excited to kick off the Spring 2025 semester. Please review your course materials.",
+        },
+        fr: {
+          title: "Bienvenue pour le nouveau semestre !",
+          content:
+            "Nous sommes ravis de lancer le semestre du printemps 2025. Veuillez consulter vos supports de cours.",
+        },
+      },
       isGlobal: true,
       audience: "BOTH",
       expiresAt: new Date("2025-02-01"),
@@ -474,6 +487,17 @@ async function seedAnnouncements(adminId) {
       title: "System Maintenance – Saturday",
       content:
         "The platform will be offline for maintenance from 2–4 AM Saturday.",
+      sourceLanguage: "en",
+      translations: {
+        en: {
+          title: "System Maintenance – Saturday",
+          content: "The platform will be offline for maintenance from 2–4 AM Saturday.",
+        },
+        fr: {
+          title: "Maintenance du système - Samedi",
+          content: "La plateforme sera indisponible pour maintenance samedi de 2 h à 4 h.",
+        },
+      },
       isGlobal: true,
       audience: "BOTH",
       createdById: adminId,

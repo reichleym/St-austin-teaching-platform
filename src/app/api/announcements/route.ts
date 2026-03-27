@@ -52,6 +52,20 @@ export async function GET() {
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
         orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          sourceLanguage: true,
+          translations: true,
+          isGlobal: true,
+          audience: true,
+          expiresAt: true,
+          createdAt: true,
+          updatedAt: true,
+          createdById: true,
+          updatedById: true,
+        },
       });
     } catch (error) {
       if (!isAnnouncementAudienceCompatibilityError(error)) throw error;
@@ -61,6 +75,19 @@ export async function GET() {
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
         orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          sourceLanguage: true,
+          translations: true,
+          isGlobal: true,
+          expiresAt: true,
+          createdAt: true,
+          updatedAt: true,
+          createdById: true,
+          updatedById: true,
+        },
       });
     }
 

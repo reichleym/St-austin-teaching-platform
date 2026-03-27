@@ -207,6 +207,8 @@ model Announcement {
   id          String               @id @default(cuid())
   title       String
   content     String
+  sourceLanguage String            @default("en")
+  translations Json?
   isGlobal    Boolean              @default(true)
   audience    AnnouncementAudience @default(BOTH)
   expiresAt   DateTime?

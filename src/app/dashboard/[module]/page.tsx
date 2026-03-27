@@ -18,7 +18,7 @@ import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
 import { StudentProgressModule } from "@/components/student-progress-module";
-import { translateContent } from "@/lib/i18n";
+import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
 import { createServerTranslator, getServerLanguage } from "@/lib/i18n-server";
 
 type Props = {
@@ -536,6 +536,8 @@ export default async function DashboardPage({ params }: Props) {
     id: string;
     title: string;
     content: string;
+    sourceLanguage: string;
+    translations: unknown;
     audience: AnnouncementAudienceValue;
     expiresAt: Date | null;
     createdAt: Date;
@@ -550,6 +552,8 @@ export default async function DashboardPage({ params }: Props) {
           id: true,
           title: true,
           content: true,
+          sourceLanguage: true,
+          translations: true,
           audience: true,
           expiresAt: true,
           createdAt: true,
@@ -567,6 +571,8 @@ export default async function DashboardPage({ params }: Props) {
               id: true,
               title: true,
               content: true,
+              sourceLanguage: true,
+              translations: true,
               expiresAt: true,
               createdAt: true,
             },
@@ -598,6 +604,8 @@ export default async function DashboardPage({ params }: Props) {
     id: string;
     title: string;
     content: string;
+    sourceLanguage: string;
+    translations: unknown;
     audience: AnnouncementAudienceValue;
     expiresAt: Date | null;
     createdAt: Date;
@@ -617,6 +625,8 @@ export default async function DashboardPage({ params }: Props) {
           id: true,
           title: true,
           content: true,
+          sourceLanguage: true,
+          translations: true,
           audience: true,
           expiresAt: true,
           createdAt: true,
@@ -638,6 +648,8 @@ export default async function DashboardPage({ params }: Props) {
               id: true,
               title: true,
               content: true,
+              sourceLanguage: true,
+              translations: true,
               expiresAt: true,
               createdAt: true,
             },
@@ -668,6 +680,8 @@ export default async function DashboardPage({ params }: Props) {
   let overviewAnnouncements: Array<{
     id: string;
     title: string;
+    sourceLanguage: string;
+    translations: unknown;
   }> = [];
 
   if (selected.slug === "overview") {
@@ -676,7 +690,7 @@ export default async function DashboardPage({ params }: Props) {
         overviewAnnouncements = await prisma.announcement.findMany({
           orderBy: { createdAt: "desc" },
           take: 6,
-          select: { id: true, title: true, audience: true },
+          select: { id: true, title: true, sourceLanguage: true, translations: true, audience: true },
         });
       } catch (error) {
         if (isAnnouncementTableMissingError(error)) {
@@ -686,7 +700,7 @@ export default async function DashboardPage({ params }: Props) {
             overviewAnnouncements = await prisma.announcement.findMany({
               orderBy: { createdAt: "desc" },
               take: 6,
-              select: { id: true, title: true },
+              select: { id: true, title: true, sourceLanguage: true, translations: true },
             });
           } catch (legacyError) {
             if (isAnnouncementTableMissingError(legacyError)) {
@@ -709,7 +723,7 @@ export default async function DashboardPage({ params }: Props) {
           },
           orderBy: { createdAt: "desc" },
           take: 6,
-          select: { id: true, title: true, audience: true },
+          select: { id: true, title: true, sourceLanguage: true, translations: true, audience: true },
         });
       } catch (error) {
         if (isAnnouncementTableMissingError(error)) {
@@ -723,7 +737,7 @@ export default async function DashboardPage({ params }: Props) {
               },
               orderBy: { createdAt: "desc" },
               take: 6,
-              select: { id: true, title: true },
+              select: { id: true, title: true, sourceLanguage: true, translations: true },
             });
           } catch (legacyError) {
             if (isAnnouncementTableMissingError(legacyError)) {
@@ -1040,7 +1054,7 @@ export default async function DashboardPage({ params }: Props) {
                       href={`/dashboard/${announcementModuleSlug}#announcement-${item.id}`}
                       className="block rounded-lg border border-[#cee2fb] bg-white/75 px-3 py-2 text-sm font-semibold text-[#1f508f] transition hover:bg-[#e8f3ff]"
                     >
-                      {translateContent(language, item.title)}
+                      {getAnnouncementLocalizedValue(item, language, "title")}
                     </Link>
                   ))
                 ) : (

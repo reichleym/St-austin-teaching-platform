@@ -4,15 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
-import { translateContent } from "@/lib/i18n";
+import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
 
 type Props = {
   id: string;
   title: string;
+  sourceLanguage?: string | null;
+  translations?: unknown;
   backHref: string;
 };
 
-export function AnnouncementDetailActions({ id, title, backHref }: Props) {
+export function AnnouncementDetailActions({ id, title, sourceLanguage, translations, backHref }: Props) {
   const router = useRouter();
   const { t, language } = useLanguage();
   const [error, setError] = useState("");
@@ -20,7 +22,9 @@ export function AnnouncementDetailActions({ id, title, backHref }: Props) {
 
   const onDelete = async () => {
     setError("");
-    const confirmMessage = t("announcement.deleteMessage", { title: translateContent(language, title) });
+    const confirmMessage = t("announcement.deleteMessage", {
+      title: getAnnouncementLocalizedValue({ title, sourceLanguage, translations }, language, "title"),
+    });
     if (!window.confirm(confirmMessage)) return;
     setPending(true);
     try {

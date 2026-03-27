@@ -56,6 +56,8 @@ export default async function AnnouncementsPage() {
     id: string;
     title: string;
     content: string;
+    sourceLanguage: string;
+    translations: unknown;
     audience: AnnouncementAudienceValue;
     expiresAt: Date | null;
     createdAt: Date;
@@ -65,13 +67,15 @@ export default async function AnnouncementsPage() {
     adminAnnouncements = await prisma.announcement.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        audience: true,
-        expiresAt: true,
-        createdAt: true,
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          sourceLanguage: true,
+          translations: true,
+          audience: true,
+          expiresAt: true,
+          createdAt: true,
       },
     });
   } catch (error) {
@@ -82,13 +86,15 @@ export default async function AnnouncementsPage() {
         const legacyAnnouncements = await prisma.announcement.findMany({
           orderBy: { createdAt: "desc" },
           take: 200,
-          select: {
-            id: true,
-            title: true,
-            content: true,
-            expiresAt: true,
-            createdAt: true,
-          },
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              sourceLanguage: true,
+              translations: true,
+              expiresAt: true,
+              createdAt: true,
+            },
         });
         adminAnnouncements = legacyAnnouncements.map((item) => ({ ...item, audience: "BOTH" }));
       } catch (legacyError) {

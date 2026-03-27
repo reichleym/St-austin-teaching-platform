@@ -7,7 +7,8 @@ import { createServerTranslator, getServerLanguage } from "@/lib/i18n-server";
 import { DashboardSidebar } from "@/components/dashboard-sidebar";
 import { DashboardTopbar } from "@/components/dashboard-topbar";
 import { AnnouncementDetailActions } from "@/components/announcement-detail-actions";
-import { getLanguageLocale, translateContent } from "@/lib/i18n";
+import { getLanguageLocale } from "@/lib/i18n";
+import { getAnnouncementLocalization } from "@/lib/announcement-translations";
 
 type Props = {
   params: Promise<{ announcementId: string }>;
@@ -48,6 +49,8 @@ export default async function AnnouncementDetailPage({ params }: Props) {
       id: true,
       title: true,
       content: true,
+      sourceLanguage: true,
+      translations: true,
       audience: true,
       expiresAt: true,
       createdAt: true,
@@ -57,6 +60,8 @@ export default async function AnnouncementDetailPage({ params }: Props) {
   if (!announcement) {
     notFound();
   }
+
+  const localizedAnnouncement = getAnnouncementLocalization(announcement, language);
 
   return (
     <main className="min-h-screen lg:flex">
@@ -82,7 +87,7 @@ export default async function AnnouncementDetailPage({ params }: Props) {
         <section className="brand-card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="brand-section-title">{translateContent(language, announcement.title)}</p>
+              <p className="brand-section-title">{localizedAnnouncement.title}</p>
               <p className="mt-1 text-xs text-[#3a689f]">{t(`audience.label.${announcement.audience}`)}</p>
             </div>
             <Link
@@ -93,7 +98,7 @@ export default async function AnnouncementDetailPage({ params }: Props) {
             </Link>
           </div>
 
-          <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5d96]">{translateContent(language, announcement.content)}</p>
+          <p className="mt-3 whitespace-pre-wrap text-sm text-[#2f5d96]">{localizedAnnouncement.content}</p>
 
           <div className="mt-4 grid gap-1 text-xs text-[#3f70ae]">
             <span>{t("posted")}: {formatDate(announcement.createdAt, locale)}</span>
@@ -104,6 +109,8 @@ export default async function AnnouncementDetailPage({ params }: Props) {
             <AnnouncementDetailActions
               id={announcement.id}
               title={announcement.title}
+              sourceLanguage={announcement.sourceLanguage}
+              translations={announcement.translations}
               backHref="/dashboard/announcements"
             />
           </div>

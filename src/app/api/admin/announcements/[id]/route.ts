@@ -1,5 +1,6 @@
 import { AdminActionType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { buildAnnouncementLocalizationPayload } from "@/lib/announcement-translations";
 import { PermissionError, requireSuperAdminUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -53,12 +54,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       content?: string;
       expiresAt?: string | null;
       audience?: AnnouncementAudienceValue;
+      sourceLanguage?: string;
+      translations?: unknown;
     };
 
-    const title = body.title?.trim();
-    const content = body.content?.trim();
     const expiresAt = parseExpiresAt(body.expiresAt);
     const audience = parseAudience(body.audience);
+    const localizedPayload = buildAnnouncementLocalizationPayload(body);
+    if (localizedPayload.error) {
+      return NextResponse.json({ error: localizedPayload.error }, { status: 400 });
+    }
     if (body.expiresAt !== undefined && expiresAt === undefined) {
       return NextResponse.json({ error: "Invalid expiresAt value." }, { status: 400 });
     }
@@ -72,8 +77,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const updated = await tx.announcement.update({
           where: { id },
           data: {
-            title,
-            content,
+            title: localizedPayload.data.title,
+            content: localizedPayload.data.content,
+            sourceLanguage: localizedPayload.data.sourceLanguage,
+            translations: localizedPayload.data.translations,
             expiresAt,
             audience,
             updatedById: superAdmin.id,
@@ -103,8 +110,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const updated = await tx.announcement.update({
           where: { id },
           data: {
-            title,
-            content,
+            title: localizedPayload.data.title,
+            content: localizedPayload.data.content,
+            sourceLanguage: localizedPayload.data.sourceLanguage,
+            translations: localizedPayload.data.translations,
             expiresAt,
             updatedById: superAdmin.id,
           },

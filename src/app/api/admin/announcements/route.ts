@@ -1,5 +1,6 @@
 import { AdminActionType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { buildAnnouncementLocalizationPayload } from "@/lib/announcement-translations";
 import { PermissionError, requireSuperAdminUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -69,15 +70,16 @@ export async function POST(request: NextRequest) {
       content?: string;
       expiresAt?: string | null;
       audience?: AnnouncementAudienceValue;
+      sourceLanguage?: string;
+      translations?: unknown;
     };
 
-    const title = body.title?.trim() ?? "";
-    const content = body.content?.trim() ?? "";
     const expiresAt = parseExpiresAt(body.expiresAt);
     const audience = parseAudience(body.audience);
+    const localizedPayload = buildAnnouncementLocalizationPayload(body);
 
-    if (!title || !content) {
-      return NextResponse.json({ error: "Title and content are required." }, { status: 400 });
+    if (localizedPayload.error) {
+      return NextResponse.json({ error: localizedPayload.error }, { status: 400 });
     }
     if (body.expiresAt !== undefined && expiresAt === undefined) {
       return NextResponse.json({ error: "Invalid expiresAt value." }, { status: 400 });
@@ -91,8 +93,10 @@ export async function POST(request: NextRequest) {
       announcement = await prisma.$transaction(async (tx) => {
         const created = await tx.announcement.create({
           data: {
-            title,
-            content,
+            title: localizedPayload.data.title,
+            content: localizedPayload.data.content,
+            sourceLanguage: localizedPayload.data.sourceLanguage,
+            translations: localizedPayload.data.translations,
             isGlobal: true,
             audience,
             expiresAt,
@@ -119,8 +123,10 @@ export async function POST(request: NextRequest) {
       announcement = await prisma.$transaction(async (tx) => {
         const created = await tx.announcement.create({
           data: {
-            title,
-            content,
+            title: localizedPayload.data.title,
+            content: localizedPayload.data.content,
+            sourceLanguage: localizedPayload.data.sourceLanguage,
+            translations: localizedPayload.data.translations,
             isGlobal: true,
             expiresAt,
             createdById: superAdmin.id,
