@@ -45,6 +45,32 @@ function isAnnouncementAudienceCompatibilityError(error: unknown) {
   );
 }
 
+function isAnnouncementLocalizationCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `sourceLanguage`") ||
+    error.message.includes("Unknown field `translations`") ||
+    error.message.includes("Unknown argument `sourceLanguage`") ||
+    error.message.includes("Unknown argument `translations`")
+  );
+}
+
+function isAnnouncementVisibilityCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+    return true;
+  }
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("Unknown field `isGlobal`") ||
+    error.message.includes("Unknown field `expiresAt`") ||
+    error.message.includes("Unknown argument `isGlobal`") ||
+    error.message.includes("Unknown argument `expiresAt`")
+  );
+}
+
 function isAnnouncementTableMissingError(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
     return true;
@@ -72,6 +98,32 @@ function isUserCountryStateCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `state`") ||
     error.message.includes("Unknown argument `studentId`")
   );
+}
+
+function isOverviewMetricCompatibilityError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2021" || error.code === "P2022" || error.code === "P2010";
+  }
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("unknown field") ||
+    message.includes("unknown argument") ||
+    message.includes("does not exist") ||
+    message.includes("relation") ||
+    message.includes("column")
+  );
+}
+
+async function safeOverviewMetricCount(getCount: () => Promise<number>) {
+  try {
+    return await getCount();
+  } catch (error) {
+    if (isOverviewMetricCompatibilityError(error)) {
+      return 0;
+    }
+    throw error;
+  }
 }
 
 export default async function DashboardPage({ params }: Props) {
@@ -158,7 +210,7 @@ export default async function DashboardPage({ params }: Props) {
   } catch (error) {
     if (isAnnouncementTableMissingError(error)) {
       announcementCount = 0;
-    } else if (isAnnouncementAudienceCompatibilityError(error)) {
+    } else if (isAnnouncementAudienceCompatibilityError(error) || isAnnouncementVisibilityCompatibilityError(error)) {
       try {
         if (isSuperAdmin) {
           announcementCount = await prisma.announcement.count();
@@ -192,6 +244,8 @@ export default async function DashboardPage({ params }: Props) {
           } catch (fallbackError) {
             if (isAnnouncementTableMissingError(fallbackError)) {
               announcementCount = 0;
+            } else if (isAnnouncementVisibilityCompatibilityError(fallbackError)) {
+              announcementCount = await prisma.announcement.count().catch(() => 0);
             } else {
               throw fallbackError;
             }
@@ -562,7 +616,11 @@ export default async function DashboardPage({ params }: Props) {
     } catch (error) {
       if (isAnnouncementTableMissingError(error)) {
         adminAnnouncements = [];
-      } else if (isAnnouncementAudienceCompatibilityError(error)) {
+      } else if (
+        isAnnouncementAudienceCompatibilityError(error) ||
+        isAnnouncementLocalizationCompatibilityError(error) ||
+        isAnnouncementVisibilityCompatibilityError(error)
+      ) {
         try {
           const legacyAnnouncements = await prisma.announcement.findMany({
             orderBy: { createdAt: "desc" },
@@ -571,16 +629,45 @@ export default async function DashboardPage({ params }: Props) {
               id: true,
               title: true,
               content: true,
-              sourceLanguage: true,
-              translations: true,
               expiresAt: true,
               createdAt: true,
             },
           });
-          adminAnnouncements = legacyAnnouncements.map((item) => ({ ...item, audience: "BOTH" }));
+          adminAnnouncements = legacyAnnouncements.map((item) => ({
+            ...item,
+            sourceLanguage: "en",
+            translations: null,
+            audience: "BOTH",
+          }));
         } catch (legacyError) {
           if (isAnnouncementTableMissingError(legacyError)) {
             adminAnnouncements = [];
+          } else if (isAnnouncementVisibilityCompatibilityError(legacyError)) {
+            try {
+              const minimalAnnouncements = await prisma.announcement.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 200,
+                select: {
+                  id: true,
+                  title: true,
+                  content: true,
+                  createdAt: true,
+                },
+              });
+              adminAnnouncements = minimalAnnouncements.map((item) => ({
+                ...item,
+                sourceLanguage: "en",
+                translations: null,
+                audience: "BOTH",
+                expiresAt: null,
+              }));
+            } catch (minimalError) {
+              if (isAnnouncementTableMissingError(minimalError)) {
+                adminAnnouncements = [];
+              } else {
+                throw minimalError;
+              }
+            }
           } else {
             throw legacyError;
           }
@@ -635,7 +722,11 @@ export default async function DashboardPage({ params }: Props) {
     } catch (error) {
       if (isAnnouncementTableMissingError(error)) {
         learnerAnnouncements = [];
-      } else if (isAnnouncementAudienceCompatibilityError(error)) {
+      } else if (
+        isAnnouncementAudienceCompatibilityError(error) ||
+        isAnnouncementLocalizationCompatibilityError(error) ||
+        isAnnouncementVisibilityCompatibilityError(error)
+      ) {
         try {
           const legacyAnnouncements = await prisma.announcement.findMany({
             where: {
@@ -648,16 +739,45 @@ export default async function DashboardPage({ params }: Props) {
               id: true,
               title: true,
               content: true,
-              sourceLanguage: true,
-              translations: true,
               expiresAt: true,
               createdAt: true,
             },
           });
-          learnerAnnouncements = legacyAnnouncements.map((item) => ({ ...item, audience: "BOTH" }));
+          learnerAnnouncements = legacyAnnouncements.map((item) => ({
+            ...item,
+            sourceLanguage: "en",
+            translations: null,
+            audience: "BOTH",
+          }));
         } catch (legacyError) {
           if (isAnnouncementTableMissingError(legacyError)) {
             learnerAnnouncements = [];
+          } else if (isAnnouncementVisibilityCompatibilityError(legacyError)) {
+            try {
+              const minimalAnnouncements = await prisma.announcement.findMany({
+                orderBy: { createdAt: "desc" },
+                take: 200,
+                select: {
+                  id: true,
+                  title: true,
+                  content: true,
+                  createdAt: true,
+                },
+              });
+              learnerAnnouncements = minimalAnnouncements.map((item) => ({
+                ...item,
+                sourceLanguage: "en",
+                translations: null,
+                audience: "BOTH",
+                expiresAt: null,
+              }));
+            } catch (minimalError) {
+              if (isAnnouncementTableMissingError(minimalError)) {
+                learnerAnnouncements = [];
+              } else {
+                throw minimalError;
+              }
+            }
           } else {
             throw legacyError;
           }
@@ -695,13 +815,22 @@ export default async function DashboardPage({ params }: Props) {
       } catch (error) {
         if (isAnnouncementTableMissingError(error)) {
           overviewAnnouncements = [];
-        } else if (isAnnouncementAudienceCompatibilityError(error)) {
+        } else if (
+          isAnnouncementAudienceCompatibilityError(error) ||
+          isAnnouncementLocalizationCompatibilityError(error) ||
+          isAnnouncementVisibilityCompatibilityError(error)
+        ) {
           try {
-            overviewAnnouncements = await prisma.announcement.findMany({
+            const legacyAnnouncements = await prisma.announcement.findMany({
               orderBy: { createdAt: "desc" },
               take: 6,
-              select: { id: true, title: true, sourceLanguage: true, translations: true },
+              select: { id: true, title: true },
             });
+            overviewAnnouncements = legacyAnnouncements.map((item) => ({
+              ...item,
+              sourceLanguage: "en",
+              translations: null,
+            }));
           } catch (legacyError) {
             if (isAnnouncementTableMissingError(legacyError)) {
               overviewAnnouncements = [];
@@ -728,20 +857,48 @@ export default async function DashboardPage({ params }: Props) {
       } catch (error) {
         if (isAnnouncementTableMissingError(error)) {
           overviewAnnouncements = [];
-        } else if (isAnnouncementAudienceCompatibilityError(error)) {
+        } else if (
+          isAnnouncementAudienceCompatibilityError(error) ||
+          isAnnouncementLocalizationCompatibilityError(error) ||
+          isAnnouncementVisibilityCompatibilityError(error)
+        ) {
           try {
-            overviewAnnouncements = await prisma.announcement.findMany({
+            const legacyAnnouncements = await prisma.announcement.findMany({
               where: {
                 isGlobal: true,
                 OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
               },
               orderBy: { createdAt: "desc" },
               take: 6,
-              select: { id: true, title: true, sourceLanguage: true, translations: true },
+              select: { id: true, title: true },
             });
+            overviewAnnouncements = legacyAnnouncements.map((item) => ({
+              ...item,
+              sourceLanguage: "en",
+              translations: null,
+            }));
           } catch (legacyError) {
             if (isAnnouncementTableMissingError(legacyError)) {
               overviewAnnouncements = [];
+            } else if (isAnnouncementVisibilityCompatibilityError(legacyError)) {
+              try {
+                const minimalAnnouncements = await prisma.announcement.findMany({
+                  orderBy: { createdAt: "desc" },
+                  take: 6,
+                  select: { id: true, title: true },
+                });
+                overviewAnnouncements = minimalAnnouncements.map((item) => ({
+                  ...item,
+                  sourceLanguage: "en",
+                  translations: null,
+                }));
+              } catch (minimalError) {
+                if (isAnnouncementTableMissingError(minimalError)) {
+                  overviewAnnouncements = [];
+                } else {
+                  throw minimalError;
+                }
+              }
             } else {
               throw legacyError;
             }
@@ -765,29 +922,33 @@ export default async function DashboardPage({ params }: Props) {
           .catch(() => [])
       : [];
 
-  const enrolledCoursesCount = await prisma.course.count({
-    where: isSuperAdmin
-      ? {}
-      : roleKey === "TEACHER"
-        ? { teacherId: session.user.id }
-        : roleKey === "DEPARTMENT_HEAD"
-          ? { id: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
-          : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
-  });
-  const assignmentCount = await prisma.assignment.count({
-    where:
-      roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
+  const enrolledCoursesCount = await safeOverviewMetricCount(async () =>
+    prisma.course.count({
+      where: isSuperAdmin
         ? {}
         : roleKey === "TEACHER"
-          ? { course: { teacherId: session.user.id } }
+          ? { teacherId: session.user.id }
           : roleKey === "DEPARTMENT_HEAD"
-            ? { courseId: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
-            : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
-  });
+            ? { id: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
+            : { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } },
+    })
+  );
+  const assignmentCount = await safeOverviewMetricCount(async () =>
+    prisma.assignment.count({
+      where:
+        roleKey === "SUPER_ADMIN" || roleKey === "ADMIN"
+          ? {}
+          : roleKey === "TEACHER"
+            ? { course: { teacherId: session.user.id } }
+            : roleKey === "DEPARTMENT_HEAD"
+              ? { courseId: { in: departmentHeadCourseIds.length ? departmentHeadCourseIds : ["__none__"] } }
+              : { course: { enrollments: { some: { studentId: session.user.id, status: "ACTIVE" } } } },
+    })
+  );
   const pendingGradeEditCount = isSuperAdmin
-    ? await prisma.gradeEditRequest.count({ where: { status: "PENDING" } })
+    ? await safeOverviewMetricCount(() => prisma.gradeEditRequest.count({ where: { status: "PENDING" } }))
     : roleKey === "TEACHER"
-      ? await prisma.gradeEditRequest.count({ where: { requestedById: session.user.id, status: "PENDING" } })
+      ? await safeOverviewMetricCount(() => prisma.gradeEditRequest.count({ where: { requestedById: session.user.id, status: "PENDING" } }))
       : 0;
   const pendingSubmissionCount =
     roleKey === "TEACHER"
