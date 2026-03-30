@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 
 type CreateBody = {
   title?: string;
+  degreeLevel?: string | null;
   description?: string | null;
   startDate?: string;
   endDate?: string;
@@ -31,6 +32,7 @@ type CreateBody = {
 type UpdateBody = {
   courseId?: string;
   title?: string;
+  degreeLevel?: string | null;
   description?: string | null;
   startDate?: string;
   endDate?: string;
@@ -45,6 +47,26 @@ type DeleteBody = {
 };
 
 type EnrollmentRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+const ALLOWED_DEGREE_LEVELS = [
+  "Bachelor’s Degree",
+  "Master’s Degree",
+  "Higher National Diploma (HND)",
+] as const;
+type DegreeLevelValue = (typeof ALLOWED_DEGREE_LEVELS)[number];
+const COURSE_SCHEMA_MISMATCH_MESSAGE =
+  "Course schema/client mismatch detected. Run latest Prisma migrations, run `npx prisma generate`, then restart your Next.js server.";
+
+function isDegreeLevelValue(value: string): value is DegreeLevelValue {
+  return (ALLOWED_DEGREE_LEVELS as readonly string[]).includes(value);
+}
+
+function prismaClientSupportsCourseDegreeLevel() {
+  const scalarFieldEnum = (
+    Prisma as unknown as { CourseScalarFieldEnum?: Record<string, string> }
+  ).CourseScalarFieldEnum;
+  if (!scalarFieldEnum) return false;
+  return Object.values(scalarFieldEnum).includes("degreeLevel");
+}
 
 function isCourseSchemaCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;
@@ -55,9 +77,12 @@ function isCourseSchemaCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `startDate`") ||
     error.message.includes("Unknown field `endDate`") ||
     error.message.includes("Unknown argument `endDate`") ||
+    error.message.includes("Unknown field `degreeLevel`") ||
+    error.message.includes("Unknown argument `degreeLevel`") ||
     error.message.includes("column \"visibility\" does not exist") ||
     error.message.includes("column \"startDate\" does not exist") ||
     error.message.includes("column \"endDate\" does not exist") ||
+    error.message.includes("column \"degreeLevel\" does not exist") ||
     (error.message.includes("CourseVisibility") && error.message.includes("Invalid value for argument"))
   );
 }
@@ -355,6 +380,7 @@ export async function GET(request: NextRequest) {
       id: string;
       code: string;
       title: string;
+      degreeLevel: string | null;
       description: string | null;
       startDate: Date | null;
       endDate: Date | null;
@@ -428,6 +454,7 @@ export async function GET(request: NextRequest) {
       });
       courses = legacyCourses.map((course) => ({
         ...course,
+        degreeLevel: null,
         startDate: null,
         endDate: null,
         visibility: COURSE_VISIBILITY_PUBLISHED,
@@ -524,6 +551,7 @@ export async function GET(request: NextRequest) {
           id: course.id,
           code: course.code,
           title: course.title,
+          degreeLevel: course.degreeLevel ?? null,
           description: course.description,
           startDate: course.startDate?.toISOString() ?? null,
           endDate: course.endDate?.toISOString() ?? null,
@@ -584,6 +612,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as CreateBody;
     const title = body.title?.trim() ?? "";
+    const degreeLevelInput = typeof body.degreeLevel === "string" ? body.degreeLevel.trim() : "";
     const description = normalizeDescription(body.description);
     const startDate = parseCourseDateInput(body.startDate);
     const endDate = parseCourseDateInput(body.endDate);
@@ -592,6 +621,12 @@ export async function POST(request: NextRequest) {
 
     const titleError = validateCourseTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
+    if (!degreeLevelInput) {
+      return NextResponse.json({ error: "Degree level is required." }, { status: 400 });
+    }
+    if (!isDegreeLevelValue(degreeLevelInput)) {
+      return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
+    }
     if (!startDate || !endDate) {
       return NextResponse.json({ error: "Course start date and end date are required." }, { status: 400 });
     }
@@ -620,6 +655,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: departmentHeadsValidation.error }, { status: departmentHeadsValidation.status });
     }
     await ensureDepartmentHeadCourseSchema();
+    const canWriteDegreeLevelWithPrismaClient = prismaClientSupportsCourseDegreeLevel();
 
     const code = await generateUniqueCourseCode(title);
 
@@ -628,6 +664,7 @@ export async function POST(request: NextRequest) {
         data: {
           code,
           title,
+          ...(canWriteDegreeLevelWithPrismaClient ? { degreeLevel: degreeLevelInput } : {}),
           description,
           startDate,
           endDate,
@@ -661,6 +698,14 @@ export async function POST(request: NextRequest) {
             ON CONFLICT ("courseId","departmentHeadId") DO NOTHING
           `;
         }
+      }
+
+      if (!canWriteDegreeLevelWithPrismaClient) {
+        await tx.$executeRaw`
+          UPDATE "Course"
+          SET "degreeLevel" = ${degreeLevelInput}
+          WHERE "id" = ${course.id}
+        `.catch(() => {});
       }
 
       return course;
@@ -714,6 +759,7 @@ export async function POST(request: NextRequest) {
           id: created.id,
           code: created.code,
           title: created.title,
+          degreeLevel: degreeLevelInput,
           description: created.description,
           startDate: created.startDate?.toISOString() ?? null,
           endDate: created.endDate?.toISOString() ?? null,
@@ -738,10 +784,7 @@ export async function POST(request: NextRequest) {
     }
     if (isCourseSchemaCompatibilityError(error)) {
       return NextResponse.json(
-        {
-          error:
-            "Course schema is outdated in the database. Please run latest Prisma migrations and regenerate Prisma client.",
-        },
+        { error: COURSE_SCHEMA_MISMATCH_MESSAGE },
         { status: 503 }
       );
     }
@@ -773,6 +816,7 @@ export async function PATCH(request: NextRequest) {
       | {
           id: string;
           title: string;
+          degreeLevel: string | null;
           description: string | null;
           startDate: Date | null;
           endDate: Date | null;
@@ -784,7 +828,16 @@ export async function PATCH(request: NextRequest) {
     try {
       const result = await prisma.course.findUnique({
         where: { id: courseId },
-        select: { id: true, title: true, description: true, startDate: true, endDate: true, teacherId: true, visibility: true },
+        select: {
+          id: true,
+          title: true,
+          degreeLevel: true,
+          description: true,
+          startDate: true,
+          endDate: true,
+          teacherId: true,
+          visibility: true,
+        },
       });
       existing = result ? { ...result, legacySchema: false } : null;
     } catch (error) {
@@ -796,6 +849,7 @@ export async function PATCH(request: NextRequest) {
       existing = legacy
         ? {
             ...legacy,
+            degreeLevel: null,
             startDate: null,
             endDate: null,
             visibility: COURSE_VISIBILITY_PUBLISHED,
@@ -808,6 +862,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const data: Prisma.CourseUpdateInput = {};
+    const canWriteDegreeLevelWithPrismaClient = prismaClientSupportsCourseDegreeLevel();
+    let pendingDegreeLevelUpdate: string | null | undefined = undefined;
 
     if (body.title !== undefined) {
       const title = body.title.trim();
@@ -824,6 +880,28 @@ export async function PATCH(request: NextRequest) {
         );
       }
       data.description = normalizeDescription(body.description);
+    }
+
+    if (body.degreeLevel !== undefined) {
+      if (body.degreeLevel === null || body.degreeLevel === "") {
+        if (canWriteDegreeLevelWithPrismaClient) {
+          data.degreeLevel = null;
+        } else {
+          pendingDegreeLevelUpdate = null;
+        }
+      } else if (typeof body.degreeLevel === "string") {
+        const normalizedDegreeLevel = body.degreeLevel.trim();
+        if (!isDegreeLevelValue(normalizedDegreeLevel)) {
+          return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
+        }
+        if (canWriteDegreeLevelWithPrismaClient) {
+          data.degreeLevel = normalizedDegreeLevel;
+        } else {
+          pendingDegreeLevelUpdate = normalizedDegreeLevel;
+        }
+      } else {
+        return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
+      }
     }
 
     let nextStartDate = existing.startDate;
@@ -923,15 +1001,10 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (existing.legacySchema) {
-        return tx.course.update({
+        const updatedCourse = await tx.course.update({
           where: { id: courseId },
           data,
-          select: {
-            id: true,
-            code: true,
-            title: true,
-            description: true,
-            createdAt: true,
+          include: {
             teacher: {
               select: { id: true, name: true, email: true, status: true },
             },
@@ -949,9 +1022,17 @@ export async function PATCH(request: NextRequest) {
             },
           },
         });
+        if (pendingDegreeLevelUpdate !== undefined) {
+          await tx.$executeRaw`
+            UPDATE "Course"
+            SET "degreeLevel" = ${pendingDegreeLevelUpdate}
+            WHERE "id" = ${courseId}
+          `.catch(() => {});
+        }
+        return updatedCourse;
       }
 
-      return tx.course.update({
+      const updatedCourse = await tx.course.update({
         where: { id: courseId },
         data,
         include: {
@@ -972,6 +1053,14 @@ export async function PATCH(request: NextRequest) {
           },
         },
       });
+      if (pendingDegreeLevelUpdate !== undefined) {
+        await tx.$executeRaw`
+          UPDATE "Course"
+          SET "degreeLevel" = ${pendingDegreeLevelUpdate}
+          WHERE "id" = ${courseId}
+        `.catch(() => {});
+      }
+      return updatedCourse;
     });
 
     const updatedStartDate =
@@ -982,6 +1071,12 @@ export async function PATCH(request: NextRequest) {
       "visibility" in updated
         ? (updated.visibility as CourseVisibilityValue | undefined) ?? COURSE_VISIBILITY_PUBLISHED
         : COURSE_VISIBILITY_PUBLISHED;
+    const updatedDegreeLevel =
+      pendingDegreeLevelUpdate !== undefined
+        ? pendingDegreeLevelUpdate
+        : "degreeLevel" in updated
+          ? (updated.degreeLevel as string | null | undefined) ?? null
+          : null;
 
     return NextResponse.json({
       ok: true,
@@ -989,6 +1084,7 @@ export async function PATCH(request: NextRequest) {
         id: updated.id,
         code: updated.code,
         title: updated.title,
+        degreeLevel: updatedDegreeLevel,
         description: updated.description,
         startDate: existing.legacySchema ? null : updatedStartDate?.toISOString() ?? null,
         endDate: existing.legacySchema ? null : updatedEndDate?.toISOString() ?? null,
@@ -1017,10 +1113,7 @@ export async function PATCH(request: NextRequest) {
     }
     if (isCourseSchemaCompatibilityError(error)) {
       return NextResponse.json(
-        {
-          error:
-            "Course schema is outdated in the database. Please run latest Prisma migrations and regenerate Prisma client.",
-        },
+        { error: COURSE_SCHEMA_MISMATCH_MESSAGE },
         { status: 503 }
       );
     }
@@ -1068,10 +1161,7 @@ export async function DELETE(request: NextRequest) {
     }
     if (isCourseSchemaCompatibilityError(error)) {
       return NextResponse.json(
-        {
-          error:
-            "Course schema is outdated in the database. Please run latest Prisma migrations and regenerate Prisma client.",
-        },
+        { error: COURSE_SCHEMA_MISMATCH_MESSAGE },
         { status: 503 }
       );
     }

@@ -396,7 +396,7 @@ export default async function DashboardDetailPage({ params }: Props) {
   }
 
   const routeParams = await params;
-  const module = routeParams.module;
+  const moduleSlug = routeParams.module;
   const recordId = routeParams.id;
   const roleKey = String(session.user.role ?? "");
   const isSuperAdmin = isSuperAdminRole(roleKey);
@@ -404,7 +404,7 @@ export default async function DashboardDetailPage({ params }: Props) {
   const isTeacher = isTeacherRole(roleKey);
   const isStudent = roleKey === "STUDENT";
 
-  if (module === "courses" || module === "learning") {
+  if (moduleSlug === "courses" || moduleSlug === "learning") {
     const departmentHeadCourseIds = isDepartmentHead ? await getDepartmentHeadCourseIds(session.user.id) : [];
     const departmentHeadCourseId =
       isDepartmentHead && departmentHeadCourseIds.includes(recordId) ? recordId : "__none__";
@@ -416,7 +416,7 @@ export default async function DashboardDetailPage({ params }: Props) {
         : isTeacher
           ? { id: recordId, teacherId: session.user.id }
             : isStudent
-              ? module === "learning"
+              ? moduleSlug === "learning"
                 ? {
                     id: recordId,
                     visibility: COURSE_VISIBILITY_PUBLISHED,
@@ -463,8 +463,18 @@ export default async function DashboardDetailPage({ params }: Props) {
     });
 
     if (!course) {
-      redirect(`/dashboard/${module === "learning" ? "learning" : "courses"}`);
+      redirect(`/dashboard/${moduleSlug === "learning" ? "learning" : "courses"}`);
     }
+
+    const courseDegreeLevel = await prisma
+      .$queryRaw<Array<{ degreeLevel: string | null }>>`
+        SELECT "degreeLevel"
+        FROM "Course"
+        WHERE "id" = ${course.id}
+        LIMIT 1
+      `
+      .then((rows) => rows[0]?.degreeLevel ?? null)
+      .catch(() => null);
 
     const [teachers, students, departmentHeads, enrolledStudents, assignedDepartmentHeads] = isSuperAdmin
       ? await Promise.all([
@@ -495,6 +505,7 @@ export default async function DashboardDetailPage({ params }: Props) {
       id: course.id,
       code: course.code,
       title: course.title,
+      degreeLevel: courseDegreeLevel,
       description: course.description,
       startDate: course.startDate ? course.startDate.toISOString() : null,
       endDate: course.endDate ? course.endDate.toISOString() : null,
@@ -518,7 +529,7 @@ export default async function DashboardDetailPage({ params }: Props) {
 
     return (
       <main className="min-h-screen lg:flex">
-        <DashboardSidebar role={roleKey} selectedSlug={module} />
+        <DashboardSidebar role={roleKey} selectedSlug={moduleSlug} />
         <div className="flex-1 space-y-6 p-6 lg:p-8">
           <DashboardTopbar name={session.user.name} email={session.user.email} role={roleKey} />
 
@@ -542,7 +553,7 @@ export default async function DashboardDetailPage({ params }: Props) {
                   />
                 ) : null}
                 <Link
-                  href={`/dashboard/${module === "learning" ? "learning" : "courses"}`}
+                  href={`/dashboard/${moduleSlug === "learning" ? "learning" : "courses"}`}
                   aria-label="Back to courses"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#9bbfed] bg-white text-[#1f518f] shadow-sm"
                 >
@@ -558,6 +569,7 @@ export default async function DashboardDetailPage({ params }: Props) {
             <article className="brand-card p-5">
               <p className="brand-section-title">Course Summary</p>
               <div className="mt-3 space-y-2 text-sm text-[#0b3e81]">
+                <p><span className="font-semibold">Degree Level:</span> {courseDegreeLevel ?? "-"}</p>
                 <p><span className="font-semibold">Visibility:</span> {course.visibility}</p>
                 <p><span className="font-semibold">Duration:</span> {formatDate(course.startDate)} to {formatDate(course.endDate)}</p>
                 <p><span className="font-semibold">Teacher:</span> {course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</p>
@@ -577,7 +589,7 @@ export default async function DashboardDetailPage({ params }: Props) {
             <article className="brand-card p-5">
               <p className="brand-section-title">Quick Actions</p>
               <div className="mt-3 grid gap-2 text-sm">
-                {module === "courses" && canViewStructure ? (
+                {moduleSlug === "courses" && canViewStructure ? (
                   <Link
                     href={`/dashboard/courses/${course.id}/structure`}
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
@@ -685,7 +697,7 @@ export default async function DashboardDetailPage({ params }: Props) {
     );
   }
 
-  if (module === "assessment") {
+  if (moduleSlug === "assessment") {
     const departmentHeadCourseIds = isDepartmentHead ? await getDepartmentHeadCourseIds(session.user.id) : [];
 
     const assignment = await prisma.assignment.findFirst({
@@ -716,7 +728,7 @@ export default async function DashboardDetailPage({ params }: Props) {
     });
 
     if (!assignment) {
-      redirect(`/dashboard/${module}`);
+      redirect(`/dashboard/${moduleSlug}`);
     }
 
     const [config, submissionCount, submissions] = await Promise.all([
@@ -745,7 +757,7 @@ export default async function DashboardDetailPage({ params }: Props) {
 
     return (
       <main className="min-h-screen lg:flex">
-        <DashboardSidebar role={roleKey} selectedSlug={module} />
+        <DashboardSidebar role={roleKey} selectedSlug={moduleSlug} />
         <div className="flex-1 space-y-6 p-6 lg:p-8">
           <DashboardTopbar name={session.user.name} email={session.user.email} role={roleKey} />
 
@@ -770,14 +782,14 @@ export default async function DashboardDetailPage({ params }: Props) {
                 ) : null}
                 {isStudent ? (
                   <Link
-                    href={`/dashboard/${module}/${assignment.id}/submit`}
+                    href={`/dashboard/${moduleSlug}/${assignment.id}/submit`}
                     className="btn-brand-primary px-2 py-2 text-sm font-semibold no-underline"
                   >
                     View Assignment
                   </Link>
                 ) : null}
                 <Link
-                  href={`/dashboard/${module}`}
+                  href={`/dashboard/${moduleSlug}`}
                   aria-label="Back to assessment"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#9bbfed] bg-white text-[#1f518f] shadow-sm"
                 >
@@ -853,7 +865,7 @@ export default async function DashboardDetailPage({ params }: Props) {
           </section>
 
           <AssignmentSubmissionsTable
-            module={module}
+            module={moduleSlug}
             assignmentId={assignment.id}
             submissions={serializedSubmissions}
             canGrade={canGrade}
@@ -864,5 +876,5 @@ export default async function DashboardDetailPage({ params }: Props) {
     );
   }
 
-  redirect(`/dashboard/${module}`);
+  redirect(`/dashboard/${moduleSlug}`);
 }

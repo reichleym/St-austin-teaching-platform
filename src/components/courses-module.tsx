@@ -8,11 +8,18 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import { useLanguage } from "@/components/language-provider";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
+const DEGREE_LEVEL_OPTIONS = [
+  "Bachelor’s Degree",
+  "Master’s Degree",
+  "Higher National Diploma (HND)",
+] as const;
+type DegreeLevelValue = (typeof DEGREE_LEVEL_OPTIONS)[number];
 
 type CourseItem = {
   id: string;
   code: string;
   title: string;
+  degreeLevel: string | null;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -148,6 +155,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [showCreate, setShowCreate] = useState(false);
   const [editCourseId, setEditCourseId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
+  const [createDegreeLevel, setCreateDegreeLevel] = useState<DegreeLevelValue | "">("");
   const [createDescription, setCreateDescription] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
   const [createEndDate, setCreateEndDate] = useState("");
@@ -161,6 +169,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [createPending, setCreatePending] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
+  const [editDegreeLevel, setEditDegreeLevel] = useState<DegreeLevelValue | "">("");
   const [editDescription, setEditDescription] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -235,6 +244,11 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
     if (!selected) return;
 
     setEditTitle(selected.title);
+    setEditDegreeLevel(
+      selected.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(selected.degreeLevel as DegreeLevelValue)
+        ? (selected.degreeLevel as DegreeLevelValue)
+        : ""
+    );
     setEditDescription(selected.description ?? "");
     setEditStartDate(toDateInputValue(selected.startDate));
     setEditEndDate(toDateInputValue(selected.endDate));
@@ -363,6 +377,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: createTitle,
+          degreeLevel: createDegreeLevel,
           description: createDescription,
           startDate: createStartDate,
           endDate: createEndDate,
@@ -383,6 +398,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
 
       setShowCreate(false);
       setCreateTitle("");
+      setCreateDegreeLevel("");
       setCreateDescription("");
       setCreateStartDate("");
       setCreateEndDate("");
@@ -417,6 +433,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         body: JSON.stringify({
           courseId: editCourseId,
           title: editTitle,
+          degreeLevel: editDegreeLevel,
           description: editDescription,
           startDate: editStartDate,
           endDate: editEndDate,
@@ -661,6 +678,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                       <td className="px-3 py-2 font-semibold">{course.code}</td>
                       <td className="px-3 py-2">
                         <p>{course.title}</p>
+                        {course.degreeLevel ? <p className="mt-1 text-xs text-[#3768ac]">Degree Level: {course.degreeLevel}</p> : null}
                         {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                       </td>
                       <td className="px-3 py-2">
@@ -764,6 +782,24 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
               <label className="grid gap-1.5">
                 <span className="brand-label">{t("label.courseTitle")}</span>
                 <input className="brand-input" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} maxLength={120} required />
+              </label>
+              <label className="grid gap-1.5 md:max-w-sm">
+                <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
+                <select
+                  className="brand-input"
+                  value={createDegreeLevel}
+                  onChange={(event) => setCreateDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
+                  required
+                >
+                  <option value="" disabled>
+                    Select degree level
+                  </option>
+                  {DEGREE_LEVEL_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
@@ -991,6 +1027,23 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
             <label className="grid gap-1.5">
               <span className="brand-label">{t("label.courseTitle")}</span>
               <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} maxLength={120} required />
+            </label>
+            <label className="grid gap-1.5 md:max-w-sm">
+              <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
+              <select
+                className="brand-input"
+                value={editDegreeLevel}
+                onChange={(event) => setEditDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
+              >
+                <option value="">
+                  Select degree level
+                </option>
+                {DEGREE_LEVEL_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1.5">

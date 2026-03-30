@@ -227,6 +227,7 @@ model Course {
   id                 String              @id @default(cuid())
   code               String              @unique
   title              String
+  degreeLevel        String?
   description        String?
   startDate          DateTime?
   endDate            DateTime?

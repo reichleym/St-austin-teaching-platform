@@ -19,6 +19,7 @@ type CourseSnapshot = {
   id: string;
   code: string;
   title: string;
+  degreeLevel: string | null;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -27,6 +28,13 @@ type CourseSnapshot = {
   studentIds: string[];
   departmentHeadIds: string[];
 };
+
+const DEGREE_LEVEL_OPTIONS = [
+  "Bachelor’s Degree",
+  "Master’s Degree",
+  "Higher National Diploma (HND)",
+] as const;
+type DegreeLevelValue = (typeof DEGREE_LEVEL_OPTIONS)[number];
 
 type Props = {
   course: CourseSnapshot;
@@ -51,6 +59,11 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const [pending, setPending] = useState(false);
 
   const [title, setTitle] = useState(course.title);
+  const [degreeLevel, setDegreeLevel] = useState<DegreeLevelValue | "">(
+    course.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(course.degreeLevel as DegreeLevelValue)
+      ? (course.degreeLevel as DegreeLevelValue)
+      : ""
+  );
   const [description, setDescription] = useState(course.description ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(course.startDate));
   const [endDate, setEndDate] = useState(toDateInputValue(course.endDate));
@@ -85,6 +98,11 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const openModal = () => {
     setError("");
     setTitle(course.title);
+    setDegreeLevel(
+      course.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(course.degreeLevel as DegreeLevelValue)
+        ? (course.degreeLevel as DegreeLevelValue)
+        : ""
+    );
     setDescription(course.description ?? "");
     setStartDate(toDateInputValue(course.startDate));
     setEndDate(toDateInputValue(course.endDate));
@@ -186,6 +204,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
         body: JSON.stringify({
           courseId: course.id,
           title: nextTitle,
+          degreeLevel: degreeLevel || null,
           description: description.trim(),
           startDate,
           endDate,
@@ -233,6 +252,24 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                   <label className="grid gap-1.5">
                     <span className="brand-label">{t("label.courseTitle")}</span>
                     <input className="brand-input" value={title} onChange={(event) => setTitle(event.currentTarget.value)} maxLength={120} required />
+                  </label>
+                  <label className="grid gap-1.5 md:max-w-sm">
+                    <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
+                    <select
+                      className="brand-input"
+                      value={degreeLevel}
+                      onChange={(event) => setDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
+                      required
+                    >
+                      <option value="" disabled>
+                        Select degree level
+                      </option>
+                      {DEGREE_LEVEL_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-1.5">
