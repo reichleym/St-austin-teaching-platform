@@ -20,6 +20,7 @@ type CourseSnapshot = {
   code: string;
   title: string;
   degreeLevel: string | null;
+  fieldOfStudy: string | null;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -64,6 +65,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
       ? (course.degreeLevel as DegreeLevelValue)
       : ""
   );
+  const [fieldOfStudy, setFieldOfStudy] = useState(course.fieldOfStudy ?? "");
   const [description, setDescription] = useState(course.description ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(course.startDate));
   const [endDate, setEndDate] = useState(toDateInputValue(course.endDate));
@@ -103,6 +105,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
         ? (course.degreeLevel as DegreeLevelValue)
         : ""
     );
+    setFieldOfStudy(course.fieldOfStudy ?? "");
     setDescription(course.description ?? "");
     setStartDate(toDateInputValue(course.startDate));
     setEndDate(toDateInputValue(course.endDate));
@@ -188,6 +191,10 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
       setError(t("error.courseTitleRequired"));
       return;
     }
+    if (!fieldOfStudy.trim()) {
+      setError("Field of study is required.");
+      return;
+    }
     if (!startDate || !endDate) {
       setError(t("error.courseDatesRequired"));
       return;
@@ -205,6 +212,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
           courseId: course.id,
           title: nextTitle,
           degreeLevel: degreeLevel || null,
+          fieldOfStudy: fieldOfStudy.trim(),
           description: description.trim(),
           startDate,
           endDate,
@@ -270,6 +278,16 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label className="grid gap-1.5 md:max-w-sm">
+                    <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
+                    <input
+                      className="brand-input"
+                      value={fieldOfStudy}
+                      onChange={(event) => setFieldOfStudy(event.currentTarget.value)}
+                      maxLength={120}
+                      required
+                    />
                   </label>
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-1.5">

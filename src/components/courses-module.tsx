@@ -20,6 +20,7 @@ type CourseItem = {
   code: string;
   title: string;
   degreeLevel: string | null;
+  fieldOfStudy: string | null;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -156,6 +157,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [editCourseId, setEditCourseId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
   const [createDegreeLevel, setCreateDegreeLevel] = useState<DegreeLevelValue | "">("");
+  const [createFieldOfStudy, setCreateFieldOfStudy] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
   const [createEndDate, setCreateEndDate] = useState("");
@@ -170,6 +172,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
 
   const [editTitle, setEditTitle] = useState("");
   const [editDegreeLevel, setEditDegreeLevel] = useState<DegreeLevelValue | "">("");
+  const [editFieldOfStudy, setEditFieldOfStudy] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -249,6 +252,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         ? (selected.degreeLevel as DegreeLevelValue)
         : ""
     );
+    setEditFieldOfStudy(selected.fieldOfStudy ?? "");
     setEditDescription(selected.description ?? "");
     setEditStartDate(toDateInputValue(selected.startDate));
     setEditEndDate(toDateInputValue(selected.endDate));
@@ -378,6 +382,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         body: JSON.stringify({
           title: createTitle,
           degreeLevel: createDegreeLevel,
+          fieldOfStudy: createFieldOfStudy,
           description: createDescription,
           startDate: createStartDate,
           endDate: createEndDate,
@@ -399,6 +404,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
       setShowCreate(false);
       setCreateTitle("");
       setCreateDegreeLevel("");
+      setCreateFieldOfStudy("");
       setCreateDescription("");
       setCreateStartDate("");
       setCreateEndDate("");
@@ -434,6 +440,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
           courseId: editCourseId,
           title: editTitle,
           degreeLevel: editDegreeLevel,
+          fieldOfStudy: editFieldOfStudy,
           description: editDescription,
           startDate: editStartDate,
           endDate: editEndDate,
@@ -679,6 +686,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                       <td className="px-3 py-2">
                         <p>{course.title}</p>
                         {course.degreeLevel ? <p className="mt-1 text-xs text-[#3768ac]">Degree Level: {course.degreeLevel}</p> : null}
+                        {course.fieldOfStudy ? <p className="mt-1 text-xs text-[#3768ac]">Field of Study: {course.fieldOfStudy}</p> : null}
                         {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                       </td>
                       <td className="px-3 py-2">
@@ -800,6 +808,16 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="grid gap-1.5 md:max-w-sm">
+                <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
+                <input
+                  className="brand-input"
+                  value={createFieldOfStudy}
+                  onChange={(event) => setCreateFieldOfStudy(event.currentTarget.value)}
+                  maxLength={120}
+                  required
+                />
               </label>
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
@@ -1044,6 +1062,16 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="grid gap-1.5 md:max-w-sm">
+              <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
+              <input
+                className="brand-input"
+                value={editFieldOfStudy}
+                onChange={(event) => setEditFieldOfStudy(event.currentTarget.value)}
+                maxLength={120}
+                required
+              />
             </label>
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1.5">

@@ -476,6 +476,16 @@ export default async function DashboardDetailPage({ params }: Props) {
       .then((rows) => rows[0]?.degreeLevel ?? null)
       .catch(() => null);
 
+    const courseFieldOfStudy = await prisma
+      .$queryRaw<Array<{ fieldOfStudy: string | null }>>`
+        SELECT "fieldOfStudy"
+        FROM "Course"
+        WHERE "id" = ${course.id}
+        LIMIT 1
+      `
+      .then((rows) => rows[0]?.fieldOfStudy ?? null)
+      .catch(() => null);
+
     const [teachers, students, departmentHeads, enrolledStudents, assignedDepartmentHeads] = isSuperAdmin
       ? await Promise.all([
           prisma.user.findMany({
@@ -506,6 +516,7 @@ export default async function DashboardDetailPage({ params }: Props) {
       code: course.code,
       title: course.title,
       degreeLevel: courseDegreeLevel,
+      fieldOfStudy: courseFieldOfStudy,
       description: course.description,
       startDate: course.startDate ? course.startDate.toISOString() : null,
       endDate: course.endDate ? course.endDate.toISOString() : null,
@@ -570,6 +581,7 @@ export default async function DashboardDetailPage({ params }: Props) {
               <p className="brand-section-title">Course Summary</p>
               <div className="mt-3 space-y-2 text-sm text-[#0b3e81]">
                 <p><span className="font-semibold">Degree Level:</span> {courseDegreeLevel ?? "-"}</p>
+                <p><span className="font-semibold">Field of Study:</span> {courseFieldOfStudy ?? "-"}</p>
                 <p><span className="font-semibold">Visibility:</span> {course.visibility}</p>
                 <p><span className="font-semibold">Duration:</span> {formatDate(course.startDate)} to {formatDate(course.endDate)}</p>
                 <p><span className="font-semibold">Teacher:</span> {course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</p>

@@ -228,6 +228,7 @@ model Course {
   code               String              @unique
   title              String
   degreeLevel        String?
+  fieldOfStudy       String?
   description        String?
   startDate          DateTime?
   endDate            DateTime?
