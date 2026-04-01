@@ -80,6 +80,9 @@ function prismaClientSupportsCourseFieldOfStudy() {
 }
 
 function isCourseSchemaCompatibilityError(error: unknown) {
+  if (error && typeof error === "object" && "code" in error && error.code === "P2022") {
+    return true;
+  }
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes("Unknown field `visibility`") ||
@@ -97,8 +100,57 @@ function isCourseSchemaCompatibilityError(error: unknown) {
     error.message.includes("column \"endDate\" does not exist") ||
     error.message.includes("column \"degreeLevel\" does not exist") ||
     error.message.includes("column \"fieldOfStudy\" does not exist") ||
+    error.message.includes("does not exist in the current database") ||
     (error.message.includes("CourseVisibility") && error.message.includes("Invalid value for argument"))
   );
+}
+
+async function ensureCourseMetadataSchema() {
+  await prisma.$executeRawUnsafe(`
+ALTER TABLE "Course"
+ADD COLUMN IF NOT EXISTS "degreeLevel" TEXT;
+ALTER TABLE "Course"
+ADD COLUMN IF NOT EXISTS "fieldOfStudy" TEXT;
+  `);
+}
+
+async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy") {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'Course'
+          AND column_name = ${columnName}
+      ) AS "exists"
+    `;
+    return Boolean(rows[0]?.exists);
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCourseMetadataWriteSupport() {
+  const clientSupportsDegreeLevel = prismaClientSupportsCourseDegreeLevel();
+  const clientSupportsFieldOfStudy = prismaClientSupportsCourseFieldOfStudy();
+
+  if (!clientSupportsDegreeLevel && !clientSupportsFieldOfStudy) {
+    return {
+      canWriteDegreeLevelWithPrismaClient: false,
+      canWriteFieldOfStudyWithPrismaClient: false,
+    };
+  }
+
+  const [hasDegreeLevelColumn, hasFieldOfStudyColumn] = await Promise.all([
+    doesCourseColumnExist("degreeLevel"),
+    doesCourseColumnExist("fieldOfStudy"),
+  ]);
+
+  return {
+    canWriteDegreeLevelWithPrismaClient: clientSupportsDegreeLevel && hasDegreeLevelColumn,
+    canWriteFieldOfStudyWithPrismaClient: clientSupportsFieldOfStudy && hasFieldOfStudyColumn,
+  };
 }
 
 function getCourseAccessState(input: {
@@ -328,6 +380,8 @@ export async function GET(request: NextRequest) {
     const scope = request.nextUrl.searchParams.get("scope")?.trim() ?? "";
     const enrolledOnly = scope === "enrolled";
     const isDepartmentHead = role === Role.DEPARTMENT_HEAD;
+
+    await ensureCourseMetadataSchema().catch(() => {});
 
     if (isSuperAdminRole(role) || isDepartmentHead) {
       await ensureDepartmentHeadCourseSchema();
@@ -681,9 +735,10 @@ export async function POST(request: NextRequest) {
     if (!departmentHeadsValidation.ok) {
       return NextResponse.json({ error: departmentHeadsValidation.error }, { status: departmentHeadsValidation.status });
     }
+    await ensureCourseMetadataSchema().catch(() => {});
     await ensureDepartmentHeadCourseSchema();
-    const canWriteDegreeLevelWithPrismaClient = prismaClientSupportsCourseDegreeLevel();
-    const canWriteFieldOfStudyWithPrismaClient = prismaClientSupportsCourseFieldOfStudy();
+    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient } =
+      await resolveCourseMetadataWriteSupport();
 
     const code = await generateUniqueCourseCode(title);
 
@@ -844,6 +899,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "courseId is required." }, { status: 400 });
     }
 
+    await ensureCourseMetadataSchema().catch(() => {});
+
     const access = await canManageCourse(courseId, user);
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status });
@@ -902,8 +959,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const data: Prisma.CourseUpdateInput = {};
-    const canWriteDegreeLevelWithPrismaClient = prismaClientSupportsCourseDegreeLevel();
-    const canWriteFieldOfStudyWithPrismaClient = prismaClientSupportsCourseFieldOfStudy();
+    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient } =
+      await resolveCourseMetadataWriteSupport();
     let pendingDegreeLevelUpdate: string | null | undefined = undefined;
     let pendingFieldOfStudyUpdate: string | null | undefined = undefined;
 
@@ -1226,6 +1283,8 @@ export async function DELETE(request: NextRequest) {
     if (!courseId) {
       return NextResponse.json({ error: "courseId is required." }, { status: 400 });
     }
+
+    await ensureCourseMetadataSchema().catch(() => {});
 
     const access = await canManageCourse(courseId, user);
     if (!access.ok) {
