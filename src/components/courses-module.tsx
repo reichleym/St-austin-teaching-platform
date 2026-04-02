@@ -14,6 +14,13 @@ const DEGREE_LEVEL_OPTIONS = [
   "Higher National Diploma (HND)",
 ] as const;
 type DegreeLevelValue = (typeof DEGREE_LEVEL_OPTIONS)[number];
+type ProgramDetails = {
+  overview: string | null;
+  tuitionAndFees: string | null;
+  curriculum: string[];
+  admissionRequirements: string[];
+  careerOpportunities: string[];
+};
 
 type CourseItem = {
   id: string;
@@ -22,6 +29,7 @@ type CourseItem = {
   degreeLevel: string | null;
   fieldOfStudy: string | null;
   description: string | null;
+  programDetails: ProgramDetails | null;
   startDate: string | null;
   endDate: string | null;
   visibility: "DRAFT" | "PUBLISHED";
@@ -688,6 +696,16 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                         {course.degreeLevel ? <p className="mt-1 text-xs text-[#3768ac]">Degree Level: {course.degreeLevel}</p> : null}
                         {course.fieldOfStudy ? <p className="mt-1 text-xs text-[#3768ac]">Field of Study: {course.fieldOfStudy}</p> : null}
                         {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
+                        {course.programDetails?.tuitionAndFees ? (
+                          <p className="mt-1 text-xs text-[#3768ac]">Tuition & Fees: {course.programDetails.tuitionAndFees}</p>
+                        ) : null}
+                        {course.programDetails ? (
+                          <p className="mt-1 text-xs text-[#3768ac]">
+                            Program: {course.programDetails.curriculum.length} curriculum,{" "}
+                            {course.programDetails.admissionRequirements.length} requirements,{" "}
+                            {course.programDetails.careerOpportunities.length} careers
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2">
                         {formatDurationYmd(course.startDate, course.endDate)}
@@ -744,6 +762,14 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                                   {t("action.manageModules")}
                                 </Link>
                               ) : null}
+                              {/* {canManage ? (
+                                <Link
+                                  href={`/dashboard/courses/${course.id}/program-content`}
+                                  className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
+                                >
+                                  Program Content
+                                </Link>
+                              ) : null} */}
                               {canManage ? (
                                 <button
                                   type="button"

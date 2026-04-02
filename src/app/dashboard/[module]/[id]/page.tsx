@@ -49,6 +49,14 @@ type SubmissionListItem = {
   quizAnswers?: Prisma.JsonValue | null;
 };
 
+type ProgramDetails = {
+  overview: string | null;
+  tuitionAndFees: string | null;
+  curriculum: string[];
+  admissionRequirements: string[];
+  careerOpportunities: string[];
+};
+
 const formatDate = (value?: Date | string | null) => {
   if (!value) return "-";
   const parsed = typeof value === "string" ? new Date(value) : value;
@@ -78,6 +86,48 @@ const formatEnumLabel = (value: string | null | undefined) => {
       return `${segment[0]}${segment.slice(1).toLowerCase()}`;
     })
     .join(" ");
+};
+
+const normalizeProgramText = (input: unknown) => {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  return value ? value : null;
+};
+
+const normalizeProgramList = (input: unknown) => {
+  if (!Array.isArray(input)) return [] as string[];
+  return input
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 50);
+};
+
+const parseProgramContent = (raw: string | null | undefined): ProgramDetails | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const value = parsed as Record<string, unknown>;
+    const details: ProgramDetails = {
+      overview: normalizeProgramText(value.overview),
+      tuitionAndFees: normalizeProgramText(value.tuitionAndFees),
+      curriculum: normalizeProgramList(value.curriculum),
+      admissionRequirements: normalizeProgramList(value.admissionRequirements),
+      careerOpportunities: normalizeProgramList(value.careerOpportunities),
+    };
+    if (
+      !details.overview &&
+      !details.tuitionAndFees &&
+      !details.curriculum.length &&
+      !details.admissionRequirements.length &&
+      !details.careerOpportunities.length
+    ) {
+      return null;
+    }
+    return details;
+  } catch {
+    return null;
+  }
 };
 
 const parseAssignmentType = (input: unknown): AssignmentType => {
@@ -486,6 +536,16 @@ export default async function DashboardDetailPage({ params }: Props) {
       .then((rows) => rows[0]?.fieldOfStudy ?? null)
       .catch(() => null);
 
+    const courseProgramDetails = await prisma
+      .$queryRaw<Array<{ programContent: string | null }>>`
+        SELECT "programContent"
+        FROM "Course"
+        WHERE "id" = ${course.id}
+        LIMIT 1
+      `
+      .then((rows) => parseProgramContent(rows[0]?.programContent ?? null))
+      .catch(() => null);
+
     const [teachers, students, departmentHeads, enrolledStudents, assignedDepartmentHeads] = isSuperAdmin
       ? await Promise.all([
           prisma.user.findMany({
@@ -582,6 +642,10 @@ export default async function DashboardDetailPage({ params }: Props) {
               <div className="mt-3 space-y-2 text-sm text-[#0b3e81]">
                 <p><span className="font-semibold">Degree Level:</span> {courseDegreeLevel ?? "-"}</p>
                 <p><span className="font-semibold">Field of Study:</span> {courseFieldOfStudy ?? "-"}</p>
+                <p><span className="font-semibold">Tuition & Fees:</span> {courseProgramDetails?.tuitionAndFees ?? "-"}</p>
+                <p><span className="font-semibold">Curriculum Items:</span> {courseProgramDetails?.curriculum.length ?? 0}</p>
+                <p><span className="font-semibold">Admission Requirements:</span> {courseProgramDetails?.admissionRequirements.length ?? 0}</p>
+                <p><span className="font-semibold">Career Opportunities:</span> {courseProgramDetails?.careerOpportunities.length ?? 0}</p>
                 <p><span className="font-semibold">Visibility:</span> {course.visibility}</p>
                 <p><span className="font-semibold">Duration:</span> {formatDate(course.startDate)} to {formatDate(course.endDate)}</p>
                 <p><span className="font-semibold">Teacher:</span> {course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</p>
@@ -642,6 +706,14 @@ export default async function DashboardDetailPage({ params }: Props) {
                     className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
                   >
                     Manage Students
+                  </Link>
+                ) : null}
+                {isSuperAdmin ? (
+                  <Link
+                    href={`/dashboard/courses/${course.id}/program-content`}
+                    className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+                  >
+                    Update Program Content
                   </Link>
                 ) : null}
                 {isStudent ? (

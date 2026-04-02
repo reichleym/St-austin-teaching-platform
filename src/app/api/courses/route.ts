@@ -7,7 +7,6 @@ import {
   COURSE_DESCRIPTION_MAX_LENGTH,
   generateCourseCodeCandidate,
   isTeacherRole,
-  isCourseExpired,
   normalizeDescription,
   parseCourseDateInput,
   parseCourseVisibility,
@@ -22,6 +21,7 @@ type CreateBody = {
   degreeLevel?: string | null;
   fieldOfStudy?: string | null;
   description?: string | null;
+  programDetails?: unknown;
   startDate?: string;
   endDate?: string;
   visibility?: CourseVisibilityValue;
@@ -36,6 +36,7 @@ type UpdateBody = {
   degreeLevel?: string | null;
   fieldOfStudy?: string | null;
   description?: string | null;
+  programDetails?: unknown;
   startDate?: string;
   endDate?: string;
   visibility?: CourseVisibilityValue;
@@ -49,6 +50,13 @@ type DeleteBody = {
 };
 
 type EnrollmentRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+type CourseProgramDetails = {
+  overview: string | null;
+  tuitionAndFees: string | null;
+  curriculum: string[];
+  admissionRequirements: string[];
+  careerOpportunities: string[];
+};
 const ALLOWED_DEGREE_LEVELS = [
   "Bachelor’s Degree",
   "Master’s Degree",
@@ -56,6 +64,10 @@ const ALLOWED_DEGREE_LEVELS = [
 ] as const;
 type DegreeLevelValue = (typeof ALLOWED_DEGREE_LEVELS)[number];
 const COURSE_FIELD_OF_STUDY_MAX_LENGTH = 120;
+const COURSE_PROGRAM_OVERVIEW_MAX_LENGTH = 3000;
+const COURSE_PROGRAM_TUITION_MAX_LENGTH = 160;
+const COURSE_PROGRAM_LIST_ITEM_MAX_LENGTH = 160;
+const COURSE_PROGRAM_LIST_MAX_ITEMS = 50;
 const COURSE_SCHEMA_MISMATCH_MESSAGE =
   "Course schema/client mismatch detected. Run latest Prisma migrations, run `npx prisma generate`, then restart your Next.js server.";
 
@@ -79,6 +91,77 @@ function prismaClientSupportsCourseFieldOfStudy() {
   return Object.values(scalarFieldEnum).includes("fieldOfStudy");
 }
 
+function prismaClientSupportsCourseProgramContent() {
+  const scalarFieldEnum = (
+    Prisma as unknown as { CourseScalarFieldEnum?: Record<string, string> }
+  ).CourseScalarFieldEnum;
+  if (!scalarFieldEnum) return false;
+  return Object.values(scalarFieldEnum).includes("programContent");
+}
+
+function normalizeProgramText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  if (!value) return null;
+  return value.slice(0, maxLength);
+}
+
+function normalizeProgramList(input: unknown) {
+  if (!Array.isArray(input)) return [] as string[];
+  const normalized = input
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, COURSE_PROGRAM_LIST_MAX_ITEMS)
+    .map((item) => item.slice(0, COURSE_PROGRAM_LIST_ITEM_MAX_LENGTH));
+  return Array.from(new Set(normalized));
+}
+
+function normalizeCourseProgramDetailsInput(input: unknown): { ok: true; value: CourseProgramDetails | null } | { ok: false } {
+  if (input === undefined || input === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false };
+  }
+
+  const value = input as Record<string, unknown>;
+  const details: CourseProgramDetails = {
+    overview: normalizeProgramText(value.overview, COURSE_PROGRAM_OVERVIEW_MAX_LENGTH),
+    tuitionAndFees: normalizeProgramText(value.tuitionAndFees, COURSE_PROGRAM_TUITION_MAX_LENGTH),
+    curriculum: normalizeProgramList(value.curriculum),
+    admissionRequirements: normalizeProgramList(value.admissionRequirements),
+    careerOpportunities: normalizeProgramList(value.careerOpportunities),
+  };
+
+  if (
+    !details.overview &&
+    !details.tuitionAndFees &&
+    !details.curriculum.length &&
+    !details.admissionRequirements.length &&
+    !details.careerOpportunities.length
+  ) {
+    return { ok: true, value: null };
+  }
+
+  return { ok: true, value: details };
+}
+
+function parseCourseProgramContent(raw: string | null | undefined): CourseProgramDetails | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const normalized = normalizeCourseProgramDetailsInput(parsed);
+    if (!normalized.ok) return null;
+    return normalized.value;
+  } catch {
+    return null;
+  }
+}
+
+function serializeCourseProgramContent(details: CourseProgramDetails | null) {
+  return details ? JSON.stringify(details) : null;
+}
+
 function isCourseSchemaCompatibilityError(error: unknown) {
   if (error && typeof error === "object" && "code" in error && error.code === "P2022") {
     return true;
@@ -95,11 +178,14 @@ function isCourseSchemaCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `degreeLevel`") ||
     error.message.includes("Unknown field `fieldOfStudy`") ||
     error.message.includes("Unknown argument `fieldOfStudy`") ||
+    error.message.includes("Unknown field `programContent`") ||
+    error.message.includes("Unknown argument `programContent`") ||
     error.message.includes("column \"visibility\" does not exist") ||
     error.message.includes("column \"startDate\" does not exist") ||
     error.message.includes("column \"endDate\" does not exist") ||
     error.message.includes("column \"degreeLevel\" does not exist") ||
     error.message.includes("column \"fieldOfStudy\" does not exist") ||
+    error.message.includes("column \"programContent\" does not exist") ||
     error.message.includes("does not exist in the current database") ||
     (error.message.includes("CourseVisibility") && error.message.includes("Invalid value for argument"))
   );
@@ -111,10 +197,12 @@ ALTER TABLE "Course"
 ADD COLUMN IF NOT EXISTS "degreeLevel" TEXT;
 ALTER TABLE "Course"
 ADD COLUMN IF NOT EXISTS "fieldOfStudy" TEXT;
+ALTER TABLE "Course"
+ADD COLUMN IF NOT EXISTS "programContent" TEXT;
   `);
 }
 
-async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy") {
+async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy" | "programContent") {
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS (
@@ -134,22 +222,26 @@ async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy")
 async function resolveCourseMetadataWriteSupport() {
   const clientSupportsDegreeLevel = prismaClientSupportsCourseDegreeLevel();
   const clientSupportsFieldOfStudy = prismaClientSupportsCourseFieldOfStudy();
+  const clientSupportsProgramContent = prismaClientSupportsCourseProgramContent();
 
-  if (!clientSupportsDegreeLevel && !clientSupportsFieldOfStudy) {
+  if (!clientSupportsDegreeLevel && !clientSupportsFieldOfStudy && !clientSupportsProgramContent) {
     return {
       canWriteDegreeLevelWithPrismaClient: false,
       canWriteFieldOfStudyWithPrismaClient: false,
+      canWriteProgramContentWithPrismaClient: false,
     };
   }
 
-  const [hasDegreeLevelColumn, hasFieldOfStudyColumn] = await Promise.all([
+  const [hasDegreeLevelColumn, hasFieldOfStudyColumn, hasProgramContentColumn] = await Promise.all([
     doesCourseColumnExist("degreeLevel"),
     doesCourseColumnExist("fieldOfStudy"),
+    doesCourseColumnExist("programContent"),
   ]);
 
   return {
     canWriteDegreeLevelWithPrismaClient: clientSupportsDegreeLevel && hasDegreeLevelColumn,
     canWriteFieldOfStudyWithPrismaClient: clientSupportsFieldOfStudy && hasFieldOfStudyColumn,
+    canWriteProgramContentWithPrismaClient: clientSupportsProgramContent && hasProgramContentColumn,
   };
 }
 
@@ -451,6 +543,7 @@ export async function GET(request: NextRequest) {
       degreeLevel: string | null;
       fieldOfStudy: string | null;
       description: string | null;
+      programContent: string | null;
       startDate: Date | null;
       endDate: Date | null;
       visibility: CourseVisibilityValue;
@@ -525,6 +618,7 @@ export async function GET(request: NextRequest) {
         ...course,
         degreeLevel: null,
         fieldOfStudy: null,
+        programContent: null,
         startDate: null,
         endDate: null,
         visibility: COURSE_VISIBILITY_PUBLISHED,
@@ -624,6 +718,7 @@ export async function GET(request: NextRequest) {
           degreeLevel: course.degreeLevel ?? null,
           fieldOfStudy: course.fieldOfStudy ?? null,
           description: course.description,
+          programDetails: parseCourseProgramContent(course.programContent),
           startDate: course.startDate?.toISOString() ?? null,
           endDate: course.endDate?.toISOString() ?? null,
           visibility: course.visibility,
@@ -685,6 +780,11 @@ export async function POST(request: NextRequest) {
     const title = body.title?.trim() ?? "";
     const degreeLevelInput = typeof body.degreeLevel === "string" ? body.degreeLevel.trim() : "";
     const fieldOfStudyInput = typeof body.fieldOfStudy === "string" ? body.fieldOfStudy.trim() : "";
+    const normalizedProgramDetails = normalizeCourseProgramDetailsInput(body.programDetails);
+    if (!normalizedProgramDetails.ok) {
+      return NextResponse.json({ error: "Invalid program details format." }, { status: 400 });
+    }
+    const serializedProgramContent = serializeCourseProgramContent(normalizedProgramDetails.value);
     const description = normalizeDescription(body.description);
     const startDate = parseCourseDateInput(body.startDate);
     const endDate = parseCourseDateInput(body.endDate);
@@ -737,7 +837,7 @@ export async function POST(request: NextRequest) {
     }
     await ensureCourseMetadataSchema().catch(() => {});
     await ensureDepartmentHeadCourseSchema();
-    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient } =
+    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient, canWriteProgramContentWithPrismaClient } =
       await resolveCourseMetadataWriteSupport();
 
     const code = await generateUniqueCourseCode(title);
@@ -749,6 +849,7 @@ export async function POST(request: NextRequest) {
           title,
           ...(canWriteDegreeLevelWithPrismaClient ? { degreeLevel: degreeLevelInput } : {}),
           ...(canWriteFieldOfStudyWithPrismaClient ? { fieldOfStudy: fieldOfStudyInput } : {}),
+          ...(canWriteProgramContentWithPrismaClient ? { programContent: serializedProgramContent } : {}),
           description,
           startDate,
           endDate,
@@ -795,6 +896,13 @@ export async function POST(request: NextRequest) {
         await tx.$executeRaw`
           UPDATE "Course"
           SET "fieldOfStudy" = ${fieldOfStudyInput}
+          WHERE "id" = ${course.id}
+        `.catch(() => {});
+      }
+      if (!canWriteProgramContentWithPrismaClient) {
+        await tx.$executeRaw`
+          UPDATE "Course"
+          SET "programContent" = ${serializedProgramContent}
           WHERE "id" = ${course.id}
         `.catch(() => {});
       }
@@ -853,6 +961,7 @@ export async function POST(request: NextRequest) {
           degreeLevel: degreeLevelInput,
           fieldOfStudy: fieldOfStudyInput,
           description: created.description,
+          programDetails: normalizedProgramDetails.value,
           startDate: created.startDate?.toISOString() ?? null,
           endDate: created.endDate?.toISOString() ?? null,
           visibility: created.visibility,
@@ -894,12 +1003,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = (await request.json()) as UpdateBody;
+
     const courseId = body.courseId?.trim() ?? "";
     if (!courseId) {
       return NextResponse.json({ error: "courseId is required." }, { status: 400 });
     }
 
     await ensureCourseMetadataSchema().catch(() => {});
+    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient, canWriteProgramContentWithPrismaClient } =
+      await resolveCourseMetadataWriteSupport();
 
     const access = await canManageCourse(courseId, user);
     if (!access.ok) {
@@ -913,6 +1025,7 @@ export async function PATCH(request: NextRequest) {
           degreeLevel: string | null;
           fieldOfStudy: string | null;
           description: string | null;
+          programContent: string | null;
           startDate: Date | null;
           endDate: Date | null;
           teacherId: string | null;
@@ -921,21 +1034,56 @@ export async function PATCH(request: NextRequest) {
         }
       | null = null;
     try {
-      const result = await prisma.course.findUnique({
-        where: { id: courseId },
-        select: {
-          id: true,
-          title: true,
-          degreeLevel: true,
-          fieldOfStudy: true,
-          description: true,
-          startDate: true,
-          endDate: true,
-          teacherId: true,
-          visibility: true,
-        },
-      });
-      existing = result ? { ...result, legacySchema: false } : null;
+      if (canWriteProgramContentWithPrismaClient) {
+        const result = await prisma.course.findUnique({
+          where: { id: courseId },
+          select: {
+            id: true,
+            title: true,
+            degreeLevel: true,
+            fieldOfStudy: true,
+            description: true,
+            programContent: true,
+            startDate: true,
+            endDate: true,
+            teacherId: true,
+            visibility: true,
+          },
+        });
+        existing = result ? { ...result, legacySchema: false } : null;
+      } else {
+        const result = await prisma.course.findUnique({
+          where: { id: courseId },
+          select: {
+            id: true,
+            title: true,
+            degreeLevel: true,
+            fieldOfStudy: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            teacherId: true,
+            visibility: true,
+          },
+        });
+        if (result) {
+          let programContent: string | null = null;
+          try {
+            const programContentRows = await prisma.$queryRaw<Array<{ programContent: string | null }>>`
+              SELECT "programContent"
+              FROM "Course"
+              WHERE "id" = ${courseId}
+              LIMIT 1
+            `;
+            programContent = programContentRows[0]?.programContent ?? null;
+          } catch {
+            programContent = null;
+          }
+          existing = { ...result, programContent, legacySchema: false };
+        } else {
+          existing = null;
+        }
+      }
     } catch (error) {
       if (!isCourseSchemaCompatibilityError(error)) throw error;
       const legacy = await prisma.course.findUnique({
@@ -947,6 +1095,7 @@ export async function PATCH(request: NextRequest) {
             ...legacy,
             degreeLevel: null,
             fieldOfStudy: null,
+            programContent: null,
             startDate: null,
             endDate: null,
             visibility: COURSE_VISIBILITY_PUBLISHED,
@@ -959,10 +1108,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const data: Prisma.CourseUpdateInput = {};
-    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient } =
-      await resolveCourseMetadataWriteSupport();
     let pendingDegreeLevelUpdate: string | null | undefined = undefined;
     let pendingFieldOfStudyUpdate: string | null | undefined = undefined;
+    let pendingProgramContentUpdate: string | null | undefined = undefined;
 
     if (body.title !== undefined) {
       const title = body.title.trim();
@@ -1031,6 +1179,19 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    if (body.programDetails !== undefined) {
+      const normalizedProgramDetails = normalizeCourseProgramDetailsInput(body.programDetails);
+      if (!normalizedProgramDetails.ok) {
+        return NextResponse.json({ error: "Invalid program details format." }, { status: 400 });
+      }
+      const serializedProgramContent = serializeCourseProgramContent(normalizedProgramDetails.value);
+      if (canWriteProgramContentWithPrismaClient) {
+        data.programContent = serializedProgramContent;
+      } else {
+        pendingProgramContentUpdate = serializedProgramContent;
+      }
+    }
+
     let nextStartDate = existing.startDate;
     let nextEndDate = existing.endDate;
 
@@ -1039,28 +1200,26 @@ export async function PATCH(request: NextRequest) {
         nextStartDate = null;
         nextEndDate = null;
       } else {
-      const startDate = parseCourseDateInput(body.startDate);
-      const endDate = parseCourseDateInput(body.endDate);
-      if (!startDate || !endDate) {
-        return NextResponse.json({ error: "Course start date and end date are required." }, { status: 400 });
-      }
-      const durationError = validateCourseDuration(startDate, endDate);
-      if (durationError) return NextResponse.json({ error: durationError }, { status: 400 });
-      data.startDate = startDate;
-      data.endDate = endDate;
-      nextStartDate = startDate;
-      nextEndDate = endDate;
+        const startDate = parseCourseDateInput(body.startDate);
+        const endDate = parseCourseDateInput(body.endDate);
+        if (!startDate || !endDate) {
+          return NextResponse.json({ error: "Course start date and end date are required." }, { status: 400 });
+        }
+        const durationError = validateCourseDuration(startDate, endDate);
+        if (durationError) return NextResponse.json({ error: durationError }, { status: 400 });
+        data.startDate = startDate;
+        data.endDate = endDate;
+        nextStartDate = startDate;
+        nextEndDate = endDate;
       }
     }
 
-    let nextTeacherId = existing.teacherId;
     const studentIds = Array.isArray(body.studentIds) ? body.studentIds : undefined;
     const departmentHeadIds = Array.isArray(body.departmentHeadIds) ? body.departmentHeadIds : undefined;
 
     if (body.teacherId !== undefined) {
       if (body.teacherId === null || body.teacherId === "") {
         data.teacher = { disconnect: true };
-        nextTeacherId = null;
       } else {
         const teacherId = body.teacherId.trim();
         const teacherValidation = await ensureTeacherIfProvided(teacherId);
@@ -1068,21 +1227,26 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: teacherValidation.error }, { status: teacherValidation.status });
         }
         data.teacher = { connect: { id: teacherId } };
-        nextTeacherId = teacherId;
       }
     }
 
     if (body.visibility !== undefined) {
       if (!existing.legacySchema) {
-      const visibility = parseCourseVisibility(body.visibility);
-      if (!visibility) {
-        return NextResponse.json({ error: "Invalid course visibility value." }, { status: 400 });
-      }
-      data.visibility = visibility;
+        const visibility = parseCourseVisibility(body.visibility);
+        if (!visibility) {
+          return NextResponse.json({ error: "Invalid course visibility value." }, { status: 400 });
+        }
+        data.visibility = visibility;
       }
     }
 
-    if (!Object.keys(data).length) {
+    const hasDirectDataUpdates = Object.keys(data).length > 0;
+    const hasRawFallbackUpdates =
+      pendingDegreeLevelUpdate !== undefined ||
+      pendingFieldOfStudyUpdate !== undefined ||
+      pendingProgramContentUpdate !== undefined;
+
+    if (!hasDirectDataUpdates && !hasRawFallbackUpdates) {
       if (!Array.isArray(studentIds) && !Array.isArray(departmentHeadIds)) {
         return NextResponse.json({ error: "At least one field is required to update." }, { status: 400 });
       }
@@ -1128,27 +1292,51 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (existing.legacySchema) {
-        const updatedCourse = await tx.course.update({
-          where: { id: courseId },
-          data,
-          include: {
-            teacher: {
-              select: { id: true, name: true, email: true, status: true },
-            },
-            assignments: { select: { id: true } },
-            enrollments: {
-              where: { status: "ACTIVE" },
-              select: {
-                id: true,
-                studentId: true,
-                status: true,
-                student: {
-                  select: { id: true, name: true, email: true },
+        const updatedCourse = hasDirectDataUpdates
+          ? await tx.course.update({
+              where: { id: courseId },
+              data,
+              include: {
+                teacher: {
+                  select: { id: true, name: true, email: true, status: true },
+                },
+                assignments: { select: { id: true } },
+                enrollments: {
+                  where: { status: "ACTIVE" },
+                  select: {
+                    id: true,
+                    studentId: true,
+                    status: true,
+                    student: {
+                      select: { id: true, name: true, email: true },
+                    },
+                  },
                 },
               },
-            },
-          },
-        });
+            })
+          : await tx.course.findUnique({
+              where: { id: courseId },
+              include: {
+                teacher: {
+                  select: { id: true, name: true, email: true, status: true },
+                },
+                assignments: { select: { id: true } },
+                enrollments: {
+                  where: { status: "ACTIVE" },
+                  select: {
+                    id: true,
+                    studentId: true,
+                    status: true,
+                    student: {
+                      select: { id: true, name: true, email: true },
+                    },
+                  },
+                },
+              },
+            });
+        if (!updatedCourse) {
+          throw new Error("Course not found.");
+        }
         if (pendingDegreeLevelUpdate !== undefined) {
           await tx.$executeRaw`
             UPDATE "Course"
@@ -1163,30 +1351,61 @@ export async function PATCH(request: NextRequest) {
             WHERE "id" = ${courseId}
           `.catch(() => {});
         }
+        if (pendingProgramContentUpdate !== undefined) {
+          await tx.$executeRaw`
+            UPDATE "Course"
+            SET "programContent" = ${pendingProgramContentUpdate}
+            WHERE "id" = ${courseId}
+          `.catch(() => {});
+        }
         return updatedCourse;
       }
 
-      const updatedCourse = await tx.course.update({
-        where: { id: courseId },
-        data,
-        include: {
-          teacher: {
-            select: { id: true, name: true, email: true, status: true },
-          },
-          assignments: { select: { id: true } },
-          enrollments: {
-            where: { status: "ACTIVE" },
-            select: {
-              id: true,
-              studentId: true,
-              status: true,
-              student: {
-                select: { id: true, name: true, email: true },
+      const updatedCourse = hasDirectDataUpdates
+        ? await tx.course.update({
+            where: { id: courseId },
+            data,
+            include: {
+              teacher: {
+                select: { id: true, name: true, email: true, status: true },
+              },
+              assignments: { select: { id: true } },
+              enrollments: {
+                where: { status: "ACTIVE" },
+                select: {
+                  id: true,
+                  studentId: true,
+                  status: true,
+                  student: {
+                    select: { id: true, name: true, email: true },
+                  },
+                },
               },
             },
-          },
-        },
-      });
+          })
+        : await tx.course.findUnique({
+            where: { id: courseId },
+            include: {
+              teacher: {
+                select: { id: true, name: true, email: true, status: true },
+              },
+              assignments: { select: { id: true } },
+              enrollments: {
+                where: { status: "ACTIVE" },
+                select: {
+                  id: true,
+                  studentId: true,
+                  status: true,
+                  student: {
+                    select: { id: true, name: true, email: true },
+                  },
+                },
+              },
+            },
+          });
+      if (!updatedCourse) {
+        throw new Error("Course not found.");
+      }
       if (pendingDegreeLevelUpdate !== undefined) {
         await tx.$executeRaw`
           UPDATE "Course"
@@ -1198,6 +1417,13 @@ export async function PATCH(request: NextRequest) {
         await tx.$executeRaw`
           UPDATE "Course"
           SET "fieldOfStudy" = ${pendingFieldOfStudyUpdate}
+          WHERE "id" = ${courseId}
+        `.catch(() => {});
+      }
+      if (pendingProgramContentUpdate !== undefined) {
+        await tx.$executeRaw`
+          UPDATE "Course"
+          SET "programContent" = ${pendingProgramContentUpdate}
           WHERE "id" = ${courseId}
         `.catch(() => {});
       }
@@ -1224,6 +1450,12 @@ export async function PATCH(request: NextRequest) {
         : "fieldOfStudy" in updated
           ? (updated.fieldOfStudy as string | null | undefined) ?? null
           : null;
+    const updatedProgramDetails =
+      pendingProgramContentUpdate !== undefined
+        ? parseCourseProgramContent(pendingProgramContentUpdate)
+        : "programContent" in updated
+          ? parseCourseProgramContent((updated.programContent as string | null | undefined) ?? null)
+          : parseCourseProgramContent(existing.programContent);
 
     return NextResponse.json({
       ok: true,
@@ -1234,6 +1466,7 @@ export async function PATCH(request: NextRequest) {
         degreeLevel: updatedDegreeLevel,
         fieldOfStudy: updatedFieldOfStudy,
         description: updated.description,
+        programDetails: updatedProgramDetails,
         startDate: existing.legacySchema ? null : updatedStartDate?.toISOString() ?? null,
         endDate: existing.legacySchema ? null : updatedEndDate?.toISOString() ?? null,
         visibility: existing.legacySchema ? COURSE_VISIBILITY_PUBLISHED : updatedVisibility,

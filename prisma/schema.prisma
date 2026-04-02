@@ -230,6 +230,7 @@ model Course {
   degreeLevel        String?
   fieldOfStudy       String?
   description        String?
+  programContent     String?
   startDate          DateTime?
   endDate            DateTime?
   visibility         CourseVisibility    @default(DRAFT)
