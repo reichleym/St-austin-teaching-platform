@@ -649,8 +649,8 @@ export default async function DashboardDetailPage({ params }: Props) {
                 <p><span className="font-semibold">Visibility:</span> {course.visibility}</p>
                 <p><span className="font-semibold">Duration:</span> {formatDate(course.startDate)} to {formatDate(course.endDate)}</p>
                 <p><span className="font-semibold">Teacher:</span> {course.teacher?.name ?? course.teacher?.email ?? "Unassigned"}</p>
-                <p><span className="font-semibold">Created:</span> {formatDateTime(course.createdAt)}</p>
-                <p><span className="font-semibold">Updated:</span> {formatDateTime(course.updatedAt)}</p>
+                {/* <p><span className="font-semibold">Created:</span> {formatDateTime(course.createdAt)}</p>
+                <p><span className="font-semibold">Updated:</span> {formatDateTime(course.updatedAt)}</p> */}
               </div>
             </article>
             <article className="brand-card p-5">

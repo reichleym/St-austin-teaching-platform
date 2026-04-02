@@ -4,7 +4,6 @@ import {
   COURSE_VISIBILITY_PUBLISHED,
   isCourseExpired,
   MODULE_VISIBILITY_ALL,
-  MODULE_VISIBILITY_LIMITED,
   parseModuleVisibility,
   type ModuleVisibilityValue,
 } from "@/lib/courses";
@@ -70,9 +69,9 @@ type RawCompletion = {
   completedAt: Date;
 };
 
-type RawModuleAssignment = {
-  moduleId: string;
-};
+// type RawModuleAssignment = {
+//   moduleId: string;
+// };
 
 function isCourseVisibilityCompatibilityError(error: unknown) {
   if (!(error instanceof Error)) return false;

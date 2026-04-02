@@ -1209,8 +1209,8 @@ export async function PATCH(request: NextRequest) {
         if (durationError) return NextResponse.json({ error: durationError }, { status: 400 });
         data.startDate = startDate;
         data.endDate = endDate;
-        nextStartDate = startDate;
-        nextEndDate = endDate;
+        // nextStartDate = startDate;
+        // nextEndDate = endDate;
       }
     }
 

@@ -103,14 +103,14 @@ function makeId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`;
 }
 
-async function deleteExistingInvitationRaw(email: string, role: InvitableRole) {
-  await prisma.$executeRaw`
-    DELETE FROM "Invitation"
-    WHERE "email" = ${email}
-      AND "role" = CAST(${role} AS "Role")
-      AND "acceptedAt" IS NULL
-  `;
-}
+// async function deleteExistingInvitationRaw(email: string, role: InvitableRole) {
+//   await prisma.$executeRaw`
+//     DELETE FROM "Invitation"
+//     WHERE "email" = ${email}
+//       AND "role" = CAST(${role} AS "Role")
+//       AND "acceptedAt" IS NULL
+//   `;
+// }
 
 async function createInvitationRaw(params: {
   email: string;

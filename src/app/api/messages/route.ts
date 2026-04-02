@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Prisma, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { isCourseExpired } from "@/lib/courses";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
