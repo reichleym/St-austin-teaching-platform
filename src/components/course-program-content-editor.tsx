@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ToastMessage } from "@/components/toast-message";
 
 type ProgramDetails = {
@@ -25,6 +26,7 @@ const toListFromMultiline = (value: string) =>
     .filter(Boolean);
 
 export function CourseProgramContentEditor({ courseId, initialProgramDetails }: Props) {
+  const router = useRouter();
   const [overview, setOverview] = useState(initialProgramDetails?.overview ?? "");
   const [tuitionAndFees, setTuitionAndFees] = useState(initialProgramDetails?.tuitionAndFees ?? "");
   const [curriculum, setCurriculum] = useState(toMultilineValue(initialProgramDetails?.curriculum));
@@ -37,6 +39,14 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const applyProgramDetails = (details: ProgramDetails | null) => {
+    setOverview(details?.overview ?? "");
+    setTuitionAndFees(details?.tuitionAndFees ?? "");
+    setCurriculum(toMultilineValue(details?.curriculum));
+    setAdmissionRequirements(toMultilineValue(details?.admissionRequirements));
+    setCareerOpportunities(toMultilineValue(details?.careerOpportunities));
+  };
 
   const previewStats = useMemo(
     () => ({
@@ -70,14 +80,18 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
       });
 
       const raw = await response.text();
-      const result = raw ? (JSON.parse(raw) as { error?: string }) : {};
+      const result = raw
+        ? (JSON.parse(raw) as { error?: string; course?: { programDetails?: ProgramDetails | null } })
+        : {};
 
       if (!response.ok) {
         setError(result.error ?? "Unable to update program content.");
         return;
       }
 
+      applyProgramDetails(result.course?.programDetails ?? null);
       setSuccess("Program content updated successfully.");
+      router.refresh();
     } catch {
       setError("Unable to update program content.");
     } finally {
