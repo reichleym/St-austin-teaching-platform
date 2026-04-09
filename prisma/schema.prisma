@@ -197,6 +197,7 @@ model SystemSettings {
   signupMode                 SignupMode @default(INVITE_ONLY)
   gradeScale                 Json?
   lateSubmissionPenaltyRules Json?
+  dashboardCalendarEvents    Json?
   updatedById                String?
   updatedBy                  User?      @relation("SystemSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt                  DateTime   @default(now())

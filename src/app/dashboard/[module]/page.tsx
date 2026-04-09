@@ -17,7 +17,9 @@ import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
+import { CalendarEventsSettings } from "@/components/calendar-events-settings";
 import { StudentProgressModule } from "@/components/student-progress-module";
+import { getTodayTimelineEntries, normalizeDashboardCalendarEvents } from "@/lib/dashboard-calendar";
 import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
 import { createServerTranslator, getServerLanguage } from "@/lib/i18n-server";
 
@@ -910,6 +912,20 @@ export default async function DashboardPage({ params }: Props) {
     }
   }
 
+  let overviewTimeline: string[] = [];
+  if (selected.slug === "overview") {
+    try {
+      const settings = await prisma.systemSettings.findUnique({
+        where: { id: 1 },
+        select: { dashboardCalendarEvents: true },
+      });
+      const calendarEvents = normalizeDashboardCalendarEvents(settings?.dashboardCalendarEvents);
+      overviewTimeline = getTodayTimelineEntries(calendarEvents, roleKey);
+    } catch {
+      overviewTimeline = [];
+    }
+  }
+
   const departmentHeadCourseIds =
     roleKey === "DEPARTMENT_HEAD"
       ? await prisma
@@ -1204,7 +1220,15 @@ export default async function DashboardPage({ params }: Props) {
 
         {selected.slug === "overview" ? (
           <section className="grid gap-4">
-            <RoleOverview role={roleKey} name={session.user.name} overview={{ metrics: overviewMetrics, focus: overviewFocus }} />
+            <RoleOverview
+              role={roleKey}
+              name={session.user.name}
+              overview={{
+                metrics: overviewMetrics,
+                focus: overviewFocus,
+                timeline: overviewTimeline,
+              }}
+            />
             <section className="brand-card p-5">
               <p className="brand-section-title">{t("announcements")}</p>
               <div className="mt-3 space-y-2">
@@ -1303,13 +1327,15 @@ export default async function DashboardPage({ params }: Props) {
           <AdminProfileSettings />
         ) : selected.slug === "academic-policies" ? (
           <AcademicPoliciesSettings />
+        ) : selected.slug === "calendar-events" ? (
+          <CalendarEventsSettings />
         ) : selected.slug === "system-settings" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
               <p className="brand-section-title">Policies & Settings</p>
-              <p className="brand-muted mt-2 text-sm">Use submenu: Admin Profile or Academic Policies.</p>
+              <p className="brand-muted mt-2 text-sm">Use submenu: Admin Profile, Academic Policies, or Calendar Events.</p>
             </article>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
               <Link href="/dashboard/admin-profile" className="brand-card p-5 no-underline">
                 <p className="brand-section-title">Admin Profile</p>
                 <p className="brand-muted mt-2 text-sm">Update account details and password.</p>
@@ -1317,6 +1343,10 @@ export default async function DashboardPage({ params }: Props) {
               <Link href="/dashboard/academic-policies" className="brand-card p-5 no-underline">
                 <p className="brand-section-title">Academic Policies</p>
                 <p className="brand-muted mt-2 text-sm">Configure grade scale and late penalty rules.</p>
+              </Link>
+              <Link href="/dashboard/calendar-events" className="brand-card p-5 no-underline">
+                <p className="brand-section-title">Calendar Events</p>
+                <p className="brand-muted mt-2 text-sm">Plan daily role-based events shown in Overview.</p>
               </Link>
             </div>
           </section>

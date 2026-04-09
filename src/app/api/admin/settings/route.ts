@@ -1,5 +1,6 @@
 import { AdminActionType, Prisma, SignupMode } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizeDashboardCalendarEvents, type DashboardCalendarEvent } from "@/lib/dashboard-calendar";
 import { PermissionError, requireSuperAdminUser } from "@/lib/permissions";
 import { getSystemSettings, type GradeScaleBand, type LatePenaltyRule } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,7 @@ export async function PATCH(request: NextRequest) {
       signupMode?: SignupMode;
       gradeScale?: GradeScaleBand[] | null;
       lateSubmissionPenaltyRules?: LatePenaltyRule[] | null;
+      dashboardCalendarEvents?: DashboardCalendarEvent[] | null;
     };
 
     if (body.signupMode && body.signupMode !== SignupMode.INVITE_ONLY && body.signupMode !== SignupMode.OPEN_WITH_CUTOFF) {
@@ -48,6 +50,15 @@ export async function PATCH(request: NextRequest) {
     if (body.studentSignupCutoffDate !== undefined && parsedCutoff === undefined) {
       return NextResponse.json({ error: "Invalid `studentSignupCutoffDate`." }, { status: 400 });
     }
+    if (body.dashboardCalendarEvents !== undefined && body.dashboardCalendarEvents !== null && !Array.isArray(body.dashboardCalendarEvents)) {
+      return NextResponse.json({ error: "Invalid `dashboardCalendarEvents` payload." }, { status: 400 });
+    }
+    const parsedCalendarEvents =
+      body.dashboardCalendarEvents === undefined
+        ? undefined
+        : body.dashboardCalendarEvents === null
+          ? null
+          : normalizeDashboardCalendarEvents(body.dashboardCalendarEvents);
 
     if (body.signupMode === SignupMode.OPEN_WITH_CUTOFF && parsedCutoff === undefined && body.studentSignupCutoffDate === undefined) {
       const existing = await getSystemSettings();
@@ -66,6 +77,7 @@ export async function PATCH(request: NextRequest) {
           signupMode: body.signupMode ?? SignupMode.INVITE_ONLY,
           gradeScale: toNullableJson(body.gradeScale ?? null),
           lateSubmissionPenaltyRules: toNullableJson(body.lateSubmissionPenaltyRules ?? null),
+          dashboardCalendarEvents: toNullableJson(parsedCalendarEvents ?? null),
           updatedById: superAdmin.id,
         },
         update: {
@@ -75,6 +87,8 @@ export async function PATCH(request: NextRequest) {
           gradeScale: body.gradeScale === undefined ? undefined : toNullableJson(body.gradeScale),
           lateSubmissionPenaltyRules:
             body.lateSubmissionPenaltyRules === undefined ? undefined : toNullableJson(body.lateSubmissionPenaltyRules),
+          dashboardCalendarEvents:
+            parsedCalendarEvents === undefined ? undefined : toNullableJson(parsedCalendarEvents),
           updatedById: superAdmin.id,
         },
       });
@@ -91,6 +105,8 @@ export async function PATCH(request: NextRequest) {
             signupMode: body.signupMode,
             hasGradeScale: body.gradeScale !== undefined,
             hasLatePenaltyRules: body.lateSubmissionPenaltyRules !== undefined,
+            hasDashboardCalendarEvents: parsedCalendarEvents !== undefined,
+            dashboardCalendarEventCount: parsedCalendarEvents?.length,
           },
         },
       });

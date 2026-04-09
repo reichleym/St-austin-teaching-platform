@@ -5,7 +5,6 @@ import Image from "next/image";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { getStudentSelfSignupCutoffLabel, isStudentSelfSignupAllowed } from "@/lib/onboarding-policy";
 import { toast } from "@/lib/toast";
 import { PasswordField } from "@/components/password-field";
 import { ToastMessage } from "@/components/toast-message";
@@ -33,8 +32,6 @@ export default function LoginClient({ callbackUrl }: Props) {
   const [isPending, setIsPending] = useState(false);
   const [activeLoginAs, setActiveLoginAs] = useState<"STUDENT" | "TEACHER" | "DEPARTMENT_HEAD" | null>(null);
   const [selectedLoginAs, setSelectedLoginAs] = useState<"STUDENT" | "TEACHER" | "DEPARTMENT_HEAD">("STUDENT");
-  const studentSignupCutoff = getStudentSelfSignupCutoffLabel();
-  const studentSelfSignupAllowed = isStudentSelfSignupAllowed();
   const getLoginErrorMessage = (code: LoginFailureCode | string | undefined) => {
     if (code === "INACTIVE_ACCOUNT") return t("login.errorInactive");
     if (code === "INVALID_CREDENTIALS") return t("login.errorInvalidCredentials");
@@ -156,10 +153,6 @@ export default function LoginClient({ callbackUrl }: Props) {
         <h1 className="brand-title brand-title-gradient text-3xl font-semibold">{t("login.title")}</h1>
         <p className="brand-muted mt-2 text-sm">{t("login.subtitle")}</p>
         <p className="mt-1 text-xs text-[#3768ac]">{t("login.adminHint")}</p>
-        <p className="brand-muted mt-1 text-xs">
-          {/* Teachers are invite-only. Student self-signup is open until {studentSignupCutoff}. */}
-          {studentSignupCutoff ? "" : ""}
-        </p>
 
         <form onSubmit={onSubmit} className="mt-6 grid gap-4">
           <label className="grid gap-1">
@@ -258,16 +251,6 @@ export default function LoginClient({ callbackUrl }: Props) {
             </button>
           </div>
         </form>
-
-        <div className="mt-4 text-sm">
-          {studentSelfSignupAllowed ? (
-            <Link href="/register/student" className="font-semibold underline">
-              {t("login.registerStudent")}
-            </Link>
-          ) : (
-            <p className="text-[#3768ac]">{t("login.signupClosed")}</p>
-          )}
-        </div>
       </div>
     </main>
   );

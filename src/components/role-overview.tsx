@@ -65,7 +65,7 @@ function getOverviewModel(roleKey: RoleKey, t: Translator, dynamicOverview?: Dyn
         t("timeline.superAdmin.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
-      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
+      ...(dynamicOverview?.timeline !== undefined ? { timeline: dynamicOverview.timeline } : {}),
     };
   }
 
@@ -103,7 +103,7 @@ function getOverviewModel(roleKey: RoleKey, t: Translator, dynamicOverview?: Dyn
         t("timeline.departmentHead.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
-      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
+      ...(dynamicOverview?.timeline !== undefined ? { timeline: dynamicOverview.timeline } : {}),
     };
   }
 
@@ -141,7 +141,7 @@ function getOverviewModel(roleKey: RoleKey, t: Translator, dynamicOverview?: Dyn
         t("timeline.teacher.4"),
       ],
       ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
-      ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
+      ...(dynamicOverview?.timeline !== undefined ? { timeline: dynamicOverview.timeline } : {}),
     };
   }
 
@@ -178,7 +178,7 @@ function getOverviewModel(roleKey: RoleKey, t: Translator, dynamicOverview?: Dyn
       t("timeline.student.4"),
     ],
     ...(dynamicOverview?.focus?.length ? { focus: dynamicOverview.focus } : {}),
-    ...(dynamicOverview?.timeline?.length ? { timeline: dynamicOverview.timeline } : {}),
+    ...(dynamicOverview?.timeline !== undefined ? { timeline: dynamicOverview.timeline } : {}),
   };
 }
 
@@ -260,12 +260,16 @@ export function RoleOverview({ role, name, overview }: RoleOverviewProps & { ove
         <article className="brand-card p-5">
           <p className="brand-section-title">{t("today")}</p>
           <div className="mt-3 space-y-2">
-            {model.timeline.map((entry) => (
-              <div key={entry} className="flex items-start gap-2 rounded-lg border border-[#cee2fb] bg-white/75 px-3 py-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-[#1b6fc7]" />
-                <p className="text-sm text-[#1f508f]">{entry}</p>
-              </div>
-            ))}
+            {model.timeline.length ? (
+              model.timeline.map((entry) => (
+                <div key={entry} className="flex items-start gap-2 rounded-lg border border-[#cee2fb] bg-white/75 px-3 py-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-[#1b6fc7]" />
+                  <p className="text-sm text-[#1f508f]">{entry}</p>
+                </div>
+              ))
+            ) : (
+              <p className="brand-muted text-sm">{t("overview.today.noEvents", undefined, "No events yet")}</p>
+            )}
           </div>
         </article>
       </div>

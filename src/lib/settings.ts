@@ -1,4 +1,5 @@
 import { Prisma, SignupMode } from "@prisma/client";
+import type { DashboardCalendarEvent } from "@/lib/dashboard-calendar";
 import { prisma } from "@/lib/prisma";
 
 export type GradeScaleBand = {
@@ -18,6 +19,7 @@ type SettingsUpdateInput = {
   signupMode?: SignupMode;
   gradeScale?: GradeScaleBand[] | null;
   lateSubmissionPenaltyRules?: LatePenaltyRule[] | null;
+  dashboardCalendarEvents?: DashboardCalendarEvent[] | null;
   updatedById?: string;
 };
 
@@ -51,6 +53,9 @@ export async function updateSystemSettings(input: SettingsUpdateInput) {
   if (input.lateSubmissionPenaltyRules !== undefined) {
     updateData.lateSubmissionPenaltyRules = toJson(input.lateSubmissionPenaltyRules);
   }
+  if (input.dashboardCalendarEvents !== undefined) {
+    updateData.dashboardCalendarEvents = toJson(input.dashboardCalendarEvents);
+  }
   if (input.updatedById !== undefined) {
     updateData.updatedBy = input.updatedById ? { connect: { id: input.updatedById } } : { disconnect: true };
   }
@@ -64,6 +69,7 @@ export async function updateSystemSettings(input: SettingsUpdateInput) {
       signupMode: input.signupMode ?? SignupMode.INVITE_ONLY,
       gradeScale: toJson(input.gradeScale ?? null),
       lateSubmissionPenaltyRules: toJson(input.lateSubmissionPenaltyRules ?? null),
+      dashboardCalendarEvents: toJson(input.dashboardCalendarEvents ?? null),
       updatedBy: input.updatedById ? { connect: { id: input.updatedById } } : undefined,
     },
     update: updateData,
