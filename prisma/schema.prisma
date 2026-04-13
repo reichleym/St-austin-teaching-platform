@@ -40,6 +40,11 @@ enum CourseVisibility {
   PUBLISHED
 }
 
+enum ProgramVisibility {
+  DRAFT
+  PUBLISHED
+}
+
 enum ModuleVisibilityRule {
   ALL_VISIBLE
   LIMITED_ACCESS
@@ -244,6 +249,29 @@ model Course {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   instructionThreads InstructionThread[]
+  programs           ProgramCourse[]
+}
+
+model Program {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  title              String
+  description        String?
+  programContent     String?
+  visibility         ProgramVisibility @default(DRAFT)
+  courses            ProgramCourse[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ProgramCourse {
+  programId String
+  courseId  String
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([programId, courseId])
 }
 
 model CourseModule {

@@ -1,8 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { subscribeToasts, toast, ToastPayload } from "@/lib/toast";
-import { useLanguage } from "@/components/language-provider";
+import { subscribeToasts, ToastPayload } from "@/lib/toast";
 
 type Props = {
   children: ReactNode;
@@ -10,71 +9,7 @@ type Props = {
 
 type ToastItem = ToastPayload;
 
-type MutationMethod = "POST" | "PATCH" | "PUT" | "DELETE";
-
-const MUTATION_METHODS: MutationMethod[] = ["POST", "PATCH", "PUT", "DELETE"];
-const TOAST_SUPPRESSED_PATHS = ["/api/auth/"];
-
-function parsePayloadMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as Record<string, unknown>;
-
-  if (typeof record.error === "string" && record.error.trim()) return record.error;
-  if (typeof record.message === "string" && record.message.trim()) return record.message;
-  return null;
-}
-
-function getMutationMethod(input: RequestInfo | URL, init?: RequestInit): string {
-  if (typeof init?.method === "string" && init.method.trim()) return init.method.trim().toUpperCase();
-  if (typeof Request !== "undefined" && input instanceof Request) return input.method.toUpperCase();
-  return "GET";
-}
-
-function getRequestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
-  if (input instanceof URL) return input.toString();
-  if (typeof Request !== "undefined" && input instanceof Request) return input.url;
-  return "";
-}
-
-function isToastSuppressed(rawUrl: string): boolean {
-  if (!rawUrl) return false;
-
-  if (rawUrl.startsWith("/")) {
-    return TOAST_SUPPRESSED_PATHS.some((path) => rawUrl.startsWith(path));
-  }
-
-  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-    try {
-      const parsed = new URL(rawUrl);
-      if (parsed.origin !== window.location.origin) return false;
-      return TOAST_SUPPRESSED_PATHS.some((path) => parsed.pathname.startsWith(path));
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-function isApiMutation(method: string, rawUrl: string): method is MutationMethod {
-  if (!MUTATION_METHODS.includes(method as MutationMethod)) return false;
-  if (!rawUrl) return false;
-
-  if (rawUrl.startsWith("/api/")) return true;
-  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-    try {
-      const parsed = new URL(rawUrl);
-      return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/");
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
-
 export function AppToastProvider({ children }: Props) {
-  const { t } = useLanguage();
   const [items, setItems] = useState<ToastItem[]>([]);
   const timerMapRef = useRef<Map<string, number>>(new Map());
 
@@ -97,67 +32,6 @@ export function AppToastProvider({ children }: Props) {
         window.clearTimeout(timeoutId);
       }
       timerMap.clear();
-    };
-  }, []);
-
-  useEffect(() => {
-    const originalFetch = window.fetch.bind(window);
-    const wrappedFetch: typeof window.fetch = async (input, init) => {
-      const method = getMutationMethod(input, init);
-      const url = getRequestUrl(input);
-      const shouldToast = isApiMutation(method, url) && !isToastSuppressed(url);
-
-      try {
-        const response = await originalFetch(input, init);
-
-        if (!shouldToast) return response;
-
-        const clone = response.clone();
-        let parsedPayload: unknown = null;
-        try {
-          const raw = await clone.text();
-          parsedPayload = raw ? (JSON.parse(raw) as unknown) : null;
-        } catch {
-          parsedPayload = null;
-        }
-
-        const payloadMessage = parsePayloadMessage(parsedPayload);
-
-        if (response.ok) {
-          const successMessage =
-            method === "POST"
-              ? t("toast.created")
-              : method === "PATCH" || method === "PUT"
-                ? t("toast.updated")
-                : t("toast.deleted");
-          toast.success(payloadMessage ?? successMessage);
-        } else {
-          const errorMessage =
-            method === "POST"
-              ? t("toast.createFailed")
-              : method === "PATCH" || method === "PUT"
-                ? t("toast.updateFailed")
-                : t("toast.deleteFailed");
-          toast.error(payloadMessage ?? errorMessage);
-        }
-
-        return response;
-      } catch (error) {
-        if (shouldToast) {
-          if (error instanceof Error && error.message.trim()) {
-            toast.error(error.message);
-          } else {
-            toast.error(t("toast.networkFailed"));
-          }
-        }
-        throw error;
-      }
-    };
-
-    window.fetch = wrappedFetch;
-
-    return () => {
-      window.fetch = originalFetch;
     };
   }, []);
 

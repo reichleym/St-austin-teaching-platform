@@ -708,14 +708,6 @@ export default async function DashboardDetailPage({ params }: Props) {
                     Manage Students
                   </Link>
                 ) : null}
-                {isSuperAdmin ? (
-                  <Link
-                    href={`/dashboard/courses/${course.id}/program-content`}
-                    className="rounded-lg border border-[#9bbfed] bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#0b3e81] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
-                  >
-                    Update Program Content
-                  </Link>
-                ) : null}
                 {isStudent ? (
                   <Link
                     href={`/dashboard/courses/${course.id}/progress`}

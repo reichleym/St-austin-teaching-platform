@@ -13,6 +13,7 @@ import { AdminUserManagementTable } from "@/components/admin-user-management-tab
 import { AdminAnnouncementsManager } from "@/components/admin-announcements-manager";
 import { AnnouncementsFeed } from "@/components/announcements-feed";
 import { CoursesModule } from "@/components/courses-module";
+import { ProgramsModule } from "@/components/programs-module";
 import { AssignmentsModule } from "@/components/assignments-module";
 import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
@@ -1254,6 +1255,8 @@ export default async function DashboardPage({ params }: Props) {
           <AnnouncementsFeed announcements={serializedLearnerAnnouncements} />
         ) : selected.slug === "courses" ? (
           <CoursesModule role={roleForModules} viewMode="all" showModuleManagement />
+        ) : selected.slug === "programs" ? (
+          <ProgramsModule role={roleForModules} />
         ) : selected.slug === "learning" ? (
           <CoursesModule
             role={roleForModules}

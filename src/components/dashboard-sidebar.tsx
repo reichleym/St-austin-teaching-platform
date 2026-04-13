@@ -15,7 +15,7 @@ export function DashboardSidebar({ role, selectedSlug }: DashboardSidebarProps) 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const { t } = useLanguage();
-  const roleKey = String(role) as DashboardRole;
+  const roleKey = (String(role) === "ADMIN" ? "SUPER_ADMIN" : String(role)) as DashboardRole;
   const availableModules = dashboardModules.filter((item) => item.roles.includes(roleKey));
   const rootKey = "__root__";
   const modulesByParent = new Map<string, typeof availableModules>();

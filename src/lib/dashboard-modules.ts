@@ -17,6 +17,12 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["SUPER_ADMIN", "DEPARTMENT_HEAD", "TEACHER", "STUDENT"],
   },
   {
+    slug: "programs",
+    title: "Programs",
+    description: "Manage academic programs and course associations.",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
     slug: "courses",
     title: "Courses",
     description: "Manage and navigate academic course structures.",
