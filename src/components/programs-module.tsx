@@ -118,7 +118,9 @@ export function ProgramsModule({ role }: Props) {
     try {
       const response = await fetch("/api/admin/programs", { method: "GET" });
       const raw = await response.text();
-      const result = raw ? JSON.parse(raw) as { programs: ProgramItem[]; courses: CourseOption[]; error?: string } : {};
+      const result: { programs?: ProgramItem[]; courses?: CourseOption[]; error?: string } = raw
+        ? (JSON.parse(raw) as { programs?: ProgramItem[]; courses?: CourseOption[]; error?: string })
+        : {};
 
       if (!response.ok) {
         setError(result.error ?? t("error.loadPrograms"));
@@ -179,7 +181,7 @@ export function ProgramsModule({ role }: Props) {
         }),
       });
       const raw = await response.text();
-      const result = raw ? JSON.parse(raw) as { error?: string } : {};
+      const result: { error?: string } = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
         setError(result.error ?? t("error.createProgram"));
         return;
@@ -223,7 +225,7 @@ export function ProgramsModule({ role }: Props) {
         }),
       });
       const raw = await response.text();
-      const result = raw ? JSON.parse(raw) as { error?: string } : {};
+      const result: { error?: string } = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
         setError(result.error ?? t("error.updateProgram"));
         return;
@@ -246,7 +248,7 @@ export function ProgramsModule({ role }: Props) {
         body: JSON.stringify({ programId }),
       });
       const raw = await response.text();
-      const result = raw ? JSON.parse(raw) as { error?: string } : {};
+      const result: { error?: string } = raw ? (JSON.parse(raw) as { error?: string }) : {};
       if (!response.ok) {
         setError(result.error ?? t("error.deleteProgram"));
         return;
