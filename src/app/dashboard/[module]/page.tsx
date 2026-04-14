@@ -19,6 +19,7 @@ import { EngagementModule } from "@/components/engagement-module";
 import { AdminProfileSettings } from "@/components/admin-profile-settings";
 import { AcademicPoliciesSettings } from "@/components/academic-policies-settings";
 import { CalendarEventsSettings } from "@/components/calendar-events-settings";
+import { UniversityCareersSettings } from "@/components/university-careers-settings";
 import { StudentProgressModule } from "@/components/student-progress-module";
 import { getTodayTimelineEntries, normalizeDashboardCalendarEvents } from "@/lib/dashboard-calendar";
 import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
@@ -1332,6 +1333,8 @@ export default async function DashboardPage({ params }: Props) {
           <AcademicPoliciesSettings />
         ) : selected.slug === "calendar-events" ? (
           <CalendarEventsSettings />
+        ) : selected.slug === "careers" ? (
+          <UniversityCareersSettings />
         ) : selected.slug === "system-settings" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">

@@ -203,6 +203,7 @@ model SystemSettings {
   gradeScale                 Json?
   lateSubmissionPenaltyRules Json?
   dashboardCalendarEvents    Json?
+  universityCareers          Json?
   updatedById                String?
   updatedBy                  User?      @relation("SystemSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt                  DateTime   @default(now())

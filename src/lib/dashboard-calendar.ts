@@ -118,9 +118,21 @@ export function getTodayTimelineEntries(
 ) {
   const mappedRole = mapRole(role);
   if (!mappedRole) return [];
+  const roleEvents = events
+    .filter((event) => event.roles.includes(mappedRole))
+    .sort(compareEvents);
 
-  return events
-    .filter((event) => event.date === today && event.roles.includes(mappedRole))
-    .sort(compareEvents)
+  const todayEntries = roleEvents
+    .filter((event) => event.date === today)
     .map((event) => toTimelineLabel(event));
+
+  if (todayEntries.length) {
+    return todayEntries;
+  }
+
+  // If no event is scheduled for today, show the nearest saved events
+  // so admins can confirm that calendar data was persisted.
+  return roleEvents
+    .slice(0, 6)
+    .map((event) => `${event.date} ${toTimelineLabel(event)}`);
 }

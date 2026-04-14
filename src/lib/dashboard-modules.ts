@@ -125,13 +125,20 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["SUPER_ADMIN"],
     parentSlug: "system-settings",
   },
-  {
-    slug: "calendar-events",
-    title: "Calendar Events",
-    description: "Manage role-based events shown in dashboard overview timelines.",
-    roles: ["SUPER_ADMIN"],
-    parentSlug: "system-settings",
-  },
+    {
+      slug: "calendar-events",
+      title: "Calendar Events",
+      description: "Manage role-based events shown in dashboard overview timelines.",
+      roles: ["SUPER_ADMIN"],
+      parentSlug: "system-settings",
+    },
+    {
+      slug: "careers",
+      title: "University Careers",
+      description: "Manage careers available for university programs.",
+      roles: ["SUPER_ADMIN"],
+      parentSlug: "system-settings",
+    },
   {
     slug: "invitations",
     title: "Invitations",

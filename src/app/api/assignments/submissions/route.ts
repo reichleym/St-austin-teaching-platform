@@ -1,7 +1,9 @@
 import { Prisma, Role } from "@prisma/client";
 import { promises as fs } from "fs";
+import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { Dolos } from "@dodona/dolos-lib";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
@@ -41,6 +43,7 @@ type UpdateSubmissionBody = {
 
 type PlagiarismStatus = "PENDING" | "COMPLETED" | "FAILED";
 type AttemptScoringStrategy = "LATEST" | "HIGHEST";
+type PlagiarismProvider = "DOLOS" | "INTERNAL_HEURISTIC";
 
 const PUBLISHED_STATES: GradeLifecycleState[] = [
   "GRADE_PUBLISHED",
@@ -354,10 +357,105 @@ function similarityPercent(a: string, b: string) {
   return Math.round((intersection / union) * 10000) / 100;
 }
 
-function canCheckFileType(fileName: string | null, mimeType: string | null) {
+function normalizeTextForPlagiarism(input: string) {
+  return input.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
+function detectSubmissionFileKind(fileName: string | null, mimeType: string | null) {
   const ext = (fileName ? path.extname(fileName) : "").toLowerCase();
   const mime = (mimeType ?? "").toLowerCase();
-  return ext === ".txt" || mime === "text/plain";
+
+  if (ext === ".txt" || ext === ".md" || mime === "text/plain" || mime === "text/markdown") return "TEXT";
+  if (ext === ".pdf" || mime === "application/pdf") return "PDF";
+  if (
+    ext === ".docx" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    return "DOCX";
+  }
+  if (ext === ".doc" || mime === "application/msword") return "DOC";
+  return null;
+}
+
+function canCheckFileType(fileName: string | null, mimeType: string | null) {
+  return detectSubmissionFileKind(fileName, mimeType) !== null;
+}
+
+async function readSubmissionFileBuffer(fileUrl: string) {
+  if (fileUrl.startsWith("http")) {
+    const token = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    const response = await fetch(fileUrl, { headers });
+    if (!response.ok) return null;
+    const content = await response.arrayBuffer();
+    return Buffer.from(content);
+  }
+
+  const relative = fileUrl.startsWith("/") ? fileUrl.slice(1) : fileUrl;
+  const absolute = path.join(process.cwd(), "public", relative);
+  return fs.readFile(absolute);
+}
+
+async function extractPdfText(buffer: Buffer) {
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return typeof result.text === "string" ? result.text : "";
+  } finally {
+    await parser.destroy();
+  }
+}
+
+async function extractDocxText(buffer: Buffer) {
+  const mammoth = await import("mammoth");
+  const result = await mammoth.extractRawText({ buffer });
+  return typeof result.value === "string" ? result.value : "";
+}
+
+async function extractDocText(buffer: Buffer) {
+  const wordExtractorModule = await import("word-extractor");
+  const WordExtractor = wordExtractorModule.default;
+  const extractor = new WordExtractor();
+  const doc = await extractor.extract(buffer);
+  const body = doc.getBody({ filterUnicode: true, includeFootnotes: false });
+  return typeof body === "string" ? body : "";
+}
+
+function extractReadableAscii(buffer: Buffer) {
+  return buffer
+    .toString("utf8")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+async function extractSubmissionFileContent(submission: {
+  fileUrl: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+}) {
+  if (!submission.fileUrl || !canCheckFileType(submission.fileName, submission.mimeType)) return "";
+  const fileKind = detectSubmissionFileKind(submission.fileName, submission.mimeType);
+  if (!fileKind) return "";
+
+  try {
+    const buffer = await readSubmissionFileBuffer(submission.fileUrl);
+    if (!buffer) return "";
+
+    if (fileKind === "TEXT") return normalizeTextForPlagiarism(buffer.toString("utf8"));
+    if (fileKind === "PDF") return normalizeTextForPlagiarism(await extractPdfText(buffer));
+    if (fileKind === "DOCX") return normalizeTextForPlagiarism(await extractDocxText(buffer));
+    if (fileKind === "DOC") return normalizeTextForPlagiarism(await extractDocText(buffer));
+
+    return "";
+  } catch {
+    try {
+      const raw = await readSubmissionFileBuffer(submission.fileUrl);
+      return normalizeTextForPlagiarism(extractReadableAscii(raw ?? Buffer.alloc(0)));
+    } catch {
+      return "";
+    }
+  }
 }
 
 async function extractSubmissionContent(submission: {
@@ -368,35 +466,105 @@ async function extractSubmissionContent(submission: {
 }) {
   const chunks: string[] = [];
   if (submission.textResponse?.trim()) {
-    chunks.push(submission.textResponse.trim());
+    chunks.push(normalizeTextForPlagiarism(submission.textResponse));
   }
-  if (submission.fileUrl && canCheckFileType(submission.fileName, submission.mimeType)) {
-    try {
-      if (submission.fileUrl.startsWith("http")) {
-        const token = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-        const response = await fetch(submission.fileUrl, { headers });
-        if (response.ok) {
-          const content = await response.text();
-          if (content.trim()) chunks.push(content.trim());
-        }
-      } else {
-        const relative = submission.fileUrl.startsWith("/") ? submission.fileUrl.slice(1) : submission.fileUrl;
-        const absolute = path.join(process.cwd(), "public", relative);
-        const content = await fs.readFile(absolute, "utf8");
-        if (content.trim()) chunks.push(content.trim());
-      }
-    } catch {
-      // Ignore file extraction failures and continue with available content.
+
+  const fileText = await extractSubmissionFileContent(submission);
+  if (fileText) {
+    chunks.push(fileText);
+  }
+
+  return normalizeTextForPlagiarism(chunks.join("\n\n"));
+}
+
+async function runDolosSimilarity(
+  currentSubmissionId: string,
+  currentContent: string,
+  candidates: Array<{ submissionId: string; studentId: string; content: string }>
+) {
+  if (!candidates.length) return [];
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "dolos-"));
+  try {
+    const sanitizedId = currentSubmissionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const targetPath = path.join(tempRoot, `current-${sanitizedId}.txt`);
+    await fs.writeFile(targetPath, currentContent, "utf8");
+
+    const files = [targetPath];
+    const pathMeta = new Map<string, { submissionId: string; studentId: string }>();
+    pathMeta.set(targetPath, { submissionId: currentSubmissionId, studentId: "" });
+
+    for (const candidate of candidates) {
+      const candidatePath = path.join(
+        tempRoot,
+        `candidate-${candidate.submissionId.replace(/[^a-zA-Z0-9_-]/g, "_")}.txt`
+      );
+      await fs.writeFile(candidatePath, candidate.content, "utf8");
+      files.push(candidatePath);
+      pathMeta.set(candidatePath, { submissionId: candidate.submissionId, studentId: candidate.studentId });
     }
+
+    const dolos = new Dolos({
+      language: "char",
+      minSimilarity: 0,
+      limitResults: null,
+    });
+
+    const report = await dolos.analyzePaths(files);
+    const allPairs = report.allPairs();
+    const matches: Array<{ submissionId: string; studentId: string; similarity: number }> = [];
+
+    for (const pair of allPairs) {
+      const leftPath = pair.leftFile.path;
+      const rightPath = pair.rightFile.path;
+      const left = pathMeta.get(leftPath);
+      const right = pathMeta.get(rightPath);
+      if (!left || !right) continue;
+
+      let candidateMeta: { submissionId: string; studentId: string } | null = null;
+      if (left.submissionId === currentSubmissionId && right.submissionId !== currentSubmissionId) {
+        candidateMeta = right;
+      } else if (right.submissionId === currentSubmissionId && left.submissionId !== currentSubmissionId) {
+        candidateMeta = left;
+      }
+      if (!candidateMeta) continue;
+
+      const similarity = Math.max(0, Math.min(100, Math.round(pair.similarity * 10000) / 100));
+      matches.push({
+        submissionId: candidateMeta.submissionId,
+        studentId: candidateMeta.studentId,
+        similarity,
+      });
+    }
+
+    return matches
+      .filter((item) => item.similarity > 0)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
   }
-  return chunks.join("\n\n").trim();
+}
+
+function runHeuristicSimilarity(
+  content: string,
+  candidates: Array<{ submissionId: string; studentId: string; content: string }>
+) {
+  return candidates
+    .map((item) => ({
+      submissionId: item.submissionId,
+      studentId: item.studentId,
+      similarity: similarityPercent(content, item.content),
+    }))
+    .filter((item) => item.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 5);
 }
 
 async function upsertPlagiarismReport(
   submissionId: string,
   payload: {
     status: PlagiarismStatus;
+    provider: PlagiarismProvider;
     similarityScore: number | null;
     summary: string;
     matchedSources: unknown[];
@@ -409,7 +577,7 @@ async function upsertPlagiarismReport(
     INSERT INTO "PlagiarismReport"
       ("id","submissionId","status","provider","similarityScore","summary","matchedSources","errorMessage","checkedAt","updatedAt")
     VALUES
-      (${id}, ${submissionId}, ${payload.status}, ${"INTERNAL_HEURISTIC"}, ${payload.similarityScore}, ${payload.summary}, ${JSON.stringify(payload.matchedSources)}::jsonb, ${payload.errorMessage}, ${payload.checkedAt}, NOW())
+      (${id}, ${submissionId}, ${payload.status}, ${payload.provider}, ${payload.similarityScore}, ${payload.summary}, ${JSON.stringify(payload.matchedSources)}::jsonb, ${payload.errorMessage}, ${payload.checkedAt}, NOW())
     ON CONFLICT ("submissionId")
     DO UPDATE SET
       "status" = EXCLUDED."status",
@@ -426,6 +594,7 @@ async function upsertPlagiarismReport(
 async function queuePlagiarismCheck(submissionId: string) {
   await upsertPlagiarismReport(submissionId, {
     status: "PENDING",
+    provider: "DOLOS",
     similarityScore: null,
     summary: "Plagiarism check queued.",
     matchedSources: [],
@@ -461,34 +630,57 @@ async function runPlagiarismCheck(submissionId: string) {
     if (!content) {
       await upsertPlagiarismReport(submissionId, {
         status: "FAILED",
+        provider: "DOLOS",
         similarityScore: null,
         summary: "No supported content found for plagiarism check.",
         matchedSources: [],
-        errorMessage: "Only text and TXT files are checked in MVP.",
+        errorMessage: "Only text, PDF, DOC, and DOCX submissions can be checked.",
         checkedAt: new Date(),
       });
       return;
     }
 
     const candidates = await prisma.$queryRaw<
-      Array<{ id: string; studentId: string; textResponse: string | null }>
+      Array<{
+        id: string;
+        studentId: string;
+        textResponse: string | null;
+        fileUrl: string | null;
+        fileName: string | null;
+        mimeType: string | null;
+      }>
     >`
-      SELECT "id","studentId","textResponse"
+      SELECT "id","studentId","textResponse","fileUrl","fileName","mimeType"
       FROM "AssignmentSubmission"
       WHERE "assignmentId" = ${submission.assignmentId} AND "id" <> ${submissionId}
       ORDER BY "submittedAt" DESC
       LIMIT 100
     `;
 
-    const matches = candidates
-      .map((item) => ({
+    const candidateContents: Array<{ submissionId: string; studentId: string; content: string }> = [];
+    for (const item of candidates) {
+      const candidateContent = await extractSubmissionContent({
+        textResponse: item.textResponse,
+        fileUrl: item.fileUrl,
+        fileName: item.fileName,
+        mimeType: item.mimeType,
+      });
+      if (!candidateContent) continue;
+      candidateContents.push({
         submissionId: item.id,
         studentId: item.studentId,
-        similarity: similarityPercent(content, item.textResponse ?? ""),
-      }))
-      .filter((item) => item.similarity > 0)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 5);
+        content: candidateContent,
+      });
+    }
+
+    let matches: Array<{ submissionId: string; studentId: string; similarity: number }> = [];
+    let provider: PlagiarismProvider = "DOLOS";
+    try {
+      matches = await runDolosSimilarity(submissionId, content, candidateContents);
+    } catch {
+      provider = "INTERNAL_HEURISTIC";
+      matches = runHeuristicSimilarity(content, candidateContents);
+    }
 
     const similarityScore = matches.length ? matches[0].similarity : 0;
     const summary =
@@ -500,6 +692,7 @@ async function runPlagiarismCheck(submissionId: string) {
 
     await upsertPlagiarismReport(submissionId, {
       status: "COMPLETED",
+      provider,
       similarityScore,
       summary,
       matchedSources: matches,
@@ -510,6 +703,7 @@ async function runPlagiarismCheck(submissionId: string) {
     const message = error instanceof Error ? error.message : "Plagiarism check failed.";
     await upsertPlagiarismReport(submissionId, {
       status: "FAILED",
+      provider: "DOLOS",
       similarityScore: null,
       summary: "Plagiarism check failed.",
       matchedSources: [],

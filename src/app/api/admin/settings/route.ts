@@ -1,6 +1,7 @@
 import { AdminActionType, Prisma, SignupMode } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeDashboardCalendarEvents, type DashboardCalendarEvent } from "@/lib/dashboard-calendar";
+import { normalizeUniversityCareers } from "@/lib/university-careers";
 import { PermissionError, requireSuperAdminUser } from "@/lib/permissions";
 import { getSystemSettings, type GradeScaleBand, type LatePenaltyRule } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
@@ -16,11 +17,31 @@ function parseDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+async function readUniversityCareersJson() {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ universityCareers: Prisma.JsonValue | null }>>`
+      SELECT "universityCareers"
+      FROM "SystemSettings"
+      WHERE "id" = 1
+      LIMIT 1
+    `;
+    return rows[0]?.universityCareers ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   try {
     await requireSuperAdminUser();
     const settings = await getSystemSettings();
-    return NextResponse.json({ settings });
+    const universityCareers = await readUniversityCareersJson();
+    return NextResponse.json({
+      settings: {
+        ...settings,
+        universityCareers,
+      },
+    });
   } catch (error) {
     if (error instanceof PermissionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -40,6 +61,7 @@ export async function PATCH(request: NextRequest) {
       gradeScale?: GradeScaleBand[] | null;
       lateSubmissionPenaltyRules?: LatePenaltyRule[] | null;
       dashboardCalendarEvents?: DashboardCalendarEvent[] | null;
+      universityCareers?: unknown;
     };
 
     if (body.signupMode && body.signupMode !== SignupMode.INVITE_ONLY && body.signupMode !== SignupMode.OPEN_WITH_CUTOFF) {
@@ -59,6 +81,10 @@ export async function PATCH(request: NextRequest) {
         : body.dashboardCalendarEvents === null
           ? null
           : normalizeDashboardCalendarEvents(body.dashboardCalendarEvents);
+
+    const parsedCareers = body.universityCareers === undefined
+      ? undefined
+      : normalizeUniversityCareers(body.universityCareers);
 
     if (body.signupMode === SignupMode.OPEN_WITH_CUTOFF && parsedCutoff === undefined && body.studentSignupCutoffDate === undefined) {
       const existing = await getSystemSettings();
@@ -93,6 +119,27 @@ export async function PATCH(request: NextRequest) {
         },
       });
 
+      if (parsedCareers !== undefined) {
+        const serializedCareers = parsedCareers === null ? null : JSON.stringify(parsedCareers);
+        await tx.$executeRaw`
+          ALTER TABLE "SystemSettings"
+          ADD COLUMN IF NOT EXISTS "universityCareers" JSONB
+        `;
+        if (serializedCareers === null) {
+          await tx.$executeRaw`
+            UPDATE "SystemSettings"
+            SET "universityCareers" = NULL
+            WHERE "id" = ${settings.id}
+          `;
+        } else {
+          await tx.$executeRaw`
+            UPDATE "SystemSettings"
+            SET "universityCareers" = ${serializedCareers}::jsonb
+            WHERE "id" = ${settings.id}
+          `;
+        }
+      }
+
       await tx.adminActionLog.create({
         data: {
           action: AdminActionType.UPDATE_SYSTEM_SETTINGS,
@@ -107,6 +154,8 @@ export async function PATCH(request: NextRequest) {
             hasLatePenaltyRules: body.lateSubmissionPenaltyRules !== undefined,
             hasDashboardCalendarEvents: parsedCalendarEvents !== undefined,
             dashboardCalendarEventCount: parsedCalendarEvents?.length,
+            hasUniversityCareers: parsedCareers !== undefined,
+            universityCareersCount: parsedCareers?.length,
           },
         },
       });
