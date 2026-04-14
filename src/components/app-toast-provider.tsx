@@ -1,17 +1,86 @@
 "use client";
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { subscribeToasts, ToastPayload } from "@/lib/toast";
+import { subscribeToasts, toast, ToastPayload } from "@/lib/toast";
+import { useLanguage } from "@/components/language-provider";
 
 type Props = {
   children: ReactNode;
 };
 
 type ToastItem = ToastPayload;
+type MutationMethod = "POST" | "PATCH" | "PUT" | "DELETE";
+
+const MANUAL_TOAST_EVENT = "app:manual-toast";
+const MUTATION_METHODS: MutationMethod[] = ["POST", "PATCH", "PUT", "DELETE"];
+const TOAST_SUPPRESSED_PATHS = ["/api/auth/"];
+const AUTO_TOAST_DELAY_MS = 220;
+const AUTO_TOAST_SUPPRESSION_WINDOW_MS = 500;
+
+function parsePayloadMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+
+  if (typeof record.error === "string" && record.error.trim()) return record.error;
+  if (typeof record.message === "string" && record.message.trim()) return record.message;
+  return null;
+}
+
+function getMutationMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  if (typeof init?.method === "string" && init.method.trim()) return init.method.trim().toUpperCase();
+  if (typeof Request !== "undefined" && input instanceof Request) return input.method.toUpperCase();
+  return "GET";
+}
+
+function getRequestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  if (typeof Request !== "undefined" && input instanceof Request) return input.url;
+  return "";
+}
+
+function isToastSuppressed(rawUrl: string): boolean {
+  if (!rawUrl) return false;
+
+  if (rawUrl.startsWith("/")) {
+    return TOAST_SUPPRESSED_PATHS.some((path) => rawUrl.startsWith(path));
+  }
+
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.origin !== window.location.origin) return false;
+      return TOAST_SUPPRESSED_PATHS.some((path) => parsed.pathname.startsWith(path));
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function isApiMutation(method: string, rawUrl: string): method is MutationMethod {
+  if (!MUTATION_METHODS.includes(method as MutationMethod)) return false;
+  if (!rawUrl) return false;
+
+  if (rawUrl.startsWith("/api/")) return true;
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+    try {
+      const parsed = new URL(rawUrl);
+      return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/");
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
 
 export function AppToastProvider({ children }: Props) {
+  const { t } = useLanguage();
   const [items, setItems] = useState<ToastItem[]>([]);
   const timerMapRef = useRef<Map<string, number>>(new Map());
+  const manualToastAtRef = useRef(0);
+  const autoToastTimerIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     return subscribeToasts((payload) => {
@@ -34,6 +103,95 @@ export function AppToastProvider({ children }: Props) {
       timerMap.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const onManualToast = (event: Event) => {
+      const customEvent = event as CustomEvent<{ ts?: number }>;
+      manualToastAtRef.current = typeof customEvent.detail?.ts === "number" ? customEvent.detail.ts : Date.now();
+    };
+
+    window.addEventListener(MANUAL_TOAST_EVENT, onManualToast as EventListener);
+    return () => {
+      window.removeEventListener(MANUAL_TOAST_EVENT, onManualToast as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    const autoToastTimerIds = autoToastTimerIdsRef.current;
+
+    const scheduleAutoToast = (showToast: () => void) => {
+      const timeoutId = window.setTimeout(() => {
+        autoToastTimerIds.delete(timeoutId);
+        if (Date.now() - manualToastAtRef.current < AUTO_TOAST_SUPPRESSION_WINDOW_MS) return;
+        showToast();
+      }, AUTO_TOAST_DELAY_MS);
+      autoToastTimerIds.add(timeoutId);
+    };
+
+    const wrappedFetch: typeof window.fetch = async (input, init) => {
+      const method = getMutationMethod(input, init);
+      const url = getRequestUrl(input);
+      const shouldToast = isApiMutation(method, url) && !isToastSuppressed(url);
+
+      try {
+        const response = await originalFetch(input, init);
+        if (!shouldToast) return response;
+
+        const clone = response.clone();
+        let parsedPayload: unknown = null;
+        try {
+          const raw = await clone.text();
+          parsedPayload = raw ? (JSON.parse(raw) as unknown) : null;
+        } catch {
+          parsedPayload = null;
+        }
+
+        const payloadMessage = parsePayloadMessage(parsedPayload);
+
+        if (response.ok) {
+          const successMessage =
+            method === "POST"
+              ? t("toast.created")
+              : method === "PATCH" || method === "PUT"
+                ? t("toast.updated")
+                : t("toast.deleted");
+          scheduleAutoToast(() => toast.success(payloadMessage ?? successMessage));
+        } else {
+          const errorMessage =
+            method === "POST"
+              ? t("toast.createFailed")
+              : method === "PATCH" || method === "PUT"
+                ? t("toast.updateFailed")
+                : t("toast.deleteFailed");
+          scheduleAutoToast(() => toast.error(payloadMessage ?? errorMessage));
+        }
+
+        return response;
+      } catch (error) {
+        if (shouldToast) {
+          scheduleAutoToast(() => {
+            if (error instanceof Error && error.message.trim()) {
+              toast.error(error.message);
+            } else {
+              toast.error(t("toast.networkFailed"));
+            }
+          });
+        }
+        throw error;
+      }
+    };
+
+    window.fetch = wrappedFetch;
+
+    return () => {
+      window.fetch = originalFetch;
+      for (const id of autoToastTimerIds.values()) {
+        window.clearTimeout(id);
+      }
+      autoToastTimerIds.clear();
+    };
+  }, [t]);
 
   const hasItems = items.length > 0;
   const containerClassName = useMemo(

@@ -62,6 +62,11 @@ export function ProgramsModule({ role }: Props) {
   const [createTitle, setCreateTitle] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createVisibility, setCreateVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
+  const [createOverview, setCreateOverview] = useState("");
+  const [createTuitionAndFees, setCreateTuitionAndFees] = useState("");
+  const [createCurriculum, setCreateCurriculum] = useState("");
+  const [createAdmissionRequirements, setCreateAdmissionRequirements] = useState("");
+  const [createCareerOpportunities, setCreateCareerOpportunities] = useState("");
   const [createCourseIds, setCreateCourseIds] = useState<string[]>([]);
   const [createCourseSearch, setCreateCourseSearch] = useState("");
   const [createPending, setCreatePending] = useState(false);
@@ -165,6 +170,15 @@ export function ProgramsModule({ role }: Props) {
     [editAdmissionRequirements, editCareerOpportunities, editCurriculum]
   );
 
+  const createContentPreview = useMemo(
+    () => ({
+      curriculum: toListFromMultiline(createCurriculum).length,
+      admissionRequirements: toListFromMultiline(createAdmissionRequirements).length,
+      careerOpportunities: toListFromMultiline(createCareerOpportunities).length,
+    }),
+    [createAdmissionRequirements, createCareerOpportunities, createCurriculum]
+  );
+
   const onCreateProgram = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreatePending(true);
@@ -177,6 +191,13 @@ export function ProgramsModule({ role }: Props) {
           title: createTitle.trim(),
           description: createDescription.trim() || null,
           visibility: createVisibility,
+          programDetails: {
+            overview: createOverview.trim() || null,
+            tuitionAndFees: createTuitionAndFees.trim() || null,
+            curriculum: toListFromMultiline(createCurriculum),
+            admissionRequirements: toListFromMultiline(createAdmissionRequirements),
+            careerOpportunities: toListFromMultiline(createCareerOpportunities),
+          },
           courseIds: createCourseIds,
         }),
       });
@@ -190,6 +211,11 @@ export function ProgramsModule({ role }: Props) {
       setCreateTitle("");
       setCreateDescription("");
       setCreateVisibility("DRAFT");
+      setCreateOverview("");
+      setCreateTuitionAndFees("");
+      setCreateCurriculum("");
+      setCreateAdmissionRequirements("");
+      setCreateCareerOpportunities("");
       setCreateCourseIds([]);
       setCreateCourseSearch("");
       await loadData();
@@ -423,6 +449,59 @@ export function ProgramsModule({ role }: Props) {
                   <option value="PUBLISHED">Published</option>
                 </select>
               </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Program Overview</span>
+                <textarea
+                  className="brand-input min-h-[110px]"
+                  value={createOverview}
+                  onChange={(event) => setCreateOverview(event.currentTarget.value)}
+                  maxLength={3000}
+                  placeholder="Short summary shown in Program Overview section."
+                />
+              </label>
+              <label className="grid gap-1.5 md:max-w-sm">
+                <span className="brand-label">Tuition & Fees</span>
+                <input
+                  className="brand-input"
+                  value={createTuitionAndFees}
+                  onChange={(event) => setCreateTuitionAndFees(event.currentTarget.value)}
+                  maxLength={160}
+                  placeholder="$12,500 / year"
+                />
+              </label>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Curriculum (one per line)</span>
+                  <textarea
+                    className="brand-input min-h-[130px]"
+                    value={createCurriculum}
+                    onChange={(event) => setCreateCurriculum(event.currentTarget.value)}
+                    placeholder="Introduction to Business"
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Admission Requirements (one per line)</span>
+                  <textarea
+                    className="brand-input min-h-[130px]"
+                    value={createAdmissionRequirements}
+                    onChange={(event) => setCreateAdmissionRequirements(event.currentTarget.value)}
+                    placeholder="High school diploma or equivalent"
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Career Opportunities (one per line)</span>
+                  <textarea
+                    className="brand-input min-h-[130px]"
+                    value={createCareerOpportunities}
+                    onChange={(event) => setCreateCareerOpportunities(event.currentTarget.value)}
+                    placeholder="Business Manager"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-[#3a689f]">
+                Preview counts: Curriculum {createContentPreview.curriculum}, Requirements {createContentPreview.admissionRequirements}, Careers{" "}
+                {createContentPreview.careerOpportunities}
+              </p>
               <label className="grid gap-1.5">
                 <span className="brand-label">{t("label.selectCourses") || "Select Courses"}</span>
                 <div className="grid gap-2">

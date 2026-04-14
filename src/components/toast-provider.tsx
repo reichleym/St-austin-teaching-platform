@@ -16,6 +16,7 @@ type ToastContextValue = {
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+const MANUAL_TOAST_EVENT = "app:manual-toast";
 
 function ToastCard({ toast, onClose }: { toast: Toast; onClose: (id: string) => void }) {
   const { t } = useLanguage();
@@ -52,6 +53,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     if (!toast.message) return;
     const id = `toast_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
     setToasts((prev) => [...prev, { id, type: toast.type, message: toast.message }]);
+    window.dispatchEvent(
+      new CustomEvent(MANUAL_TOAST_EVENT, {
+        detail: {
+          ts: Date.now(),
+          type: toast.type,
+          message: toast.message,
+        },
+      })
+    );
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== id));
     }, 4200);
