@@ -6,6 +6,13 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
+import { supportedLanguages, type Language } from "@/lib/i18n";
+import {
+  createEmptyProgramLocalizationDrafts,
+  getProgramLocalizationDrafts,
+  parseProgramLanguage,
+  type ProgramLocalization,
+} from "@/lib/programs-translations";
 
 type ProgramDetails = {
   overview: string | null;
@@ -26,6 +33,8 @@ type ProgramItem = {
   code: string;
   title: string;
   description: string | null;
+  sourceLanguage: string;
+  translations: unknown;
   programDetails: ProgramDetails | null;
   visibility: "DRAFT" | "PUBLISHED";
   courseCount: number;
@@ -46,22 +55,21 @@ const toListFromMultiline = (value: string) =>
     .filter(Boolean);
 
 export function ProgramManageEditor({ programId }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const router = useRouter();
+  const initialSourceLanguage = parseProgramLanguage(language);
 
   const [program, setProgram] = useState<ProgramItem | null>(null);
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  const [editSourceLanguage, setEditSourceLanguage] = useState<Language>(initialSourceLanguage);
+  const [editLocalizations, setEditLocalizations] = useState<Record<Language, ProgramLocalization>>(
+    createEmptyProgramLocalizationDrafts()
+  );
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
-  const [editOverview, setEditOverview] = useState("");
   const [editTuitionAndFees, setEditTuitionAndFees] = useState("");
-  const [editCurriculum, setEditCurriculum] = useState("");
-  const [editAdmissionRequirements, setEditAdmissionRequirements] = useState("");
-  const [editCareerOpportunities, setEditCareerOpportunities] = useState("");
   const [editCourseIds, setEditCourseIds] = useState<string[]>([]);
   const [editCourseSearch, setEditCourseSearch] = useState("");
   const [editPending, setEditPending] = useState(false);
@@ -69,14 +77,10 @@ export function ProgramManageEditor({ programId }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const applyProgramToForm = useCallback((nextProgram: ProgramItem) => {
-    setEditTitle(nextProgram.title);
-    setEditDescription(nextProgram.description ?? "");
+    setEditSourceLanguage(parseProgramLanguage(nextProgram.sourceLanguage));
+    setEditLocalizations(getProgramLocalizationDrafts(nextProgram));
     setEditVisibility(nextProgram.visibility);
-    setEditOverview(nextProgram.programDetails?.overview ?? "");
     setEditTuitionAndFees(nextProgram.programDetails?.tuitionAndFees ?? "");
-    setEditCurriculum(toMultilineValue(nextProgram.programDetails?.curriculum));
-    setEditAdmissionRequirements(toMultilineValue(nextProgram.programDetails?.admissionRequirements));
-    setEditCareerOpportunities(toMultilineValue(nextProgram.programDetails?.careerOpportunities));
     setEditCourseIds(nextProgram.courses.map((course) => course.id));
     setEditCourseSearch("");
   }, []);
@@ -139,13 +143,134 @@ export function ProgramManageEditor({ programId }: Props) {
     [courses, editCourseIds]
   );
 
-  const editContentPreview = useMemo(
-    () => ({
-      curriculum: toListFromMultiline(editCurriculum).length,
-      admissionRequirements: toListFromMultiline(editAdmissionRequirements).length,
-      careerOpportunities: toListFromMultiline(editCareerOpportunities).length,
-    }),
-    [editAdmissionRequirements, editCareerOpportunities, editCurriculum]
+  const editContentPreview = useMemo(() => {
+    const localization = editLocalizations[editSourceLanguage];
+    return {
+      curriculum: toListFromMultiline(localization.curriculum ?? "").length,
+      admissionRequirements: toListFromMultiline(localization.admissionRequirements ?? "").length,
+      careerOpportunities: toListFromMultiline(localization.careerOpportunities ?? "").length,
+    };
+  }, [editLocalizations, editSourceLanguage]);
+
+  const languageLabel = (value: Language) => (value === "fr" ? t("french") : t("english"));
+
+  const updateLocalization = (
+    targetLanguage: Language,
+    field:
+      | "title"
+      | "description"
+      | "overview"
+      | "curriculum"
+      | "admissionRequirements"
+      | "careerOpportunities",
+    value: string
+  ) => {
+    setEditLocalizations((prev) => ({
+      ...prev,
+      [targetLanguage]: {
+        ...prev[targetLanguage],
+        [field]: value,
+      },
+    }));
+  };
+
+  const renderLocalizationFields = (draftSourceLanguage: Language, draftLocalizations: Record<Language, ProgramLocalization>) => (
+    <div className="grid gap-4">
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">{t("announcement.sourceLanguage")}</span>
+        <select
+          className="brand-input"
+          value={draftSourceLanguage}
+          onChange={(event) => setEditSourceLanguage(parseProgramLanguage(event.currentTarget.value))}
+        >
+          {supportedLanguages.map((entryLanguage) => (
+            <option key={entryLanguage} value={entryLanguage}>
+              {languageLabel(entryLanguage)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((entryLanguage) => {
+          const isPrimary = entryLanguage === draftSourceLanguage;
+          const fields = draftLocalizations[entryLanguage];
+          return (
+            <fieldset key={entryLanguage} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <legend className="text-sm font-semibold text-[#0b3e81]">
+                  {t("announcement.languageVersion", { language: languageLabel(entryLanguage) })}
+                </legend>
+                {isPrimary ? (
+                  <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">
+                    {t("announcement.primaryLanguage")}
+                  </span>
+                ) : null}
+              </div>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("label.title")}</span>
+                <input
+                  className="brand-input"
+                  value={fields.title}
+                  onChange={(event) => updateLocalization(entryLanguage, "title", event.currentTarget.value)}
+                  required={isPrimary}
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("label.descriptionOptional")}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.description ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "description", event.currentTarget.value)}
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.overview") || "Program Overview"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.overview ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "overview", event.currentTarget.value)}
+                  placeholder="Short summary shown in Program Overview section."
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.curriculum") || "Curriculum (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.curriculum ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "curriculum", event.currentTarget.value)}
+                  placeholder="Introduction to Business"
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.admissionRequirements") || "Admission Requirements (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.admissionRequirements ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "admissionRequirements", event.currentTarget.value)}
+                  placeholder="High school diploma or equivalent"
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.careerOpportunities") || "Career Opportunities (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.careerOpportunities ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "careerOpportunities", event.currentTarget.value)}
+                  placeholder="Business Manager"
+                />
+              </label>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
   );
 
   const toggleEditCourse = (courseId: string) => {
@@ -166,21 +291,24 @@ export function ProgramManageEditor({ programId }: Props) {
 
     setEditPending(true);
     setError("");
+    const primaryLocalization = editLocalizations[editSourceLanguage];
     try {
       const response = await fetch("/api/admin/programs", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           programId: program.id,
-          title: editTitle.trim(),
-          description: editDescription.trim() || null,
+          title: primaryLocalization.title.trim(),
+          description: (primaryLocalization.description ?? "").trim() || null,
+          sourceLanguage: editSourceLanguage,
+          translations: editLocalizations,
           visibility: editVisibility,
           programDetails: {
-            overview: editOverview.trim() || null,
+            overview: primaryLocalization.overview?.trim() || null,
             tuitionAndFees: editTuitionAndFees.trim() || null,
-            curriculum: toListFromMultiline(editCurriculum),
-            admissionRequirements: toListFromMultiline(editAdmissionRequirements),
-            careerOpportunities: toListFromMultiline(editCareerOpportunities),
+            curriculum: toListFromMultiline(primaryLocalization.curriculum ?? ""),
+            admissionRequirements: toListFromMultiline(primaryLocalization.admissionRequirements ?? ""),
+            careerOpportunities: toListFromMultiline(primaryLocalization.careerOpportunities ?? ""),
           },
           courseIds: editCourseIds,
         }),
@@ -249,22 +377,14 @@ export function ProgramManageEditor({ programId }: Props) {
 
       <form className="mt-4 grid gap-4" onSubmit={onUpdateProgram}>
         <label className="grid gap-1.5">
-          <span className="brand-label">Code</span>
+          <span className="brand-label">{t("label.programCode") || "Code"}</span>
           <input className="brand-input" value={program.code} disabled />
         </label>
 
-        <label className="grid gap-1.5">
-          <span className="brand-label">Title</span>
-          <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} required />
-        </label>
+        {renderLocalizationFields(editSourceLanguage, editLocalizations)}
 
-        <label className="grid gap-1.5">
-          <span className="brand-label">Description (optional)</span>
-          <textarea className="brand-input min-h-[90px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} />
-        </label>
-
-        <label className="grid gap-1.5">
-          <span className="brand-label">Program Overview</span>
+        {/* <label className="grid gap-1.5">
+          <span className="brand-label">{t("program.overview") || "Program Overview"}</span>
           <textarea
             className="brand-input min-h-[110px]"
             value={editOverview}
@@ -272,7 +392,7 @@ export function ProgramManageEditor({ programId }: Props) {
             maxLength={3000}
             placeholder="Short summary shown in Program Overview section."
           />
-        </label>
+        </label> */}
 
         <label className="grid gap-1.5 md:max-w-sm">
           <span className="brand-label">Tuition & Fees</span>
@@ -285,9 +405,9 @@ export function ProgramManageEditor({ programId }: Props) {
           />
         </label>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        {/* <div className="grid gap-3 md:grid-cols-3">
           <label className="grid gap-1.5">
-            <span className="brand-label">Curriculum (one per line)</span>
+            <span className="brand-label">{t("program.curriculum") || "Curriculum (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={editCurriculum}
@@ -297,7 +417,7 @@ export function ProgramManageEditor({ programId }: Props) {
           </label>
 
           <label className="grid gap-1.5">
-            <span className="brand-label">Admission Requirements (one per line)</span>
+            <span className="brand-label">{t("program.admissionRequirements") || "Admission Requirements (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={editAdmissionRequirements}
@@ -307,7 +427,7 @@ export function ProgramManageEditor({ programId }: Props) {
           </label>
 
           <label className="grid gap-1.5">
-            <span className="brand-label">Career Opportunities (one per line)</span>
+            <span className="brand-label">{t("program.careerOpportunities") || "Career Opportunities (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={editCareerOpportunities}
@@ -315,7 +435,7 @@ export function ProgramManageEditor({ programId }: Props) {
               placeholder="Business Manager"
             />
           </label>
-        </div>
+        </div> */}
 
         <p className="text-xs text-[#3a689f]">
           Preview counts: Curriculum {editContentPreview.curriculum}, Requirements {editContentPreview.admissionRequirements}, Careers{" "}

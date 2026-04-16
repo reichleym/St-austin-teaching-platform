@@ -1,3 +1,11 @@
+import { defaultLanguage, type Language } from "@/lib/i18n";
+import {
+  getCareerLocalization,
+  parseCareerTranslations,
+  type CareerLocalizationMap,
+  type CareerLocalizedRecord,
+} from "@/lib/career-translations";
+
 export const universityCareerRoles = ["SUPER_ADMIN"] as const;
 export type UniversityCareerRole = (typeof universityCareerRoles)[number];
 
@@ -5,6 +13,10 @@ export type UniversityCareer = {
   id: string;
   title: string;
   description: string;
+  sourceTitle?: string;
+  sourceDescription?: string;
+  sourceLanguage?: Language;
+  translations?: CareerLocalizationMap;
   isActive: boolean;
 };
 
@@ -24,6 +36,10 @@ function createNewCareer(): UniversityCareer {
     id: createCareerId(),
     title: "",
     description: "",
+    sourceTitle: "",
+    sourceDescription: "",
+    sourceLanguage: defaultLanguage,
+    translations: {},
     isActive: true,
   };
 }
@@ -33,16 +49,54 @@ function normalizeCareer(input: unknown): UniversityCareer | null {
   
   const record = input as Record<string, unknown>;
   const id = typeof record.id === "string" ? record.id.trim() : "";
-  const title = typeof record.title === "string" ? record.title.trim() : "";
-  const description = typeof record.description === "string" ? record.description.trim() : "";
+  const sourceTitle =
+    typeof record.sourceTitle === "string" && record.sourceTitle.trim()
+      ? record.sourceTitle.trim()
+      : typeof record.title === "string"
+        ? record.title.trim()
+        : "";
+  const sourceDescription =
+    typeof record.sourceDescription === "string" && record.sourceDescription.trim()
+      ? record.sourceDescription.trim()
+      : typeof record.description === "string"
+        ? record.description.trim()
+        : "";
+  const sourceLanguage =
+    typeof record.sourceLanguage === "string" ? (record.sourceLanguage.trim() as Language) : defaultLanguage;
+  const translationsInput = record.translations ?? record.titleTranslations ?? record.descriptionTranslations;
+  const parsedTranslations = parseCareerTranslations(translationsInput);
+  const localized = getCareerLocalization(
+    {
+      title: sourceTitle,
+      description: sourceDescription,
+      sourceLanguage,
+      translations: parsedTranslations,
+    } satisfies CareerLocalizedRecord,
+    defaultLanguage
+  );
   const isActive = record.isActive === true;
 
-  if (!id || !idPattern.test(id) || !title || title.length > titleMaxLength || 
-      description.length > descriptionMaxLength) {
+  if (
+    !id ||
+    !idPattern.test(id) ||
+    !localized.title ||
+    localized.title.length > titleMaxLength ||
+    !localized.description ||
+    localized.description.length > descriptionMaxLength
+  ) {
     return null;
   }
 
-  return { id, title, description, isActive };
+  return { 
+    id, 
+    title: localized.title, 
+    description: localized.description, 
+    sourceTitle, 
+    sourceDescription, 
+    translations: parsedTranslations,
+    sourceLanguage, 
+    isActive 
+  };
 }
 
 export function normalizeUniversityCareers(input: unknown): UniversityCareer[] {
@@ -64,4 +118,3 @@ export function normalizeUniversityCareers(input: unknown): UniversityCareer[] {
 }
 
 export { createNewCareer };
-

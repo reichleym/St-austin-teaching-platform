@@ -1,10 +1,20 @@
+import { defaultLanguage, type Language } from "@/lib/i18n";
+import {
+  getCalendarEventLocalizedTitle,
+  parseCalendarEventTranslations,
+  type CalendarEventLocalizationMap,
+} from "@/lib/calendar-event-translations";
+
 export const dashboardCalendarRoles = ["SUPER_ADMIN", "DEPARTMENT_HEAD", "TEACHER", "STUDENT"] as const;
 
 export type DashboardCalendarRole = (typeof dashboardCalendarRoles)[number];
 
 export type DashboardCalendarEvent = {
   id: string;
-  title: string;
+  title: string; // localized for current lang
+  sourceTitle?: string;
+  titleTranslations?: CalendarEventLocalizationMap;
+  sourceLanguage?: Language;
   date: string; // YYYY-MM-DD
   startTime: string; // HH:mm
   endTime: string | null;
@@ -69,22 +79,28 @@ export function normalizeDashboardCalendarEvents(input: unknown): DashboardCalen
     const item = input[index];
     if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
-    const title = typeof record.title === "string" ? record.title.trim() : "";
+    const rawTitle = typeof record.title === "string" ? record.title.trim() : "";
+    const sourceLanguage = typeof record.sourceLanguage === "string" ? record.sourceLanguage.trim() as Language : defaultLanguage;
+    const titleTranslations = record.titleTranslations;
+    const localizedTitle = getCalendarEventLocalizedTitle({ title: rawTitle, sourceLanguage, titleTranslations }, defaultLanguage);
     const date = normalizeDate(record.date);
     const startTime = normalizeTime(record.startTime);
     const endTime = normalizeTime(record.endTime);
     const roles = normalizeRoles(record.roles);
 
-    if (!title || !date || !startTime || roles.length === 0) continue;
+    if (!localizedTitle || !date || !startTime || roles.length === 0) continue;
 
     const id =
       typeof record.id === "string" && record.id.trim().length > 0
         ? record.id.trim()
-        : `${date}-${startTime}-${title.toLowerCase().replace(/\s+/g, "-")}-${index}`;
+        : `${date}-${startTime}-${localizedTitle.toLowerCase().replace(/\s+/g, "-")}-${index}`;
 
     output.push({
       id,
-      title,
+      title: localizedTitle,
+      sourceTitle: rawTitle,
+      titleTranslations: parseCalendarEventTranslations(titleTranslations),
+      sourceLanguage,
       date,
       startTime,
       endTime,

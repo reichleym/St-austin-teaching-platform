@@ -1,0 +1,12 @@
+{
+  "installCommand": "npm install --ignore-scripts && npx prisma generate",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "alias": ["st-austin.vercel.app"],
+  "build": {
+    "env": {
+      "NPM_CONFIG_BUILD_FROM_SOURCE": "true"
+    }
+  }
+}

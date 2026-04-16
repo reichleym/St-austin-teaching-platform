@@ -134,6 +134,7 @@ model User {
   settingsUpdates           SystemSettings[]          @relation("SystemSettingsUpdatedBy")
   instructionThreads        InstructionThread[]       @relation("ThreadStudent")
   instructionMessages       InstructionMessage[]      @relation("MessageAuthor")
+  pagesUpdated              DynamicPage[]             @relation("PagesUpdatedBy")
 }
 
 model Account {
@@ -259,6 +260,8 @@ model Program {
   title              String
   description        String?
   programContent     String?
+  sourceLanguage     String              @default("en")
+  translations       Json?
   visibility         ProgramVisibility @default(DRAFT)
   courses            ProgramCourse[]
   createdAt          DateTime @default(now())
@@ -520,4 +523,46 @@ model InstructionMessage {
   @@index([threadId, createdAt])
   @@index([parentId])
   @@index([authorId, createdAt])
+}
+
+/// Dynamic pages for website content management
+model DynamicPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  published Boolean  @default(false)
+  sections  PageSection[]
+  updatedById String?
+  updatedBy User? @relation("PagesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([published])
+}
+
+model PageSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  /// Section identifier (e.g., "hero", "history", "mission-vision")
+  sectionKey String
+  
+  /// Section type component (e.g., "BannerSection", "IconCard", "TeamGrid")
+  componentType String
+  
+  /// Position/order of section on the page
+  position  Int      @default(0)
+  
+  /// Raw JSON content for the section
+  content   Json
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, sectionKey])
+  @@index([pageId, position])
+}
+ pagesUpdated              DynamicPage[]             @relation("PagesUpdatedBy")
 }

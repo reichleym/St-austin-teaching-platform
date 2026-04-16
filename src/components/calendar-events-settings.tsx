@@ -10,10 +10,17 @@ import {
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
+import { supportedLanguages, translateContent, type Language } from "@/lib/i18n";
+import {
+  parseCalendarEventLanguage,
+  parseCalendarEventTranslations,
+  type CalendarEventLocalization,
+} from "@/lib/calendar-event-translations";
 
 type EditableCalendarEvent = {
   id: string;
-  title: string;
+  sourceLanguage: Language;
+  localizations: Record<Language, CalendarEventLocalization>;
   date: string;
   startTime: string;
   endTime: string;
@@ -34,10 +41,14 @@ function createEventId() {
   return `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function createNewEvent(): EditableCalendarEvent {
+function createNewEvent(defaultSourceLanguage: Language = "en"): EditableCalendarEvent {
   return {
     id: createEventId(),
-    title: "",
+    sourceLanguage: defaultSourceLanguage,
+    localizations: {
+      en: { title: "" },
+      fr: { title: "" },
+    },
     date: getLocalDateString(),
     startTime: "09:00",
     endTime: "",
@@ -46,7 +57,8 @@ function createNewEvent(): EditableCalendarEvent {
 }
 
 export function CalendarEventsSettings() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const initialSourceLanguage = parseCalendarEventLanguage(language);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -76,10 +88,44 @@ export function CalendarEventsSettings() {
         if (!active) return;
         const normalized = normalizeDashboardCalendarEvents(result.settings.dashboardCalendarEvents);
         setEvents(
-          normalized.map((item) => ({
-            ...item,
-            endTime: item.endTime ?? "",
-          }))
+          normalized.map((item) => {
+            const sourceLanguage = parseCalendarEventLanguage(item.sourceLanguage);
+            const sourceTitle = (item.sourceTitle ?? item.title ?? "").trim();
+            const translations = parseCalendarEventTranslations(item.titleTranslations);
+
+            const localizations: Record<Language, CalendarEventLocalization> = {
+              en: { title: "" },
+              fr: { title: "" },
+            };
+
+            for (const entryLanguage of supportedLanguages) {
+              const stored = (translations[entryLanguage] as CalendarEventLocalization | undefined)?.title?.trim() ?? "";
+              if (stored) {
+                localizations[entryLanguage] = { title: stored };
+                continue;
+              }
+
+              if (entryLanguage === sourceLanguage) {
+                localizations[entryLanguage] = { title: sourceTitle };
+                continue;
+              }
+
+              const translated = sourceTitle ? translateContent(entryLanguage, sourceTitle) : "";
+              localizations[entryLanguage] = {
+                title: translated && translated !== sourceTitle ? translated : "",
+              };
+            }
+
+            return {
+              id: item.id,
+              sourceLanguage,
+              localizations,
+              date: item.date,
+              startTime: item.startTime,
+              endTime: item.endTime ?? "",
+              roles: item.roles,
+            };
+          })
         );
       } catch {
         if (active) setError(t("error.loadCalendarEvents", undefined, "Unable to load calendar events."));
@@ -103,12 +149,37 @@ export function CalendarEventsSettings() {
     );
   };
 
+  const languageLabel = (value: Language) => (value === "fr" ? t("french") : t("english"));
+
+  const onUpdateSourceLanguage = (eventId: string, value: string) => {
+    const nextLanguage = parseCalendarEventLanguage(value);
+    setEvents((prev) => prev.map((item) => (item.id === eventId ? { ...item, sourceLanguage: nextLanguage } : item)));
+  };
+
+  const onUpdateTitle = (eventId: string, targetLanguage: Language, value: string) => {
+    setEvents((prev) =>
+      prev.map((item) => {
+        if (item.id !== eventId) return item;
+        return {
+          ...item,
+          localizations: {
+            ...item.localizations,
+            [targetLanguage]: {
+              ...item.localizations[targetLanguage],
+              title: value,
+            },
+          },
+        };
+      })
+    );
+  };
+
   const onSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setSuccess("");
 
-    const hasMissingFields = events.some((item) => !item.title.trim() || !item.date || !item.startTime);
+    const hasMissingFields = events.some((item) => !item.localizations[item.sourceLanguage].title.trim() || !item.date || !item.startTime);
     if (hasMissingFields) {
       setError(
         t(
@@ -124,23 +195,24 @@ export function CalendarEventsSettings() {
       return;
     }
 
-    const payload = normalizeDashboardCalendarEvents(
-      events.map((item) => ({
-        ...item,
-        endTime: item.endTime || null,
-      }))
-    );
+    const payload = events.map((item) => {
+      const titleTranslations: Record<string, { title: string }> = {};
+      for (const entryLanguage of supportedLanguages) {
+        const value = item.localizations[entryLanguage].title.trim();
+        if (value) titleTranslations[entryLanguage] = { title: value };
+      }
 
-    if (payload.length !== events.length) {
-      setError(
-        t(
-          "error.completeCalendarEvents",
-          undefined,
-          "Provide title, date, and start time for each calendar event."
-        )
-      );
-      return;
-    }
+      return {
+        id: item.id,
+        title: item.localizations[item.sourceLanguage].title.trim(),
+        sourceLanguage: item.sourceLanguage,
+        titleTranslations,
+        date: item.date,
+        startTime: item.startTime,
+        endTime: item.endTime || null,
+        roles: item.roles,
+      };
+    });
 
     setIsSaving(true);
     try {
@@ -202,21 +274,57 @@ export function CalendarEventsSettings() {
                   </div>
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <label className="grid gap-1 md:col-span-2">
-                      <span className="brand-label">{t("calendarEvents.eventTitle", undefined, "Event Title")}</span>
-                      <input
-                        className="brand-input"
-                        value={item.title}
-                        placeholder={t("calendarEvents.eventTitlePlaceholder", undefined, "Enter event title")}
-                        onChange={(inputEvent) => {
-                          const value = inputEvent.currentTarget.value;
-                          setEvents((prev) =>
-                            prev.map((entry) => (entry.id === item.id ? { ...entry, title: value } : entry))
+                    <div className="grid gap-4 md:col-span-2">
+                      <label className="grid gap-1.5 md:max-w-xs">
+                        <span className="brand-label">{t("announcement.sourceLanguage")}</span>
+                        <select
+                          className="brand-input"
+                          value={item.sourceLanguage}
+                          onChange={(eventLanguage) => onUpdateSourceLanguage(item.id, eventLanguage.currentTarget.value)}
+                        >
+                          {supportedLanguages.map((entryLanguage) => (
+                            <option key={`${item.id}_${entryLanguage}`} value={entryLanguage}>
+                              {languageLabel(entryLanguage)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        {supportedLanguages.map((entryLanguage) => {
+                          const isPrimary = entryLanguage === item.sourceLanguage;
+                          const fields = item.localizations[entryLanguage];
+                          return (
+                            <fieldset
+                              key={`${item.id}_${entryLanguage}_title`}
+                              className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <legend className="text-sm font-semibold text-[#0b3e81]">
+                                  {t("announcement.languageVersion", { language: languageLabel(entryLanguage) })}
+                                </legend>
+                                {isPrimary ? (
+                                  <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">
+                                    {t("announcement.primaryLanguage")}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <label className="grid gap-1.5">
+                                <span className="brand-label">{t("calendarEvents.eventTitle", undefined, "Event Title")}</span>
+                                <input
+                                  className="brand-input"
+                                  value={fields.title}
+                                  placeholder={t("calendarEvents.eventTitlePlaceholder", undefined, "Enter event title")}
+                                  onChange={(eventTitle) => onUpdateTitle(item.id, entryLanguage, eventTitle.currentTarget.value)}
+                                  required={isPrimary}
+                                />
+                              </label>
+                            </fieldset>
                           );
-                        }}
-                        required
-                      />
-                    </label>
+                        })}
+                      </div>
+                    </div>
 
                     <label className="grid gap-1">
                       <span className="brand-label">{t("calendarEvents.eventDate", undefined, "Date")}</span>
@@ -303,7 +411,7 @@ export function CalendarEventsSettings() {
               <button
                 type="button"
                 className="btn-brand-secondary px-4 py-2 text-sm font-semibold"
-                onClick={() => setEvents((prev) => [...prev, createNewEvent()])}
+                onClick={() => setEvents((prev) => [...prev, createNewEvent(initialSourceLanguage)])}
               >
                 {t("action.addCalendarEvent", undefined, "Add Calendar Event")}
               </button>

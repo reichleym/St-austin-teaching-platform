@@ -6,6 +6,13 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { ToastMessage } from "@/components/toast-message";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { useLanguage } from "@/components/language-provider";
+import { supportedLanguages, type Language } from "@/lib/i18n";
+import {
+  createEmptyProgramLocalizationDrafts,
+  getProgramLocalizationDrafts,
+  parseProgramLanguage,
+  type ProgramLocalization,
+} from "@/lib/programs-translations";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
 
@@ -28,6 +35,8 @@ type ProgramItem = {
   code: string;
   title: string;
   description: string | null;
+  sourceLanguage: string;
+  translations: unknown;
   programDetails: ProgramDetails | null;
   visibility: "DRAFT" | "PUBLISHED";
   courseCount: number;
@@ -48,9 +57,10 @@ const toListFromMultiline = (value: string) =>
     .filter(Boolean);
 
 export function ProgramsModule({ role }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
   const canManage = isSuperAdmin;
+  const initialSourceLanguage = parseProgramLanguage(language);
 
   const [programs, setPrograms] = useState<ProgramItem[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -59,8 +69,10 @@ export function ProgramsModule({ role }: Props) {
 
   const [showCreate, setShowCreate] = useState(false);
   const [editProgramId, setEditProgramId] = useState("");
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDescription, setCreateDescription] = useState("");
+  const [createSourceLanguage, setCreateSourceLanguage] = useState<Language>(initialSourceLanguage);
+  const [createLocalizations, setCreateLocalizations] = useState<Record<Language, ProgramLocalization>>(
+    createEmptyProgramLocalizationDrafts()
+  );
   const [createVisibility, setCreateVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [createOverview, setCreateOverview] = useState("");
   const [createTuitionAndFees, setCreateTuitionAndFees] = useState("");
@@ -71,8 +83,10 @@ export function ProgramsModule({ role }: Props) {
   const [createCourseSearch, setCreateCourseSearch] = useState("");
   const [createPending, setCreatePending] = useState(false);
 
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  const [editSourceLanguage, setEditSourceLanguage] = useState<Language>(initialSourceLanguage);
+  const [editLocalizations, setEditLocalizations] = useState<Record<Language, ProgramLocalization>>(
+    createEmptyProgramLocalizationDrafts()
+  );
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [editOverview, setEditOverview] = useState("");
   const [editTuitionAndFees, setEditTuitionAndFees] = useState("");
@@ -149,8 +163,8 @@ export function ProgramsModule({ role }: Props) {
     if (!editProgramId) return;
     const selected = programs.find((item) => item.id === editProgramId);
     if (!selected) return;
-    setEditTitle(selected.title);
-    setEditDescription(selected.description ?? "");
+    setEditSourceLanguage(parseProgramLanguage(selected.sourceLanguage));
+    setEditLocalizations(getProgramLocalizationDrafts(selected));
     setEditVisibility(selected.visibility);
     setEditOverview(selected.programDetails?.overview ?? "");
     setEditTuitionAndFees(selected.programDetails?.tuitionAndFees ?? "");
@@ -161,42 +175,195 @@ export function ProgramsModule({ role }: Props) {
     setEditCourseSearch("");
   }, [programs, editProgramId]);
 
-  const editContentPreview = useMemo(
-    () => ({
-      curriculum: toListFromMultiline(editCurriculum).length,
-      admissionRequirements: toListFromMultiline(editAdmissionRequirements).length,
-      careerOpportunities: toListFromMultiline(editCareerOpportunities).length,
-    }),
-    [editAdmissionRequirements, editCareerOpportunities, editCurriculum]
-  );
+  const editContentPreview = useMemo(() => {
+    const localization = editLocalizations[editSourceLanguage];
+    return {
+      curriculum: toListFromMultiline(localization.curriculum ?? "").length,
+      admissionRequirements: toListFromMultiline(localization.admissionRequirements ?? "").length,
+      careerOpportunities: toListFromMultiline(localization.careerOpportunities ?? "").length,
+    };
+  }, [editLocalizations, editSourceLanguage]);
 
-  const createContentPreview = useMemo(
-    () => ({
-      curriculum: toListFromMultiline(createCurriculum).length,
-      admissionRequirements: toListFromMultiline(createAdmissionRequirements).length,
-      careerOpportunities: toListFromMultiline(createCareerOpportunities).length,
-    }),
-    [createAdmissionRequirements, createCareerOpportunities, createCurriculum]
+  const createContentPreview = useMemo(() => {
+    const localization = createLocalizations[createSourceLanguage];
+    return {
+      curriculum: toListFromMultiline(localization.curriculum ?? "").length,
+      admissionRequirements: toListFromMultiline(localization.admissionRequirements ?? "").length,
+      careerOpportunities: toListFromMultiline(localization.careerOpportunities ?? "").length,
+    };
+  }, [createLocalizations, createSourceLanguage]);
+
+  const languageLabel = (value: Language) => (value === "fr" ? t("french") : t("english"));
+
+  const updateLocalization = (
+    targetLanguage: Language,
+    field:
+      | "title"
+      | "description"
+      | "overview"
+      | "curriculum"
+      | "admissionRequirements"
+      | "careerOpportunities",
+    value: string,
+    isEditing: boolean
+  ) => {
+    if (isEditing) {
+      setEditLocalizations((prev) => ({
+        ...prev,
+        [targetLanguage]: {
+          ...prev[targetLanguage],
+          [field]: value,
+        },
+      }));
+      return;
+    }
+
+    setCreateLocalizations((prev) => ({
+      ...prev,
+      [targetLanguage]: {
+        ...prev[targetLanguage],
+        [field]: value,
+      },
+    }));
+  };
+
+  const renderLocalizationFields = (
+    draftSourceLanguage: Language,
+    draftLocalizations: Record<Language, ProgramLocalization>,
+    isEditing: boolean
+  ) => (
+    <div className="grid gap-4">
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">{t("announcement.sourceLanguage")}</span>
+        <select
+          className="brand-input"
+          value={draftSourceLanguage}
+          onChange={(event) => {
+            const value = parseProgramLanguage(event.currentTarget.value);
+            if (isEditing) {
+              setEditSourceLanguage(value);
+            } else {
+              setCreateSourceLanguage(value);
+            }
+          }}
+        >
+          {supportedLanguages.map((entryLanguage) => (
+            <option key={entryLanguage} value={entryLanguage}>
+              {languageLabel(entryLanguage)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((entryLanguage) => {
+          const isPrimary = entryLanguage === draftSourceLanguage;
+          const fields = draftLocalizations[entryLanguage];
+          return (
+            <fieldset key={entryLanguage} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <legend className="text-sm font-semibold text-[#0b3e81]">
+                  {t("announcement.languageVersion", { language: languageLabel(entryLanguage) })}
+                </legend>
+                {isPrimary ? (
+                  <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">
+                    {t("announcement.primaryLanguage")}
+                  </span>
+                ) : null}
+              </div>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("label.title")}</span>
+                <input
+                  className="brand-input"
+                  value={fields.title}
+                  onChange={(event) => updateLocalization(entryLanguage, "title", event.currentTarget.value, isEditing)}
+                  required={isPrimary}
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("label.descriptionOptional")}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.description ?? ""}
+                  onChange={(event) =>
+                    updateLocalization(entryLanguage, "description", event.currentTarget.value, isEditing)
+                  }
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.overview") || "Program Overview"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.overview ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "overview", event.currentTarget.value, isEditing)}
+                  placeholder="Short summary shown in Program Overview section."
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.curriculum") || "Curriculum (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.curriculum ?? ""}
+                  onChange={(event) => updateLocalization(entryLanguage, "curriculum", event.currentTarget.value, isEditing)}
+                  placeholder="Introduction to Business"
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.admissionRequirements") || "Admission Requirements (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.admissionRequirements ?? ""}
+                  onChange={(event) =>
+                    updateLocalization(entryLanguage, "admissionRequirements", event.currentTarget.value, isEditing)
+                  }
+                  placeholder="High school diploma or equivalent"
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">{t("program.careerOpportunities") || "Career Opportunities (one per line)"}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={fields.careerOpportunities ?? ""}
+                  onChange={(event) =>
+                    updateLocalization(entryLanguage, "careerOpportunities", event.currentTarget.value, isEditing)
+                  }
+                  placeholder="Business Manager"
+                />
+              </label>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
   );
 
   const onCreateProgram = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCreatePending(true);
     setError("");
+    const primaryLocalization = createLocalizations[createSourceLanguage];
     try {
       const response = await fetch("/api/admin/programs", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
-          title: createTitle.trim(),
-          description: createDescription.trim() || null,
+          title: primaryLocalization.title.trim(),
+          description: (primaryLocalization.description ?? "").trim() || null,
+          sourceLanguage: createSourceLanguage,
+          translations: createLocalizations,
           visibility: createVisibility,
           programDetails: {
-            overview: createOverview.trim() || null,
+            overview: primaryLocalization.overview?.trim() || null,
             tuitionAndFees: createTuitionAndFees.trim() || null,
-            curriculum: toListFromMultiline(createCurriculum),
-            admissionRequirements: toListFromMultiline(createAdmissionRequirements),
-            careerOpportunities: toListFromMultiline(createCareerOpportunities),
+            curriculum: toListFromMultiline(primaryLocalization.curriculum ?? ""),
+            admissionRequirements: toListFromMultiline(primaryLocalization.admissionRequirements ?? ""),
+            careerOpportunities: toListFromMultiline(primaryLocalization.careerOpportunities ?? ""),
           },
           courseIds: createCourseIds,
         }),
@@ -208,8 +375,8 @@ export function ProgramsModule({ role }: Props) {
         return;
       }
       setShowCreate(false);
-      setCreateTitle("");
-      setCreateDescription("");
+      setCreateSourceLanguage(initialSourceLanguage);
+      setCreateLocalizations(createEmptyProgramLocalizationDrafts());
       setCreateVisibility("DRAFT");
       setCreateOverview("");
       setCreateTuitionAndFees("");
@@ -231,21 +398,24 @@ export function ProgramsModule({ role }: Props) {
     if (!editProgramId) return;
     setEditPending(true);
     setError("");
+    const primaryLocalization = editLocalizations[editSourceLanguage];
     try {
       const response = await fetch("/api/admin/programs", {
         method: "PATCH",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           programId: editProgramId,
-          title: editTitle.trim(),
-          description: editDescription.trim() || null,
+          title: primaryLocalization.title.trim(),
+          description: (primaryLocalization.description ?? "").trim() || null,
+          sourceLanguage: editSourceLanguage,
+          translations: editLocalizations,
           visibility: editVisibility,
           programDetails: {
-            overview: editOverview.trim() || null,
+            overview: primaryLocalization.overview?.trim() || null,
             tuitionAndFees: editTuitionAndFees.trim() || null,
-            curriculum: toListFromMultiline(editCurriculum),
-            admissionRequirements: toListFromMultiline(editAdmissionRequirements),
-            careerOpportunities: toListFromMultiline(editCareerOpportunities),
+            curriculum: toListFromMultiline(primaryLocalization.curriculum ?? ""),
+            admissionRequirements: toListFromMultiline(primaryLocalization.admissionRequirements ?? ""),
+            careerOpportunities: toListFromMultiline(primaryLocalization.careerOpportunities ?? ""),
           },
           courseIds: editCourseIds,
         }),
@@ -327,6 +497,15 @@ export function ProgramsModule({ role }: Props) {
             className="btn-brand-primary px-4 py-2 text-sm font-semibold"
             onClick={() => {
               setCreateCourseSearch("");
+              setCreateSourceLanguage(initialSourceLanguage);
+              setCreateLocalizations(createEmptyProgramLocalizationDrafts());
+              setCreateVisibility("DRAFT");
+              setCreateOverview("");
+              setCreateTuitionAndFees("");
+              setCreateCurriculum("");
+              setCreateAdmissionRequirements("");
+              setCreateCareerOpportunities("");
+              setCreateCourseIds([]);
               setShowCreate(true);
             }}
           >
@@ -421,132 +600,76 @@ export function ProgramsModule({ role }: Props) {
           <section className="brand-card w-full max-w-3xl p-5">
             <p className="brand-section-title">{t("program.createTitle") || "Create Program"}</p>
             <form className="mt-3 grid gap-4" onSubmit={onCreateProgram}>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Title</span>
-                <input 
-                  className="brand-input" 
-                  value={createTitle} 
-                  onChange={(e) => setCreateTitle(e.target.value)} 
-                  required 
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Description (optional)</span>
-                <textarea 
-                  className="brand-input min-h-[90px]" 
-                  value={createDescription} 
-                  onChange={(e) => setCreateDescription(e.target.value)}
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">{t("label.visibility") || "Visibility"}</span>
-                <select 
-                  className="brand-input" 
-                  value={createVisibility} 
-                  onChange={(e) => setCreateVisibility(e.target.value as "DRAFT" | "PUBLISHED")}
-                >
-                  <option value="DRAFT">Draft</option>
-                  <option value="PUBLISHED">Published</option>
-                </select>
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Program Overview</span>
-                <textarea
-                  className="brand-input min-h-[110px]"
-                  value={createOverview}
-                  onChange={(event) => setCreateOverview(event.currentTarget.value)}
-                  maxLength={3000}
-                  placeholder="Short summary shown in Program Overview section."
-                />
-              </label>
-              <label className="grid gap-1.5 md:max-w-sm">
-                <span className="brand-label">Tuition & Fees</span>
-                <input
-                  className="brand-input"
-                  value={createTuitionAndFees}
-                  onChange={(event) => setCreateTuitionAndFees(event.currentTarget.value)}
-                  maxLength={160}
-                  placeholder="$12,500 / year"
-                />
-              </label>
-              <div className="grid gap-3 md:grid-cols-3">
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Curriculum (one per line)</span>
-                  <textarea
-                    className="brand-input min-h-[130px]"
-                    value={createCurriculum}
-                    onChange={(event) => setCreateCurriculum(event.currentTarget.value)}
-                    placeholder="Introduction to Business"
-                  />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Admission Requirements (one per line)</span>
-                  <textarea
-                    className="brand-input min-h-[130px]"
-                    value={createAdmissionRequirements}
-                    onChange={(event) => setCreateAdmissionRequirements(event.currentTarget.value)}
-                    placeholder="High school diploma or equivalent"
-                  />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Career Opportunities (one per line)</span>
-                  <textarea
-                    className="brand-input min-h-[130px]"
-                    value={createCareerOpportunities}
-                    onChange={(event) => setCreateCareerOpportunities(event.currentTarget.value)}
-                    placeholder="Business Manager"
-                  />
-                </label>
-              </div>
-              <p className="text-xs text-[#3a689f]">
-                Preview counts: Curriculum {createContentPreview.curriculum}, Requirements {createContentPreview.admissionRequirements}, Careers{" "}
-                {createContentPreview.careerOpportunities}
-              </p>
-              <label className="grid gap-1.5">
-                <span className="brand-label">{t("label.selectCourses") || "Select Courses"}</span>
-                <div className="grid gap-2">
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    {selectedCreateCourses.map((course) => (
-                      <span key={course.id} className="inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81]">
-                        {course.code} - {course.title}
-                        <button
-                          type="button"
-                          className="text-[#1f518f] hover:text-[#0b3e81]"
-                          onClick={() => toggleCreateCourse(course.id)}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="relative">
-                    <input
-                      className="brand-input"
-                      placeholder={t("placeholder.courseSearch") || "Search courses by code or title"}
-                      value={createCourseSearch}
-                      onChange={(e) => setCreateCourseSearch(e.target.value)}
-                    />
-                    {createCourseSearch.trim() && (
-                      <div className="absolute z-10 mt-2 w-full max-h-48 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-2 shadow-lg">
-                        {filteredCreateCourses.filter((c) => !createCourseIds.includes(c.id)).map((course) => (
-                          <button
-                            key={course.id}
-                            type="button"
-                            className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm hover:bg-[#eff6ff]"
-                            onClick={() => {
-                              toggleCreateCourse(course.id);
-                              setCreateCourseSearch("");
-                            }}
-                          >
-                            <span className="truncate">{course.code} - {course.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+              {renderLocalizationFields(createSourceLanguage, createLocalizations, false)}
+            <p className="text-xs text-[#3a689f]">
+              Preview counts: Curriculum {createContentPreview.curriculum}, Requirements {createContentPreview.admissionRequirements}, Careers {createContentPreview.careerOpportunities}
+            </p>
+            <label className="grid gap-1.5">
+              <span className="brand-label">{t("label.visibility") || "Visibility"}</span>
+              <select 
+                className="brand-input" 
+                value={createVisibility} 
+                onChange={(e) => setCreateVisibility(e.target.value as "DRAFT" | "PUBLISHED")}
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="PUBLISHED">Published</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 md:max-w-sm">
+              <span className="brand-label">Tuition & Fees</span>
+              <input
+                className="brand-input"
+                value={createTuitionAndFees}
+                onChange={(event) => setCreateTuitionAndFees(event.currentTarget.value)}
+                maxLength={160}
+                placeholder="$12,500 / year"
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="brand-label">{t("label.selectCourses") || "Select Courses"}</span>
+              <div className="grid gap-2">
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {selectedCreateCourses.map((course) => (
+                    <span key={course.id} className="inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81]">
+                      {course.code} - {course.title}
+                      <button
+                        type="button"
+                        className="text-[#1f518f] hover:text-[#0b3e81]"
+                        onClick={() => toggleCreateCourse(course.id)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
-              </label>
-              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    className="brand-input"
+                    placeholder={t("placeholder.courseSearch") || "Search courses by code or title"}
+                    value={createCourseSearch}
+                    onChange={(e) => setCreateCourseSearch(e.target.value)}
+                  />
+                  {createCourseSearch.trim() && (
+                    <div className="absolute z-10 mt-2 w-full max-h-48 overflow-y-auto rounded-md border border-[#c6ddfa] bg-white p-2 shadow-lg">
+                      {filteredCreateCourses.filter((c) => !createCourseIds.includes(c.id)).map((course) => (
+                        <button
+                          key={course.id}
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm hover:bg-[#eff6ff]"
+                          onClick={() => {
+                            toggleCreateCourse(course.id);
+                            setCreateCourseSearch("");
+                          }}
+                        >
+                          <span className="truncate">{course.code} - {course.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </label>
+            <div className="flex items-center gap-2">
                 <button 
                   className="btn-brand-primary w-fit px-4 py-2 text-sm font-semibold disabled:opacity-60" 
                   disabled={createPending}
@@ -571,27 +694,13 @@ export function ProgramsModule({ role }: Props) {
           <p className="brand-section-title">{t("program.editTitle") || "Manage Program"}</p>
           <form className="mt-3 grid gap-4" onSubmit={onUpdateProgram}>
             <label className="grid gap-1.5">
-              <span className="brand-label">Code</span>
+              <span className="brand-label">{t("label.programCode") || "Code"}</span>
               <input className="brand-input" value={programs.find((p) => p.id === editProgramId)?.code ?? ""} disabled />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Title</span>
-              <input className="brand-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Description (optional)</span>
-              <textarea className="brand-input min-h-[90px]" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Program Overview</span>
-              <textarea
-                className="brand-input min-h-[110px]"
-                value={editOverview}
-                onChange={(event) => setEditOverview(event.currentTarget.value)}
-                maxLength={3000}
-                placeholder="Short summary shown in Program Overview section."
-              />
-            </label>
+            {renderLocalizationFields(editSourceLanguage, editLocalizations, true)}
+            <p className="text-xs text-[#3a689f]">
+              Preview counts: Curriculum {editContentPreview.curriculum}, Requirements {editContentPreview.admissionRequirements}, Careers {editContentPreview.careerOpportunities}
+            </p>
             <label className="grid gap-1.5 md:max-w-sm">
               <span className="brand-label">Tuition & Fees</span>
               <input
@@ -602,38 +711,6 @@ export function ProgramsModule({ role }: Props) {
                 placeholder="$12,500 / year"
               />
             </label>
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="grid gap-1.5">
-                <span className="brand-label">Curriculum (one per line)</span>
-                <textarea
-                  className="brand-input min-h-[130px]"
-                  value={editCurriculum}
-                  onChange={(event) => setEditCurriculum(event.currentTarget.value)}
-                  placeholder="Introduction to Business"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Admission Requirements (one per line)</span>
-                <textarea
-                  className="brand-input min-h-[130px]"
-                  value={editAdmissionRequirements}
-                  onChange={(event) => setEditAdmissionRequirements(event.currentTarget.value)}
-                  placeholder="High school diploma or equivalent"
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="brand-label">Career Opportunities (one per line)</span>
-                <textarea
-                  className="brand-input min-h-[130px]"
-                  value={editCareerOpportunities}
-                  onChange={(event) => setEditCareerOpportunities(event.currentTarget.value)}
-                  placeholder="Business Manager"
-                />
-              </label>
-            </div>
-            <p className="text-xs text-[#3a689f]">
-              Preview counts: Curriculum {editContentPreview.curriculum}, Requirements {editContentPreview.admissionRequirements}, Careers {editContentPreview.careerOpportunities}
-            </p>
             <label className="grid gap-1.5">
               <span className="brand-label">{t("label.visibility") || "Visibility"}</span>
               <select className="brand-input" value={editVisibility} onChange={(e) => setEditVisibility(e.target.value as "DRAFT" | "PUBLISHED")}>

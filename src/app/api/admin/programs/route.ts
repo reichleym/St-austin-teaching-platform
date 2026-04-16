@@ -4,21 +4,32 @@ import {
   PROGRAM_VISIBILITY_DRAFT,
   type ProgramVisibilityValue,
   generateProgramCodeCandidate,
-  normalizeDescription,
   normalizeProgramDetailsInput,
   parseProgramContent,
   parseProgramVisibility,
   serializeProgramContent,
   validateProgramTitle,
+  buildProgramLocalizationPayload,
 } from "@/lib/programs";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
+type ProgramDetailsInput = {
+  overview?: string | null;
+  tuitionAndFees?: string | null;
+  curriculum?: string[];
+  admissionRequirements?: string[];
+  careerOpportunities?: string[];
+};
+
 type CreateBody = {
   title?: string;
   description?: string | null;
+  programContent?: string | null;
+  sourceLanguage?: string;
+  translations?: unknown;
   visibility?: ProgramVisibilityValue;
-  programDetails?: unknown;
+  programDetails?: ProgramDetailsInput;
   courseIds?: string[];
 };
 
@@ -36,6 +47,8 @@ type ProgramRecord = {
   title: string;
   description: string | null;
   programContent: string | null;
+  sourceLanguage: string;
+  translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
   createdAt: Date;
 };
@@ -52,6 +65,8 @@ type RawProgramRow = {
   title: string;
   description: string | null;
   programContent: string | null;
+  sourceLanguage: string;
+  translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
   createdAt: Date;
 };
@@ -93,6 +108,8 @@ CREATE TABLE IF NOT EXISTS "Program" (
   "title" TEXT NOT NULL,
   "description" TEXT,
   "programContent" TEXT,
+  "sourceLanguage" TEXT NOT NULL DEFAULT 'en',
+  "translations" JSONB,
   "visibility" "ProgramVisibility" NOT NULL DEFAULT 'DRAFT',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -111,10 +128,63 @@ CREATE INDEX IF NOT EXISTS "ProgramCourse_courseId_idx" ON "ProgramCourse"("cour
 
 ALTER TABLE "Program"
 ADD COLUMN IF NOT EXISTS "programContent" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "sourceLanguage" TEXT NOT NULL DEFAULT 'en';
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "translations" JSONB;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "visibility" "ProgramVisibility" NOT NULL DEFAULT 'DRAFT';
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'ProgramCourse_pkey'
+  ) THEN
+    ALTER TABLE "ProgramCourse"
+    ADD CONSTRAINT "ProgramCourse_pkey" PRIMARY KEY ("programId", "courseId");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'ProgramCourse_programId_fkey'
+  ) THEN
+    ALTER TABLE "ProgramCourse"
+    ADD CONSTRAINT "ProgramCourse_programId_fkey"
+    FOREIGN KEY ("programId") REFERENCES "Program"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'ProgramCourse_courseId_fkey'
+  ) THEN
+    ALTER TABLE "ProgramCourse"
+    ADD CONSTRAINT "ProgramCourse_courseId_fkey"
+    FOREIGN KEY ("courseId") REFERENCES "Course"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 `);
 }
 
 async function getProgramById(programId: string): Promise<ProgramRecord | null> {
+  await ensureProgramSchema();
   const programDelegate = getProgramDelegate();
 
   if (programDelegate) {
@@ -126,6 +196,8 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
         title: true,
         description: true,
         programContent: true,
+        sourceLanguage: true,
+        translations: true,
         visibility: true,
         createdAt: true,
       },
@@ -137,15 +209,16 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
           title: found.title,
           description: found.description,
           programContent: found.programContent,
+          sourceLanguage: found.sourceLanguage,
+          translations: found.translations as Prisma.JsonValue | null,
           visibility: found.visibility as ProgramVisibilityValue,
           createdAt: found.createdAt,
         }
       : null;
   }
 
-  await ensureProgramSchema();
   const rows = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     WHERE "id" = ${programId}
     LIMIT 1
@@ -154,6 +227,7 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
 }
 
 async function listProgramsWithCourses() {
+  await ensureProgramSchema();
   const programDelegate = getProgramDelegate();
   const programCourseDelegate = getProgramCourseDelegate();
   const courseDelegate = getCourseDelegate();
@@ -188,6 +262,8 @@ async function listProgramsWithCourses() {
         title: program.title,
         description: program.description,
         programDetails: parseProgramContent(program.programContent),
+        sourceLanguage: program.sourceLanguage,
+        translations: program.translations,
         visibility: program.visibility as ProgramVisibilityValue,
         createdAt: program.createdAt,
         courses: program.courses.map((item) => item.course),
@@ -196,9 +272,8 @@ async function listProgramsWithCourses() {
     };
   }
 
-  await ensureProgramSchema();
   const programs = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     ORDER BY "createdAt" DESC
   `;
@@ -237,6 +312,8 @@ async function listProgramsWithCourses() {
       title: program.title,
       description: program.description,
       programDetails: parseProgramContent(program.programContent),
+      sourceLanguage: program.sourceLanguage,
+      translations: program.translations,
       visibility: program.visibility,
       createdAt: program.createdAt,
       courses: relationMap.get(program.id) ?? [],
@@ -246,10 +323,8 @@ async function listProgramsWithCourses() {
 }
 
 async function generateUniqueProgramCode(title: string) {
+  await ensureProgramSchema();
   const programDelegate = getProgramDelegate();
-  if (!programDelegate) {
-    await ensureProgramSchema();
-  }
 
   for (let nonce = 1; nonce <= 9999; nonce += 1) {
     const code = generateProgramCodeCandidate(title, nonce);
@@ -313,6 +388,8 @@ export async function GET() {
         title: program.title,
         description: program.description,
         programDetails: program.programDetails,
+        sourceLanguage: program.sourceLanguage,
+        translations: program.translations,
         visibility: program.visibility,
         courseCount: program.courses.length,
         courses: program.courses,
@@ -337,23 +414,38 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as CreateBody;
-    const title = (body.title ?? "").trim();
-    const description = normalizeDescription(body.description);
+    const normalizedProgramDetails = normalizeProgramDetailsInput(body.programDetails);
+    if (!normalizedProgramDetails.ok) {
+      return NextResponse.json({ error: "Invalid `programDetails` payload." }, { status: 400 });
+    }
+    const serializedProgramContent = serializeProgramContent(normalizedProgramDetails.value);
+    const locPayload = buildProgramLocalizationPayload({
+      title: body.title,
+      description: body.description,
+      overview: body.programDetails?.overview,
+      curriculum: body.programDetails?.curriculum,
+      admissionRequirements: body.programDetails?.admissionRequirements,
+      careerOpportunities: body.programDetails?.careerOpportunities,
+      sourceLanguage: body.sourceLanguage,
+      translations: body.translations,
+    });
+
+    if ("error" in locPayload) {
+      return NextResponse.json({ error: locPayload.error }, { status: 400 });
+    }
+
+    const { title, description, sourceLanguage } = locPayload.data;
+    const normalizedDescription = description.trim() ? description : null;
     const visibility = parseProgramVisibility(body.visibility ?? PROGRAM_VISIBILITY_DRAFT) ?? PROGRAM_VISIBILITY_DRAFT;
     const courseIdsRaw = Array.isArray(body.courseIds) ? body.courseIds : [];
-    const normalizedProgramDetails = normalizeProgramDetailsInput(body.programDetails);
 
     const titleError = validateProgramTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
-    if (!normalizedProgramDetails.ok) {
-      return NextResponse.json({ error: "Invalid program details format." }, { status: 400 });
-    }
 
     const coursesValidation = await validateCourseIds(courseIdsRaw);
     if (!coursesValidation.ok) {
       return NextResponse.json({ error: coursesValidation.error }, { status: coursesValidation.status });
     }
-    const serializedProgramContent = serializeProgramContent(normalizedProgramDetails.value);
 
     const code = await generateUniqueProgramCode(title);
     const programDelegate = getProgramDelegate();
@@ -367,18 +459,13 @@ export async function POST(request: NextRequest) {
           data: {
             code,
             title,
-            description,
+            description: normalizedDescription,
+            programContent: serializedProgramContent,
+            sourceLanguage,
+            translations: locPayload.data.translations,
             visibility,
           },
         });
-
-        if (serializedProgramContent !== null) {
-          await tx.$executeRaw`
-            UPDATE "Program"
-            SET "programContent" = ${serializedProgramContent}
-            WHERE "id" = ${program.id}
-          `;
-        }
 
         if (coursesValidation.ids.length) {
           await tx.programCourse.createMany({
@@ -397,8 +484,8 @@ export async function POST(request: NextRequest) {
       createdId = makeId("prg");
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
-          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "visibility", "createdAt", "updatedAt")
-          VALUES (${createdId}, ${code}, ${title}, ${description}, ${serializedProgramContent}, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
+          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
+          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
         `;
 
         if (coursesValidation.ids.length) {
@@ -417,8 +504,10 @@ export async function POST(request: NextRequest) {
           id: createdId,
           code,
           title,
-          description,
+          description: normalizedDescription,
           programDetails: normalizedProgramDetails.value,
+          sourceLanguage,
+          translations: locPayload.data.translations,
           visibility,
           courseCount: coursesValidation.ids.length,
           courses: coursesValidation.ids,
@@ -450,51 +539,62 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Program not found." }, { status: 404 });
     }
 
-    const title = (body.title ?? "").trim();
-    const description = normalizeDescription(body.description);
+    const hasProgramDetailsInBody = body.programDetails !== undefined;
+    let serializedProgramContent: string | null | undefined = undefined;
+    if (hasProgramDetailsInBody) {
+      const normalizedProgramDetails = normalizeProgramDetailsInput(body.programDetails);
+      if (!normalizedProgramDetails.ok) {
+        return NextResponse.json({ error: "Invalid `programDetails` payload." }, { status: 400 });
+      }
+      serializedProgramContent = serializeProgramContent(normalizedProgramDetails.value);
+    }
+
+    const locPayload = buildProgramLocalizationPayload({
+      title: body.title ?? existing.title,
+      description: body.description !== undefined ? body.description : existing.description,
+      overview: body.programDetails?.overview,
+      curriculum: body.programDetails?.curriculum,
+      admissionRequirements: body.programDetails?.admissionRequirements,
+      careerOpportunities: body.programDetails?.careerOpportunities,
+      sourceLanguage: body.sourceLanguage ?? existing.sourceLanguage,
+      translations: body.translations ?? existing.translations,
+    });
+
+    if ("error" in locPayload) {
+      return NextResponse.json({ error: locPayload.error }, { status: 400 });
+    }
+
+    const { title, description, sourceLanguage } = locPayload.data;
+    const normalizedDescription = description.trim() ? description : null;
     const visibility = parseProgramVisibility(body.visibility) ?? PROGRAM_VISIBILITY_DRAFT;
     const courseIdsRaw = Array.isArray(body.courseIds) ? body.courseIds : [];
-    const hasProgramDetailsInBody = body.programDetails !== undefined;
-    const normalizedProgramDetails = hasProgramDetailsInBody
-      ? normalizeProgramDetailsInput(body.programDetails)
-      : null;
 
-    if (title) {
+    if (title !== existing.title) {
       const titleError = validateProgramTitle(title);
       if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
-    }
-    if (hasProgramDetailsInBody && normalizedProgramDetails && !normalizedProgramDetails.ok) {
-      return NextResponse.json({ error: "Invalid program details format." }, { status: 400 });
     }
 
     const coursesValidation = await validateCourseIds(courseIdsRaw);
     if (!coursesValidation.ok) {
       return NextResponse.json({ error: coursesValidation.error }, { status: coursesValidation.status });
     }
-    const serializedProgramContent =
-      hasProgramDetailsInBody && normalizedProgramDetails && normalizedProgramDetails.ok
-        ? serializeProgramContent(normalizedProgramDetails.value)
-        : undefined;
 
     const programDelegate = getProgramDelegate();
     const programCourseDelegate = getProgramCourseDelegate();
 
     if (programDelegate && programCourseDelegate) {
-      const data: Prisma.ProgramUpdateInput = {};
-      if (body.title) data.title = title;
-      if (body.description !== undefined) data.description = description;
-      if (body.visibility !== undefined) data.visibility = visibility;
+      const data: Prisma.ProgramUpdateInput = {
+        title,
+        description: normalizedDescription,
+        programContent: serializedProgramContent,
+        sourceLanguage,
+        translations: locPayload.data.translations,
+        visibility,
+      };
 
       await prisma.$transaction(async (tx) => {
         await tx.programCourse.deleteMany({ where: { programId } });
         await tx.program.update({ where: { id: programId }, data });
-        if (serializedProgramContent !== undefined) {
-          await tx.$executeRaw`
-            UPDATE "Program"
-            SET "programContent" = ${serializedProgramContent}
-            WHERE "id" = ${programId}
-          `;
-        }
         if (coursesValidation.ids.length) {
           await tx.programCourse.createMany({
             data: coursesValidation.ids.map((courseId) => ({
@@ -507,9 +607,11 @@ export async function PATCH(request: NextRequest) {
     } else {
       await ensureProgramSchema();
       const nextTitle = body.title ? title : existing.title;
-      const nextDescription = body.description !== undefined ? description : existing.description;
+      const nextDescription = body.description !== undefined ? normalizedDescription : existing.description;
       const nextVisibility = body.visibility !== undefined ? visibility : existing.visibility;
       const nextProgramContent = serializedProgramContent !== undefined ? serializedProgramContent : existing.programContent;
+      const nextSourceLanguage = body.sourceLanguage !== undefined ? sourceLanguage : existing.sourceLanguage;
+      const nextTranslations = body.translations !== undefined ? locPayload.data.translations : existing.translations;
 
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
@@ -517,6 +619,8 @@ export async function PATCH(request: NextRequest) {
           SET "title" = ${nextTitle},
               "description" = ${nextDescription},
               "programContent" = ${nextProgramContent},
+              "sourceLanguage" = ${nextSourceLanguage},
+              "translations" = ${JSON.stringify(nextTranslations)}::jsonb,
               "visibility" = CAST(${nextVisibility} AS "ProgramVisibility"),
               "updatedAt" = NOW()
           WHERE "id" = ${programId}
@@ -539,11 +643,13 @@ export async function PATCH(request: NextRequest) {
         id: programId,
         code: existing.code,
         title: body.title ? title : existing.title,
-        description: body.description !== undefined ? description : existing.description,
+        description: body.description !== undefined ? normalizedDescription : existing.description,
         programDetails:
           serializedProgramContent !== undefined
             ? parseProgramContent(serializedProgramContent)
             : parseProgramContent(existing.programContent),
+        sourceLanguage,
+        translations: locPayload.data.translations,
         visibility: body.visibility !== undefined ? visibility : existing.visibility,
         courseCount: coursesValidation.ids.length,
         courses: coursesValidation.ids,

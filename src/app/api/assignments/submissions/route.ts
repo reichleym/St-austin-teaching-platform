@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { Dolos } from "@dodona/dolos-lib";
+// import { Dolos } from "@dodona/dolos-lib"; // Moved to dynamic import
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
@@ -414,11 +414,12 @@ async function extractDocxText(buffer: Buffer) {
 }
 
 async function extractDocText(buffer: Buffer) {
+  // @ts-ignore
   const wordExtractorModule = await import("word-extractor");
   const WordExtractor = wordExtractorModule.default;
   const extractor = new WordExtractor();
   const doc = await extractor.extract(buffer);
-  const body = doc.getBody({ filterUnicode: true, includeFootnotes: false });
+  const body = doc.getBody();
   return typeof body === "string" ? body : "";
 }
 
@@ -483,6 +484,8 @@ async function runDolosSimilarity(
   candidates: Array<{ submissionId: string; studentId: string; content: string }>
 ) {
   if (!candidates.length) return [];
+  // @ts-ignore
+  const { Dolos } = await import("@dodona/dolos-lib");
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "dolos-"));
   try {
     const sanitizedId = currentSubmissionId.replace(/[^a-zA-Z0-9_-]/g, "_");

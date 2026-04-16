@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  serverExternalPackages: ['@dodona/dolos-parsers', '@dodona/dolos-lib'],
 };
 
 export default nextConfig;

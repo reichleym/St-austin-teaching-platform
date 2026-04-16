@@ -1,3 +1,9 @@
+import { defaultLanguage, type Language } from "@/lib/i18n";
+import {
+  getProgramLocalizedValue,
+  type ProgramLocalizedRecord,
+} from "@/lib/programs-translations";
+
 /** ProgramVisibility constants matching Prisma enum */
 export const PROGRAM_VISIBILITY_DRAFT = "DRAFT" as const;
 export const PROGRAM_VISIBILITY_PUBLISHED = "PUBLISHED" as const;
@@ -5,7 +11,6 @@ export const PROGRAM_VISIBILITY_PUBLISHED = "PUBLISHED" as const;
 export type ProgramVisibilityValue = typeof PROGRAM_VISIBILITY_DRAFT | typeof PROGRAM_VISIBILITY_PUBLISHED;
 
 export const PROGRAM_DESCRIPTION_MAX_LENGTH = 2000;
-
 export const PROGRAM_FIELD_MAX_LENGTH = 120; // for description etc.
 
 export const PROGRAM_CODE_MAX_LENGTH = 10;
@@ -22,18 +27,12 @@ export type ProgramDetails = {
   careerOpportunities: string[];
 };
 
-/**
- * Parse visibility string to validated value.
- */
 export const parseProgramVisibility = (value: unknown): ProgramVisibilityValue | null => {
-  if (value === "DRAFT" || value === PROGRAM_VISIBILITY_DRAFT) return PROGRAM_VISIBILITY_DRAFT;
-  if (value === "PUBLISHED" || value === PROGRAM_VISIBILITY_PUBLISHED) return PROGRAM_VISIBILITY_PUBLISHED;
+  if (value === PROGRAM_VISIBILITY_DRAFT) return PROGRAM_VISIBILITY_DRAFT;
+  if (value === PROGRAM_VISIBILITY_PUBLISHED) return PROGRAM_VISIBILITY_PUBLISHED;
   return null;
 };
 
-/**
- * Validate program title.
- */
 export const validateProgramTitle = (title: string): string | null => {
   const trimmed = title.trim();
   if (trimmed.length < 3) return "Title must be at least 3 characters.";
@@ -42,19 +41,16 @@ export const validateProgramTitle = (title: string): string | null => {
   return null;
 };
 
-/**
- * Generate candidate program code PGM001 style from title.
- */
 export const generateProgramCodeCandidate = (title: string, nonce: number): string => {
   const words = title.toUpperCase().trim().split(/\s+/);
-  const initials = words.slice(0, 4).map((w) => w.slice(0, 2)).join("");
+  const initials = words
+    .slice(0, 4)
+    .map((word) => word.slice(0, 2))
+    .join("");
   const paddedNonce = nonce.toString().padStart(3, "0");
   return `PRG${initials.slice(0, 3)}${paddedNonce}`.slice(0, PROGRAM_CODE_MAX_LENGTH);
 };
 
-/**
- * Normalize description.
- */
 export const normalizeDescription = (input: unknown): string | null => {
   if (typeof input !== "string") return null;
   const trimmed = input.trim();
@@ -125,4 +121,24 @@ export function parseProgramContent(raw: string | null | undefined): ProgramDeta
 
 export function serializeProgramContent(details: ProgramDetails | null) {
   return details ? JSON.stringify(details) : null;
+}
+
+export {
+  parseProgramLanguage as parseProgramSourceLanguage,
+  getProgramLocalizedValue,
+  getProgramLocalization,
+  getProgramLocalizationDrafts,
+  buildProgramLocalizationPayload,
+} from "@/lib/programs-translations";
+
+export function getProgramLocalizedTitle(record: ProgramLocalizedRecord, language: Language = defaultLanguage): string {
+  return getProgramLocalizedValue(record, language, "title");
+}
+
+export function getProgramLocalizedDescription(record: ProgramLocalizedRecord, language: Language = defaultLanguage): string {
+  return getProgramLocalizedValue(record, language, "description");
+}
+
+export function getProgramLocalizedProgramContent(record: ProgramLocalizedRecord, language: Language = defaultLanguage): string {
+  return getProgramLocalizedValue(record, language, "programContent");
 }

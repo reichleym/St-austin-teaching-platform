@@ -204,7 +204,59 @@ async function seedCourses(teacherAliceId, teacherBobId) {
   return { cs101, math201, cs102 };
 }
 
-// ─── 7. Modules & Lessons ─────────────────────────────────────────────────────
+// ─── 7. Programs ───────────────────────────────────────────────────────────────
+
+async function seedPrograms(courseIds) {
+  const program = await prisma.program.upsert({
+    where: { code: "CSF-2025" },
+    update: {},
+    create: {
+      code: "CSF-2025",
+      title: "Computer Science Foundations",
+      description: "A foundational academic program bridging introductory CS courses into a coherent pathway.",
+      programContent:
+        "This program includes introductory computing, data structures, and mathematical foundations relevant to early CS degrees.",
+      sourceLanguage: "en",
+      translations: {
+        en: {
+          title: "Computer Science Foundations",
+          description: "A foundational academic program bridging introductory CS courses into a coherent pathway.",
+          programContent:
+            "This program includes introductory computing, data structures, and mathematical foundations relevant to early CS degrees.",
+        },
+        fr: {
+          title: "Fondations en informatique",
+          description:
+            "Un programme fondamental qui relie les cours d'introduction à l'informatique dans un parcours cohérent.",
+          programContent:
+            "Ce programme comprend l'informatique introductive, les structures de données et les bases mathématiques nécessaires aux premiers cours en informatique.",
+        },
+      },
+      visibility: "PUBLISHED",
+    },
+  });
+
+  for (const courseId of courseIds) {
+    await prisma.programCourse.upsert({
+      where: {
+        programId_courseId: {
+          programId: program.id,
+          courseId,
+        },
+      },
+      update: {},
+      create: {
+        programId: program.id,
+        courseId,
+      },
+    });
+  }
+
+  console.log(`✔ Program:            ${program.code} (${program.title})`);
+  return program;
+}
+
+// ─── 8. Modules & Lessons ─────────────────────────────────────────────────────
 
 async function seedModulesAndLessons(cs101Id) {
   const mod1 = await prisma.courseModule.upsert({
@@ -691,6 +743,7 @@ async function main() {
   await seedSystemSettings(admin.id);
 
   const { cs101, math201 } = await seedCourses(teacherAlice.id, teacherBob.id);
+  await seedPrograms([cs101.id, math201.id]);
   const { mod1, lesson1, lesson2 } = await seedModulesAndLessons(cs101.id);
 
   await seedEnrollments(cs101.id, math201.id, [charlie.id, diana.id, evan.id]);

@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ToastMessage } from "@/components/toast-message";
+import { useLanguage } from "@/components/language-provider";
 
 type ProgramDetails = {
   overview: string | null;
@@ -27,6 +28,7 @@ const toListFromMultiline = (value: string) =>
 
 export function CourseProgramContentEditor({ courseId, initialProgramDetails }: Props) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [overview, setOverview] = useState(initialProgramDetails?.overview ?? "");
   const [tuitionAndFees, setTuitionAndFees] = useState(initialProgramDetails?.tuitionAndFees ?? "");
   const [curriculum, setCurriculum] = useState(toMultilineValue(initialProgramDetails?.curriculum));
@@ -111,7 +113,7 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
 
       <form className="mt-4 grid gap-4" onSubmit={onSubmit}>
         <label className="grid gap-1.5">
-          <span className="brand-label">Program Overview</span>
+          <span className="brand-label">{t("program.overview") || "Program Overview"}</span>
           <textarea
             className="brand-input min-h-[110px]"
             value={overview}
@@ -134,7 +136,7 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
 
         <div className="grid gap-3 md:grid-cols-3">
           <label className="grid gap-1.5">
-            <span className="brand-label">Curriculum (one per line)</span>
+            <span className="brand-label">{t("program.curriculum") || "Curriculum (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={curriculum}
@@ -144,7 +146,7 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
           </label>
 
           <label className="grid gap-1.5">
-            <span className="brand-label">Admission Requirements (one per line)</span>
+            <span className="brand-label">{t("program.admissionRequirements") || "Admission Requirements (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={admissionRequirements}
@@ -154,7 +156,7 @@ export function CourseProgramContentEditor({ courseId, initialProgramDetails }: 
           </label>
 
           <label className="grid gap-1.5">
-            <span className="brand-label">Career Opportunities (one per line)</span>
+            <span className="brand-label">{t("program.careerOpportunities") || "Career Opportunities (one per line)"}</span>
             <textarea
               className="brand-input min-h-[130px]"
               value={careerOpportunities}

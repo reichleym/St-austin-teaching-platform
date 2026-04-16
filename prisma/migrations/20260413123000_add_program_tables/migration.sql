@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS "Program" (
   "title" TEXT NOT NULL,
   "description" TEXT,
   "programContent" TEXT,
+  "sourceLanguage" TEXT NOT NULL DEFAULT 'en',
+  "translations" JSONB,
   "visibility" "ProgramVisibility" NOT NULL DEFAULT 'DRAFT',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
