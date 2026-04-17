@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
-import { promises as fs } from "fs";
 import path from "path";
-import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
+import { Role } from "@prisma/client";
 import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 
 export const runtime = "nodejs";
@@ -20,6 +20,14 @@ export async function POST(request: NextRequest) {
     const user = await requireAuthenticatedUser();
     if (user.role === Role.STUDENT) {
       return NextResponse.json({ error: "Only admins can upload images." }, { status: 403 });
+    }
+
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.VERCEL_BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      return NextResponse.json(
+        { error: "Vercel Blob token missing. Set BLOB_READ_WRITE_TOKEN in the environment." },
+        { status: 500 }
+      );
     }
 
     const form = await request.formData();
@@ -41,19 +49,16 @@ export async function POST(request: NextRequest) {
     const safeName = sanitizeFileName(path.basename(file.name, ext));
     const finalName = `${Date.now()}-${randomUUID()}-${safeName}${ext}`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "admin-images");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const absolutePath = path.join(uploadDir, finalName);
-    await fs.writeFile(absolutePath, buffer);
-
-    const publicUrl = `/uploads/admin-images/${finalName}`;
+    const blob = await put(`admin-images/${finalName}`, file, {
+      access: "public",
+      contentType: mime,
+      addRandomSuffix: false,
+      token: blobToken,
+    });
 
     return NextResponse.json({
       ok: true,
-      publicUrl,
+      publicUrl: blob.url,
       fileName: file.name,
       storageKey: finalName,
     });

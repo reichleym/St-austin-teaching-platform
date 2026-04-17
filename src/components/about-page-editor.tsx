@@ -42,19 +42,22 @@ async function uploadAdminImage(file: File) {
   }
 
   const publicUrl = typeof parsed.publicUrl === "string" ? parsed.publicUrl : "";
-  if (!publicUrl) throw new Error("Upload failed: missing publicUrl.");
-  return publicUrl;
+  const storageKey = typeof parsed.storageKey === "string" ? parsed.storageKey : "";
+  if (!publicUrl || !storageKey) throw new Error("Upload failed: missing publicUrl or storageKey.");
+  return { publicUrl, storageKey };
 }
 
 function AdminImagePicker({
   label,
   value,
   onChange,
+  onUpload,
   compact = false,
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
+  onUpload?: (result: { publicUrl: string; storageKey: string }) => void;
   compact?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -78,7 +81,10 @@ function AdminImagePicker({
               setError("");
               setIsUploading(true);
               void uploadAdminImage(file)
-                .then((publicUrl) => onChange(publicUrl))
+                .then((result) => {
+                  onChange(result.publicUrl);
+                  onUpload?.(result);
+                })
                 .catch((err: unknown) => {
                   const message = err instanceof Error ? err.message : "Failed to upload image.";
                   setError(message);
@@ -758,7 +764,16 @@ function BannerSectionForm({
       <AdminImagePicker
         label="Background image (shared)"
         value={sharedBgImg}
-        onChange={(next) => updateAllTranslations((current) => ({ ...current, bgImg: next }))}
+        onChange={(next) =>
+          updateAllTranslations((current) => ({ ...current, bgImg: next, bgImgStorageKey: undefined }))
+        }
+        onUpload={(result) =>
+          updateAllTranslations((current) => ({
+            ...current,
+            bgImg: result.publicUrl,
+            bgImgStorageKey: result.storageKey,
+          }))
+        }
       />
 
       <div className="grid gap-3">
@@ -848,7 +863,16 @@ function HistorySectionForm({
       <AdminImagePicker
         label="Image (shared)"
         value={sharedImage}
-        onChange={(next) => updateAllTranslations((current) => ({ ...current, image: next }))}
+        onChange={(next) =>
+          updateAllTranslations((current) => ({ ...current, image: next, imageStorageKey: undefined }))
+        }
+        onUpload={(result) =>
+          updateAllTranslations((current) => ({
+            ...current,
+            image: result.publicUrl,
+            imageStorageKey: result.storageKey,
+          }))
+        }
       />
 
       <div className="grid gap-3">
@@ -1065,11 +1089,22 @@ function IconCardSectionForm({
     }));
   };
 
-  const updateSharedCardField = (index: number, field: "icon", value: string) => {
+  const updateSharedCardField = (
+    index: number,
+    field: "icon",
+    value: string,
+    storageKey?: string
+  ) => {
     updateAllTranslations((current) => {
       const cards = Array.isArray(current.blockContent) ? [...current.blockContent] : [];
       const existing = cards[index] ?? {};
-      cards[index] = { ...existing, [field]: value };
+      const nextCard = { ...existing, [field]: value } as JsonObject;
+      if (storageKey === undefined) {
+        delete nextCard.iconStorageKey;
+      } else {
+        nextCard.iconStorageKey = storageKey;
+      }
+      cards[index] = nextCard;
       return { ...current, blockContent: cards };
     });
   };
@@ -1164,6 +1199,7 @@ function IconCardSectionForm({
                             label="Icon (shared)"
                             value={sharedIcon}
                             onChange={(next) => updateSharedCardField(i, "icon", next)}
+                            onUpload={(result) => updateSharedCardField(i, "icon", result.publicUrl, result.storageKey)}
                             compact
                           />
                         </div>
@@ -1233,11 +1269,22 @@ function TeamGridSectionForm({
     }));
   };
 
-  const updateSharedMemberField = (index: number, field: "image", value: string) => {
+  const updateSharedMemberField = (
+    index: number,
+    field: "image",
+    value: string,
+    storageKey?: string
+  ) => {
     updateAllTranslations((current) => {
       const members = Array.isArray(current.teamMembers) ? [...current.teamMembers] : [];
       const existing = members[index] ?? {};
-      members[index] = { ...existing, [field]: value };
+      const nextMember = { ...existing, [field]: value } as JsonObject;
+      if (storageKey === undefined) {
+        delete nextMember.imageStorageKey;
+      } else {
+        nextMember.imageStorageKey = storageKey;
+      }
+      members[index] = nextMember;
       return { ...current, teamMembers: members };
     });
   };
@@ -1333,6 +1380,7 @@ function TeamGridSectionForm({
                             label="Image (shared)"
                             value={sharedImage}
                             onChange={(next) => updateSharedMemberField(i, "image", next)}
+                            onUpload={(result) => updateSharedMemberField(i, "image", result.publicUrl, result.storageKey)}
                             compact
                           />
                         </div>
