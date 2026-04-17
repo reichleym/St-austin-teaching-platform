@@ -176,12 +176,29 @@ export async function PUT(
       content: section.content,
     }));
 
-    // Update page and create new sections (relation depends on slug)
-    const page = await prisma.dynamicPage.update({
+    // Upsert page (never "create new slug" accidentally).
+    const page = await prisma.dynamicPage.upsert({
       where: { slug: params.slug },
-      data: {
+      update: {
         title,
         published,
+        updatedById: session.user.id,
+        ...(params.slug === "studentExperience"
+          ? {
+              studentExperienceSections: {
+                create: createPayload,
+              },
+            }
+          : {
+              sections: {
+                create: createPayload,
+              },
+            }),
+      },
+      create: {
+        slug: params.slug,
+        title: typeof title === "string" && title.trim() ? title : params.slug,
+        published: !!published,
         updatedById: session.user.id,
         ...(params.slug === "studentExperience"
           ? {
@@ -233,9 +250,7 @@ export async function PUT(
           { status: 500 }
         );
       }
-      if (error.code === "P2025") {
-        return NextResponse.json({ error: "Page not found" }, { status: 404 });
-      }
+      // Note: upsert removes the "page not found" case here.
     }
 
     console.error("Error updating page:", error);

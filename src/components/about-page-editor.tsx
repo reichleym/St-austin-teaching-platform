@@ -500,8 +500,8 @@ export default function AboutPageEditor() {
         }),
       };
 
-      const method = page.id ? "PUT" : "POST";
-      const endpoint = page.id ? `/api/admin/pages/${page.slug}` : "/api/admin/pages";
+      const method = "PUT";
+      const endpoint = `/api/admin/pages/${page.slug}`;
 
       const res = await fetch(endpoint, {
         method,
