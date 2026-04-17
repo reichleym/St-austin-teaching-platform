@@ -13,11 +13,25 @@ export async function GET(
         sections: {
           orderBy: { position: "asc" },
         },
+        studentExperienceSections: {
+          orderBy: { position: "asc" },
+        },
       },
     });
 
     if (!page || !page.published) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
+    }
+
+    if (params.slug === "studentExperience") {
+      const resolvedSections =
+        page.studentExperienceSections && page.studentExperienceSections.length > 0
+          ? page.studentExperienceSections
+          : page.sections;
+      return NextResponse.json({
+        ...page,
+        sections: resolvedSections,
+      });
     }
 
     return NextResponse.json(page);

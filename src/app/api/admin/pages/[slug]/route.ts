@@ -92,11 +92,25 @@ export async function GET(
         sections: {
           orderBy: { position: "asc" },
         },
+        studentExperienceSections: {
+          orderBy: { position: "asc" },
+        },
       },
     });
 
     if (!page) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
+    }
+
+    if (params.slug === "studentExperience") {
+      const resolvedSections =
+        page.studentExperienceSections && page.studentExperienceSections.length > 0
+          ? page.studentExperienceSections
+          : page.sections;
+      return NextResponse.json({
+        ...page,
+        sections: resolvedSections,
+      });
     }
 
     return NextResponse.json(page);
@@ -140,37 +154,67 @@ export async function PUT(
 
     const normalizedSections = parseSections(sections);
 
-    // Delete existing sections
-    await prisma.aboutPage.deleteMany({
-      where: {
-        page: {
-          slug: params.slug,
+    // Delete existing sections for this page (table depends on slug)
+    if (params.slug === "studentExperience") {
+      await prisma.studentExperience.deleteMany({
+        where: {
+          page: { slug: params.slug },
         },
-      },
-    });
+      });
+    } else {
+      await prisma.aboutPage.deleteMany({
+        where: {
+          page: { slug: params.slug },
+        },
+      });
+    }
 
-    // Update page and create new sections
+    const createPayload = normalizedSections.map((section, index) => ({
+      sectionKey: section.sectionKey,
+      componentType: section.componentType,
+      position: index,
+      content: section.content,
+    }));
+
+    // Update page and create new sections (relation depends on slug)
     const page = await prisma.dynamicPage.update({
       where: { slug: params.slug },
       data: {
         title,
         published,
         updatedById: session.user.id,
-        sections: {
-          create: normalizedSections.map((section, index) => ({
-            sectionKey: section.sectionKey,
-            componentType: section.componentType,
-            position: index,
-            content: section.content,
-          })),
-        },
+        ...(params.slug === "studentExperience"
+          ? {
+              studentExperienceSections: {
+                create: createPayload,
+              },
+            }
+          : {
+              sections: {
+                create: createPayload,
+              },
+            }),
       },
       include: {
         sections: {
           orderBy: { position: "asc" },
         },
+        studentExperienceSections: {
+          orderBy: { position: "asc" },
+        },
       },
     });
+
+    if (params.slug === "studentExperience") {
+      const resolvedSections =
+        page.studentExperienceSections && page.studentExperienceSections.length > 0
+          ? page.studentExperienceSections
+          : page.sections;
+      return NextResponse.json({
+        ...page,
+        sections: resolvedSections,
+      });
+    }
 
     return NextResponse.json(page);
   } catch (error) {

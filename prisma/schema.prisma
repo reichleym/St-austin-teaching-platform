@@ -532,6 +532,7 @@ model DynamicPage {
   title     String
   published Boolean  @default(false)
   sections  AboutPage[]
+  studentExperienceSections StudentExperience[]
   updatedById String?
   updatedBy User? @relation("PagesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
@@ -550,6 +551,30 @@ model AboutPage {
   sectionKey String
   
   /// Section type component (e.g., "BannerSection", "IconCard", "TeamGrid")
+  componentType String
+  
+  /// Position/order of section on the page
+  position  Int      @default(0)
+  
+  /// Raw JSON content for the section
+  content   Json
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, sectionKey])
+  @@index([pageId, position])
+}
+
+model StudentExperience {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  /// Section identifier (e.g., "hero", "how-youll-learn", "learn-schedule")
+  sectionKey String
+  
+  /// Section type component (e.g., "BannerSection", "IconCard", "CustomLearnSchedule")  
   componentType String
   
   /// Position/order of section on the page

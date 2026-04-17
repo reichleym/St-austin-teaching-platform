@@ -906,6 +906,8 @@ const translations: Record<Language, Record<string, string>> = {
     "validation.rawScoreNonNegative": "Raw score must be a non-negative number.",
     "validation.rawScoreExceedsMax": "Raw score cannot exceed max points ({maxPoints}).",
     "validation.proposedPointsNonNegative": "Proposed points are required and must be non-negative.",
+    "cta.title": "Ready to Start Your Journey?",
+    "cta.desc": "Take the next step toward your future. Our admissions team is here to guide you through every step of the process.",
   },
   fr: {
     workspace: "Espace de travail",
@@ -1822,6 +1824,8 @@ const translations: Record<Language, Record<string, string>> = {
     "validation.rawScoreNonNegative": "Le score brut doit être un nombre non négatif.",
     "validation.rawScoreExceedsMax": "Le score brut ne peut pas dépasser le maximum ({maxPoints}).",
     "validation.proposedPointsNonNegative": "Les points proposés sont requis et doivent être non négatifs.",
+    "cta.title": "Prêt à commencer votre parcours ?",
+    "cta.desc": "Faites le prochain pas vers votre avenir. Notre équipe d'admission est là pour vous guider à chaque étape du processus.",
   },
 };
 

@@ -160,4 +160,12 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["SUPER_ADMIN"],
     parentSlug: "dynamic-pages",
   },
+  {
+    slug: "student-experience",
+    title: "Student Experience",
+    description: "Manage Student Experience page content, text, translations, and images.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
 ];
+

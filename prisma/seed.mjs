@@ -730,6 +730,85 @@ async function seedAdminLogs(adminId) {
   console.log(`✔ Admin Logs:         ${logs.length} entries`);
 }
 
+// ─── Student Experience Page ─────────────────────────────────────────────────
+import fs from "fs";
+
+async function seedStudentExperiencePage(adminId) {
+  try {
+    const raw = fs.readFileSync(
+      new URL("../src/lib/dynamic-pages/studentExperience.json", import.meta.url),
+      "utf-8"
+    );
+    const pageJson = JSON.parse(raw);
+
+    const slug = pageJson.slug || "studentExperience";
+    const title = pageJson.title || "Student Experience";
+    const published = pageJson.published ?? true;
+
+    const sections = Array.isArray(pageJson.sections) ? pageJson.sections : [];
+
+    const normalized = sections.map((s, idx) => ({
+      sectionKey: s.sectionKey || s.name || `section-${idx}`,
+      componentType: s.componentType || s.component || "Custom",
+      position: typeof s.position === "number" ? s.position : idx,
+      content: s.content || s.props || s,
+    }));
+
+    const page = await prisma.dynamicPage.upsert({
+      where: { slug },
+      update: {
+        title,
+        published,
+        updatedById: adminId,
+      },
+      create: {
+        slug,
+        title,
+        published,
+        updatedById: adminId,
+        studentExperienceSections: {
+          create: normalized.map((sec) => ({
+            sectionKey: sec.sectionKey,
+            componentType: sec.componentType,
+            position: sec.position,
+            content: sec.content,
+          })),
+        },
+      },
+    });
+
+    // If we updated (existing), ensure sections exist (basic upsert per section)
+    if (page) {
+      for (const sec of normalized) {
+        await prisma.studentExperience.upsert({
+          where: {
+            pageId_sectionKey: {
+              pageId: page.id,
+              sectionKey: sec.sectionKey,
+            },
+          },
+          update: {
+            componentType: sec.componentType,
+            position: sec.position,
+            content: sec.content,
+          },
+          create: {
+            pageId: page.id,
+            sectionKey: sec.sectionKey,
+            componentType: sec.componentType,
+            position: sec.position,
+            content: sec.content,
+          },
+        });
+      }
+    }
+
+    console.log("✔ Student Experience page seeded/updated");
+  } catch (err) {
+    console.error("Failed to seed Student Experience page:", err);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -764,6 +843,7 @@ async function main() {
   );
   await seedInvitations(admin.id);
   await seedAdminLogs(admin.id);
+  await seedStudentExperiencePage(admin.id);
 
   console.log("\n✅ Seed complete!\n");
   console.log("─────────────────────────────────────────────────────────────");

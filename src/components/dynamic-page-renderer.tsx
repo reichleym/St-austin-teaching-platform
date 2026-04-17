@@ -151,6 +151,54 @@ const CustomSectionComponents: Record<string, React.ComponentType<{ content: Jso
     </section>
   ),
 
+  LearnSchedule: ({ content }) => (
+    <section className="py-16 px-4 md:px-8">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        {asString(content["image"]) ? (
+          <div className="overflow-hidden rounded-lg">
+            <img src={asString(content["image"])} alt={asString(content["title"])} className="w-full h-auto" />
+          </div>
+        ) : null}
+        <div>
+          <h2 className="text-3xl font-bold mb-4">{asString(content["title"])}</h2>
+          <p className="text-gray-700 leading-relaxed mb-4">{asString(content["description"])}</p>
+          <ul className="list-disc pl-5 space-y-2">
+            {Array.isArray(content["list"]) && (content["list"] as unknown[]).map((item, idx) => (
+              <li key={idx} className="text-gray-700">{asString(item)}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  ),
+
+  LearningDashboardCta: ({ content }) => (
+    <section className="py-16 px-4 md:px-8 bg-gray-50">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div>
+          <h2 className="text-3xl font-bold mb-4">{asString(content["title"])}</h2>
+          <p className="text-gray-700 leading-relaxed mb-6">{asString(content["description"])}</p>
+          {isJsonObject(content["button"]) ? (
+            isJsonObject(content["button"]) && asString((content["button"] as JsonObject)["href"]) ? (
+              <a href={asString((content["button"] as JsonObject)["href"]) } className="btn-brand-primary px-5 py-2.5 text-sm font-semibold">
+                {asString((content["button"] as JsonObject)["label"])}
+              </a>
+            ) : (
+              <button className="btn-brand-primary px-5 py-2.5 text-sm font-semibold disabled:opacity-60" disabled>
+                {asString((content["button"] as JsonObject)["label"]) || "Access the Portal"}
+              </button>
+            )
+          ) : null}
+        </div>
+        {asString(content["image"]) ? (
+          <div className="overflow-hidden rounded-lg">
+            <img src={asString(content["image"]) } alt={asString(content["title"]) } className="w-full h-auto" />
+          </div>
+        ) : null}
+      </div>
+    </section>
+  ),
+
   StatisticsSection: ({ content }) => (
     <section className="py-16 px-4 md:px-8 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
       <div className="max-w-6xl mx-auto">
