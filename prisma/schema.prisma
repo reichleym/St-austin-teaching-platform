@@ -531,7 +531,7 @@ model DynamicPage {
   slug      String   @unique
   title     String
   published Boolean  @default(false)
-  sections  PageSection[]
+  sections  AboutPage[]
   updatedById String?
   updatedBy User? @relation("PagesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
@@ -541,7 +541,7 @@ model DynamicPage {
   @@index([published])
 }
 
-model PageSection {
+model AboutPage {
   id        String   @id @default(cuid())
   pageId    String
   page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
@@ -563,6 +563,4 @@ model PageSection {
 
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
-}
- pagesUpdated              DynamicPage[]             @relation("PagesUpdatedBy")
 }

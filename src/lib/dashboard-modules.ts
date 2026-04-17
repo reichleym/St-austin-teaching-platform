@@ -147,4 +147,17 @@ export const dashboardModules: DashboardModule[] = [
     href: "/dashboard/admin/invitations",
     parentSlug: "user-access",
   },
+  {
+    slug: "dynamic-pages",
+    title: "Website Pages",
+    description: "Manage dynamic website pages and content.",
+    roles: ["SUPER_ADMIN"],
+  },
+  {
+    slug: "about",
+    title: "About Page",
+    description: "Manage About page content and sections.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
 ];
