@@ -589,3 +589,54 @@ model StudentExperience {
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
+
+// Additional dynamic page tables inferred from provided JSON payloads.
+// These store page-level metadata and the full `sections` array as JSON
+// so the frontend can render the page without changing existing About/StudentExperience schemas.
+model TuitionPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  route     String
+  sections  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model DonationsPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  route     String
+  sections  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model GovernmentEmployeesPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  route     String
+  sections  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model AdmissionsPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  route     String
+  sections  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
