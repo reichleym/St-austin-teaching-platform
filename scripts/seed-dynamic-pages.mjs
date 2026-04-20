@@ -146,6 +146,35 @@ async function upsertPages() {
 
       const res = await prisma[modelName].upsert({ where, update, create });
       console.log(`Upserted ${modelName}: ${res.slug}`);
+
+      console.log(`  sections to upsert: ${Array.isArray(payload.sections) ? payload.sections.length : 0}`);
+
+      // Upsert section rows into the corresponding Section model (e.g., tuitionPageSection)
+      const sectionDelegate = `${modelName}Section`;
+      console.log(`  section delegate: ${sectionDelegate} -> ${typeof prisma[sectionDelegate]}`);
+      if (Array.isArray(payload.sections) && prisma[sectionDelegate]) {
+        for (const s of payload.sections) {
+          const whereSection = { pageId_sectionKey: { pageId: res.id, sectionKey: s.sectionKey } };
+          const createSection = {
+            pageId: res.id,
+            sectionKey: s.sectionKey,
+            componentType: s.componentType,
+            position: s.position ?? 0,
+            content: s.content ?? {},
+          };
+          const updateSection = {
+            componentType: s.componentType,
+            position: s.position ?? 0,
+            content: s.content ?? {},
+          };
+          try {
+            await prisma[sectionDelegate].upsert({ where: whereSection, create: createSection, update: updateSection });
+            console.log(`  Upserted section ${s.sectionKey} into ${sectionDelegate}`);
+          } catch (err) {
+            console.warn(`  Failed to upsert section ${s.sectionKey} into ${sectionDelegate}:`, err.message || err);
+          }
+        }
+      }
     }
   } catch (err) {
     console.error(err);
