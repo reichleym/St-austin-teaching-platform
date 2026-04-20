@@ -167,5 +167,33 @@ export const dashboardModules: DashboardModule[] = [
     roles: ["SUPER_ADMIN"],
     parentSlug: "dynamic-pages",
   },
+  {
+    slug: "tuition",
+    title: "Tuition & Financial Aid",
+    description: "Manage Tuition page content and sections.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
+  {
+    slug: "donations",
+    title: "Donations",
+    description: "Manage Donations page content and sections.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
+  {
+    slug: "government-employees",
+    title: "Government Employees",
+    description: "Manage Government Employees page content and sections.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
+  {
+    slug: "admissions",
+    title: "Admissions",
+    description: "Manage Admissions page content and sections.",
+    roles: ["SUPER_ADMIN"],
+    parentSlug: "dynamic-pages",
+  },
 ];
 
