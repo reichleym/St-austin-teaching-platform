@@ -725,13 +725,7 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
         "CoreValuesSection",
         "StatisticsSection",
       ].includes(section.componentType) && (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-slate-700">Raw JSON editor</p>
-          <textarea
-            value={JSON.stringify(section.content, null, 2)}
-            readOnly
-            className="w-full min-h-[240px] resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-sm text-slate-700"
-          />
+        <div className="space-y-2">
           <p className="text-sm text-slate-500">This section type is not supported by the visual editor.</p>
         </div>
       )}

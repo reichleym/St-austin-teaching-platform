@@ -306,6 +306,11 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
   const sectionConfig: Record<string, { label: string; description: string }> = {
     BannerSection: { label: "Hero Banner", description: "Intro banner with title, description, and background image." },
     IconCard: { label: "How to Give", description: "Grid of donation options and descriptions." },
+    DonationFormSection: { label: "Donation Form", description: "Form settings for one-time amounts and payment methods." },
+    WhyGiveSection: { label: "Why Give", description: "Statistics and description about donations." },
+    OtherWaysSection: { label: "Other Ways to Give", description: "Alternate donation channels and instructions." },
+    Accreditation: { label: "Your Impact", description: "Impact/blocks showing donor-funded results." },
+    MatchingGiftSection: { label: "Matching Gift", description: "Matching gift info or CTA." },
     CtaSection: { label: "Call to Action", description: "Bottom section with title, description, and buttons." },
   };
 
@@ -323,16 +328,15 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
 
       {section.componentType === "BannerSection" && <BannerSectionForm content={section.content} onUpdate={onUpdate} />}
       {section.componentType === "IconCard" && <IconCardSectionForm content={section.content} onUpdate={onUpdate} />}
+      {section.componentType === "DonationFormSection" && <DonationFormSectionForm content={section.content} onUpdate={onUpdate} />}
+      {section.componentType === "WhyGiveSection" && <WhyGiveSectionForm content={section.content} onUpdate={onUpdate} />}
+      {section.componentType === "OtherWaysSection" && <OtherWaysSectionForm content={section.content} onUpdate={onUpdate} />}
+      {section.componentType === "Accreditation" && <AccreditationSectionForm content={section.content} onUpdate={onUpdate} />}
+      {section.componentType === "MatchingGiftSection" && <MatchingGiftSectionForm content={section.content} onUpdate={onUpdate} />}
       {section.componentType === "CtaSection" && <CtaSectionForm content={section.content} onUpdate={onUpdate} />}
 
-      {!["BannerSection", "IconCard", "CtaSection"].includes(section.componentType) && (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-slate-700">Raw JSON editor</p>
-          <textarea
-            value={JSON.stringify(section.content, null, 2)}
-            readOnly
-            className="w-full min-h-[240px] resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-sm text-slate-700"
-          />
+      {!["BannerSection", "IconCard", "DonationFormSection", "WhyGiveSection", "OtherWaysSection", "Accreditation", "MatchingGiftSection", "CtaSection"].includes(section.componentType) && (
+        <div className="space-y-2">
           <p className="text-sm text-slate-500">This section type is not supported by the visual editor.</p>
         </div>
       )}
@@ -612,6 +616,207 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function DonationFormSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+
+  const updateTranslation = (language: Language, nextValue: JsonObject) => {
+    onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  };
+
+  const oneTime = Array.isArray(translations[sourceLanguage]?.oneTimeAmounts) ? translations[sourceLanguage].oneTimeAmounts as string[] : [];
+  const designations = Array.isArray(translations[sourceLanguage]?.designationOptions) ? translations[sourceLanguage].designationOptions as string[] : [];
+  const paymentMethods = Array.isArray(translations[sourceLanguage]?.paymentMethods) ? translations[sourceLanguage].paymentMethods as JsonObject[] : [];
+
+  const addOneTime = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: [...oneTime, ""] });
+  const updateOneTime = (index: number, value: string) => { const next = oneTime.slice(); next[index] = value; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: next }); };
+  const removeOneTime = (index: number) => { const next = oneTime.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: next }); };
+
+  const addDesignation = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: [...designations, ""] });
+  const updateDesignation = (index: number, value: string) => { const next = designations.slice(); next[index] = value; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: next }); };
+  const removeDesignation = (index: number) => { const next = designations.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: next }); };
+
+  const addPaymentMethod = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: [...paymentMethods, { value: "", label: "" }] });
+  const updatePaymentMethod = (index: number, key: "value" | "label", value: string) => { const next = paymentMethods.slice(); next[index] = { ...(next[index] ?? {}), [key]: value }; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: next }); };
+  const removePaymentMethod = (index: number) => { const next = paymentMethods.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: next }); };
+
+  return (
+    <div className="space-y-4">
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>
+          {supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}
+        </select>
+      </label>
+
+      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+        <LanguageLegend language={sourceLanguage} isPrimary={true} />
+        <label className="grid gap-1.5">
+          <span className="brand-label">Title</span>
+          <input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} />
+        </label>
+
+        <div>
+          <h4 className="font-semibold">One-time Amounts</h4>
+          <div className="space-y-2">
+            {oneTime.map((amt, i) => (
+              <div key={i} className="flex gap-2">
+                <input className="brand-input flex-1" value={amt} onChange={(e) => updateOneTime(i, e.target.value)} />
+                <button type="button" onClick={() => removeOneTime(i)} className="text-xs font-semibold text-red-700">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={addOneTime} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add amount</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-semibold">Designation Options</h4>
+          <div className="space-y-2">
+            {designations.map((d, i) => (
+              <div key={i} className="flex gap-2">
+                <input className="brand-input flex-1" value={d} onChange={(e) => updateDesignation(i, e.target.value)} />
+                <button type="button" onClick={() => removeDesignation(i)} className="text-xs font-semibold text-red-700">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={addDesignation} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add option</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-semibold">Payment Methods</h4>
+          <div className="space-y-2">
+            {paymentMethods.map((m, i) => (
+              <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <input className="brand-input" placeholder="value" value={asString(m.value)} onChange={(e) => updatePaymentMethod(i, "value", e.target.value)} />
+                <input className="brand-input" placeholder="label" value={asString(m.label)} onChange={(e) => updatePaymentMethod(i, "label", e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => removePaymentMethod(i)} className="text-xs font-semibold text-red-700">Remove</button>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addPaymentMethod} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add method</button>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+function WhyGiveSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+  const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  const updateAll = (updater: (cur: JsonObject) => JsonObject) => { const next = { ...translations } as Record<Language, JsonObject>; for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {}); onUpdate({ sourceLanguage, translations: next }); };
+  const cards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
+  const addCard = () => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []), { cardTitle: "", cardDescription: "", icon: "" }] }));
+  const updateCard = (lang: Language, idx: number, field: string, value: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.blockContent) ? [...f.blockContent] : []; items[idx] = { ...(items[idx] ?? {}), [field]: value }; updateTranslation(lang, { ...f, blockContent: items }); };
+  const removeCard = (idx: number) => updateAll((c) => ({ ...c, blockContent: (Array.isArray(c.blockContent) ? c.blockContent : []).filter((_: any, i: number) => i !== idx) }));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const f = translations[lang] ?? {};
+          const items = asArrayOfObjects(f.blockContent);
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} /></label>
+              <div className="space-y-4">
+                {(isPrimary ? cards : items).map((_, i) => (
+                  <div key={i} className="brand-panel rounded-lg p-4">
+                    <input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} />
+                    <textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} />
+                    <AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || cards[i]?.icon)} onChange={(next) => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it)] }))} compact />
+                    {isPrimary && <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button>}
+                  </div>
+                ))}
+                {lang === sourceLanguage && <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button>}
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OtherWaysSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+  const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  const list = Array.isArray(translations[sourceLanguage]?.items) ? translations[sourceLanguage].items as string[] : [];
+  const addItem = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: [...list, ""] });
+  const updateItem = (i: number, v: string) => { const next = list.slice(); next[i] = v; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: next }); };
+  const removeItem = (i: number) => { const next = list.slice(); next.splice(i, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: next }); };
+
+  return (
+    <div className="space-y-4">
+      <label className="grid gap-1.5 md:max-w-xs"><span className="brand-label">Primary Language</span><select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>{supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}</select></label>
+      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+        <LanguageLegend language={sourceLanguage} isPrimary={true} />
+        <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} /></label>
+        <div className="space-y-2">
+          {list.map((it, i) => (<div key={i} className="flex gap-2"><input className="brand-input flex-1" value={it} onChange={(e) => updateItem(i, e.target.value)} /><button type="button" onClick={() => removeItem(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}
+          <button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">+ Add item</button>
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  // reuse IconCard style for blockContent
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+  const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  const cards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
+  const addCard = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), blockContent: [...cards, { cardTitle: "", cardDescription: "", icon: "" }] });
+  const updateCard = (lang: Language, idx: number, field: string, v: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.blockContent) ? [...f.blockContent] : []; items[idx] = { ...(items[idx] ?? {}), [field]: v }; updateTranslation(lang, { ...f, blockContent: items }); };
+  const removeCard = (idx: number) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), blockContent: (Array.isArray(translations[sourceLanguage]?.blockContent) ? translations[sourceLanguage].blockContent.filter((_: any, i: number) => i !== idx) : []) });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const f = translations[lang] ?? {};
+          const items = asArrayOfObjects(f.blockContent);
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} /></label>
+              <div className="space-y-4">{(isPrimary ? cards : items).map((_, i) => (<div key={i} className="brand-panel rounded-lg p-4"><input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} /><textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} /><AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || cards[i]?.icon)} onChange={(next) => updateTranslation(lang, { ...f, blockContent: (Array.isArray(f.blockContent) ? f.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it) })} compact /><button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}<button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button></div>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MatchingGiftSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+  const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  return (
+    <div className="space-y-4">
+      <label className="grid gap-1.5 md:max-w-xs"><span className="brand-label">Primary Language</span><select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>{supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}</select></label>
+      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+        <LanguageLegend language={sourceLanguage} isPrimary={true} />
+        <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className="brand-label">Description</span><textarea className="brand-input" value={asString(translations[sourceLanguage]?.description)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), description: e.target.value })} rows={3} /></label>
+      </fieldset>
     </div>
   );
 }
