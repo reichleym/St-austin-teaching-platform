@@ -442,7 +442,18 @@ export default function AboutPageEditor() {
       setError("");
       const res = await fetch("/api/admin/pages/about");
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as DynamicPage;
+        const hasSections = Array.isArray(data?.sections) && data.sections.length > 0;
+        if (!hasSections) {
+          const draft = createDraftAboutPage();
+          setPage({
+            ...data,
+            slug: data?.slug || "about",
+            title: data?.title || draft.title,
+            sections: draft.sections,
+          });
+          return;
+        }
         setPage(data);
         return;
       }

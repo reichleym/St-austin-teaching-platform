@@ -34,6 +34,10 @@ export async function GET(
       });
     }
 
+    if (!page.sections || page.sections.length === 0) {
+      return NextResponse.json({ error: "Page not found" }, { status: 404 });
+    }
+
     return NextResponse.json(page);
   } catch (error) {
     console.error("Error fetching page:", error);
