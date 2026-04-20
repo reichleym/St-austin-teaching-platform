@@ -22,7 +22,7 @@ export default async function Page() {
 
   return (
     <main className="w-full">
-      <DynamicPageRenderer page={page} />
+      <DynamicPageRenderer page={page as unknown as any} />
     </main>
   );
 }

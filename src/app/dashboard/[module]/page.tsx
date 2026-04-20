@@ -22,6 +22,10 @@ import { CalendarEventsSettings } from "@/components/calendar-events-settings";
 import { UniversityCareersSettings } from "@/components/university-careers-settings";
 import AboutPageEditor from "@/components/about-page-editor";
 import StudentExperienceEditor from "@/components/student-experience-editor";
+import TuitionEditor from "@/components/tuition-editor";
+import DonationsEditor from "@/components/donations-editor";
+import GovernmentEmployeesEditor from "@/components/government-employees-editor";
+import AdmissionsEditor from "@/components/admissions-editor";
 import { StudentProgressModule } from "@/components/student-progress-module";
 import { getTodayTimelineEntries, normalizeDashboardCalendarEvents } from "@/lib/dashboard-calendar";
 import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
@@ -1276,6 +1280,14 @@ export default async function DashboardPage({ params }: Props) {
           <AboutPageEditor />
         ) : selected.slug === "student-experience" ? (
           <StudentExperienceEditor />
+        ) : selected.slug === "tuition" ? (
+          <TuitionEditor />
+        ) : selected.slug === "donations" ? (
+          <DonationsEditor />
+        ) : selected.slug === "government-employees" ? (
+          <GovernmentEmployeesEditor />
+        ) : selected.slug === "admissions" ? (
+          <AdmissionsEditor />
         ) : selected.slug === "view-teachers" ? (
           <section className="grid gap-4">
             <article className="brand-card p-5">
