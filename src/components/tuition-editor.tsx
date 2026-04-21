@@ -532,11 +532,55 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       {section.componentType === "CtaSection" && <CtaSectionForm content={section.content} onUpdate={onUpdate} />}
 
       {!["BannerSection", "IconCard", "TuitionTableSection", "WhyAustin", "LearnSchedule", "PaymentPlansSection", "CtaSection"].includes(section.componentType) && (
-        <div className="space-y-2">
-          <p className="text-sm text-slate-500">This section type is not supported by the visual editor.</p>
-        </div>
+        <GenericSectionForm content={section.content} onUpdate={onUpdate} />
       )}
     </section>
+  );
+}
+
+function GenericSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+  const [localJson, setLocalJson] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const lang of supportedLanguages) out[lang] = JSON.stringify(translations[lang] ?? {}, null, 2);
+    return out;
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const out: Record<string, string> = {};
+    for (const lang of supportedLanguages) out[lang] = JSON.stringify((getLocalizedSectionEnvelopeDraft(content).translations[lang] ?? {}), null, 2);
+    setLocalJson(out);
+  }, [content]);
+
+  const saveLang = (lang: string) => {
+    try {
+      const parsed = localJson[lang] ? JSON.parse(localJson[lang]) : {};
+      onUpdate({ sourceLanguage, translations: { ...translations, [lang]: parsed } });
+      setErrors((e) => ({ ...e, [lang]: "" }));
+    } catch (err) {
+      setErrors((e) => ({ ...e, [lang]: "Invalid JSON" }));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {supportedLanguages.map((lang) => (
+        <fieldset key={lang} className="grid gap-2 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-[#0b3e81]">{languageLabelFallback(lang)} JSON</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => { setLocalJson((s) => ({ ...s, [lang]: JSON.stringify(translations[lang] ?? {}, null, 2) })); }} className="btn-brand-secondary px-3 py-1 text-sm">Reset</button>
+              <button type="button" onClick={() => saveLang(lang)} className="btn-brand-primary px-3 py-1 text-sm">Save</button>
+            </div>
+          </div>
+          <textarea className="brand-input font-mono text-sm" rows={6} value={localJson[lang] ?? ""} onChange={(e) => setLocalJson((s) => ({ ...s, [lang]: e.target.value }))} />
+          {errors[lang] ? <p className="text-xs text-red-700">{errors[lang]}</p> : null}
+        </fieldset>
+      ))}
+    </div>
   );
 }
 
