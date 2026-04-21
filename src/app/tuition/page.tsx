@@ -2,24 +2,20 @@ import DynamicPageRenderer from '@/components/dynamic-page-renderer';
 import { prisma } from '@/lib/prisma';
 
 export default async function Page() {
-  const row = await prisma.tuitionPage.findUnique({ where: { slug: 'tuition' } });
-  if (!row) return <div className="max-w-6xl mx-auto p-8">Tuition page not found.</div>;
+  const pageRow = await prisma.dynamicPage.findUnique({
+    where: { slug: 'tuition' },
+    include: {
+      sections: { orderBy: { position: 'asc' } },
+      tuitionSections: { orderBy: { position: 'asc' } },
+    },
+  });
+  if (!pageRow) return <div className="max-w-6xl mx-auto p-8">Tuition page not found.</div>;
 
-  // Prefer per-section rows if present (TuitionPageSection), fall back to stored JSON
-  const sectionRows = await prisma.tuitionPageSection.findMany({ where: { pageId: row.id }, orderBy: { position: 'asc' } });
-  const sections = sectionRows.length
-    ? sectionRows.map((s) => ({ sectionKey: s.sectionKey, componentType: s.componentType, position: s.position, content: s.content }))
-    : Array.isArray(row.sections)
-    ? row.sections
-    : [];
+  const p = pageRow as any;
+  const resolved = (p.tuitionSections && p.tuitionSections.length > 0) ? p.tuitionSections : p.sections;
+  const sections = (resolved || []).map((s: any) => ({ sectionKey: s.sectionKey, componentType: s.componentType, content: s.content }));
 
-  const page = {
-    id: row.id,
-    slug: row.slug,
-    title: row.name,
-    published: true,
-    sections,
-  };
+  const page = { id: pageRow.id, slug: pageRow.slug, title: pageRow.title, published: !!pageRow.published, sections };
 
   return (
     <main className="w-full">

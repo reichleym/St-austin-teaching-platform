@@ -41,7 +41,141 @@ function asArrayOfObjects(value: unknown): JsonObject[] {
 interface PageSection { id?: string; sectionKey: string; componentType: string; position: number; content: JsonObject; }
 interface DynamicPage { id: string; slug: string; title: string; published: boolean; sections: PageSection[]; createdAt: string; updatedAt: string; }
 
-function createDraftAdmissionsPage(): DynamicPage { return { id: "", slug: "admissions", title: "Admissions", published: false, sections: [ { sectionKey: "hero", componentType: "BannerSection", position: 0, content: { sourceLanguage: "en", translations: { en: { title: "Admissions", description: "Start your application to St. Austin's.", bgImg: "/bannerImg.jpg" }, fr: { title: "Admissions", description: "Start your application to St. Austin's.", bgImg: "/bannerImg.jpg" } } } }, { sectionKey: "requirements", componentType: "IconCard", position: 1, content: { sourceLanguage: "en", translations: { en: { title: "Admission Requirements", blockContent: [{ cardTitle: "Undergraduate", cardDescription: "High school transcript and application.", icon: "/awards-icon.png" }] }, fr: { title: "Admission Requirements", blockContent: [{ cardTitle: "Undergraduate", cardDescription: "High school transcript and application.", icon: "/awards-icon.png" }] } } } }, { sectionKey: "cta", componentType: "CtaSection", position: 2, content: { sourceLanguage: "en", translations: { en: { title: "Apply Now", desc: "Begin your application today.", buttons: ["Apply"] }, fr: { title: "Apply Now", desc: "Begin your application today.", buttons: ["Apply"] } } } } ], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; }
+function createDraftAdmissionsPage(): DynamicPage {
+  const now = new Date().toISOString();
+  return {
+    id: "",
+    slug: "admissions",
+    title: "Admissions",
+    published: false,
+    sections: [
+      {
+        sectionKey: "hero",
+        componentType: "BannerSection",
+        position: 0,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: { title: "Admissions", description: "Start your application to St. Austin's.", bgImg: "/bannerImg.jpg" },
+            fr: { title: "Admissions", description: "Commencez votre demande à St. Austin.", bgImg: "/bannerImg.jpg" },
+          },
+        },
+      },
+      {
+        sectionKey: "requirements",
+        componentType: "IconCard",
+        position: 1,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: {
+              title: "Admission Requirements",
+              blockContent: [
+                { cardTitle: "Undergraduate", cardDescription: "High school transcript and completed application.", icon: "/icons/undergrad.png" },
+                { cardTitle: "Graduate", cardDescription: "Official transcripts and letters of recommendation.", icon: "/icons/graduate.png" },
+              ],
+            },
+            fr: {
+              title: "Exigences d'admission",
+              blockContent: [
+                { cardTitle: "Premier cycle", cardDescription: "Relevé de notes et formulaire de demande.", icon: "/icons/undergrad.png" },
+                { cardTitle: "Deuxième cycle", cardDescription: "Relevés officiels et lettres de recommandation.", icon: "/icons/graduate.png" },
+              ],
+            },
+          },
+        },
+      },
+      {
+        sectionKey: "steps",
+        componentType: "StepsSection",
+        position: 2,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: {
+              title: "How to Apply",
+              stepsContent: [
+                { cardTitle: "Create an account", cardDescription: "Start your application by creating an account.", stepNum: "1" },
+                { cardTitle: "Submit documents", cardDescription: "Upload transcripts and test scores.", stepNum: "2" },
+                { cardTitle: "Receive decision", cardDescription: "Admissions will notify you by email.", stepNum: "3" },
+              ],
+            },
+            fr: {
+              title: "Comment postuler",
+              stepsContent: [
+                { cardTitle: "Créer un compte", cardDescription: "Commencez votre demande en créant un compte.", stepNum: "1" },
+                { cardTitle: "Soumettre des documents", cardDescription: "Téléversez relevés et résultats.", stepNum: "2" },
+                { cardTitle: "Recevoir la décision", cardDescription: "Les admissions vous informeront par courriel.", stepNum: "3" },
+              ],
+            },
+          },
+        },
+      },
+      {
+        sectionKey: "deadlines",
+        componentType: "DeadlinesSection",
+        position: 3,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: {
+              title: "Important Deadlines",
+              deadlineItem: [
+                { title: "Early Decision", headingOne: "Apply by", headingTwo: "Notification", dateOne: "Nov 1", dateTwo: "Dec 15" },
+                { title: "Regular Decision", headingOne: "Apply by", headingTwo: "Notification", dateOne: "Jan 15", dateTwo: "Mar 1" },
+              ],
+            },
+            fr: {
+              title: "Dates importantes",
+              deadlineItem: [
+                { title: "Décision anticipée", headingOne: "Date limite", headingTwo: "Notification", dateOne: "1 nov.", dateTwo: "15 déc." },
+                { title: "Décision régulière", headingOne: "Date limite", headingTwo: "Notification", dateOne: "15 janv.", dateTwo: "1 mars" },
+              ],
+            },
+          },
+        },
+      },
+      {
+        sectionKey: "faqs",
+        componentType: "FaqSection",
+        position: 4,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: {
+              title: "Frequently Asked Questions",
+              accordionsContent: [
+                { title: "Do I need test scores?", description: "Test score requirements vary by program." },
+                { title: "How do I submit transcripts?", description: "Upload scanned copies through the application portal." },
+              ],
+            },
+            fr: {
+              title: "Questions fréquentes",
+              accordionsContent: [
+                { title: "Ai-je besoin de résultats aux tests?", description: "Les exigences varient selon le programme." },
+                { title: "Comment soumettre mes relevés?", description: "Téléversez des copies numérisées via le portail." },
+              ],
+            },
+          },
+        },
+      },
+      {
+        sectionKey: "cta",
+        componentType: "CtaSection",
+        position: 5,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: { title: "Ready to apply?", desc: "Start your application today.", buttons: ["Apply now"] },
+            fr: { title: "Prêt à postuler?", desc: "Commencez votre demande aujourd'hui.", buttons: ["Postuler"] },
+          },
+        },
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 const languageLabelFallback = (language: Language) => (language === "fr" ? "French" : "English");
 

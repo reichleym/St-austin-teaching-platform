@@ -533,6 +533,10 @@ model DynamicPage {
   published Boolean  @default(false)
   sections  AboutPage[]
   studentExperienceSections StudentExperience[]
+  donationsSections DonationsSection[]
+  admissionsSections AdmissionsSection[]
+  tuitionSections TuitionSection[]
+  governmentEmployeesSections GovernmentEmployeesSection[]
   updatedById String?
   updatedBy User? @relation("PagesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
@@ -599,7 +603,6 @@ model TuitionPage {
   name      String
   route     String
   sections  Json
-  sectionRows TuitionPageSection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -612,7 +615,6 @@ model DonationsPage {
   name      String
   route     String
   sections  Json
-  sectionRows DonationsPageSection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -625,7 +627,6 @@ model GovernmentEmployeesPage {
   name      String
   route     String
   sections  Json
-  sectionRows GovernmentEmployeesPageSection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -638,7 +639,6 @@ model AdmissionsPage {
   name      String
   route     String
   sections  Json
-  sectionRows AdmissionsPageSection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -646,62 +646,72 @@ model AdmissionsPage {
 }
 
 // Per-page section tables mirroring the AboutPage and StudentExperience patterns.
-model TuitionPageSection {
-  id           String   @id @default(cuid())
-  pageId       String
-  page         TuitionPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  sectionKey   String
+
+model DonationsSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey String
   componentType String
-  position     Int      @default(0)
-  content      Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  position  Int      @default(0)
+  content   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
 
-model DonationsPageSection {
-  id           String   @id @default(cuid())
-  pageId       String
-  page         DonationsPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  sectionKey   String
+model AdmissionsSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey String
   componentType String
-  position     Int      @default(0)
-  content      Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  position  Int      @default(0)
+  content   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
 
-model GovernmentEmployeesPageSection {
-  id           String   @id @default(cuid())
-  pageId       String
-  page         GovernmentEmployeesPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  sectionKey   String
+model TuitionSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey String
   componentType String
-  position     Int      @default(0)
-  content      Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  position  Int      @default(0)
+  content   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
 
-model AdmissionsPageSection {
-  id           String   @id @default(cuid())
-  pageId       String
-  page         AdmissionsPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  sectionKey   String
+model GovernmentEmployeesSection {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey String
   componentType String
-  position     Int      @default(0)
-  content      Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  position  Int      @default(0)
+  content   Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
+

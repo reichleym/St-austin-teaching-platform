@@ -1,0 +1,2 @@
+-- This is a placeholder migration file to resolve the failed migration state.
+-- Original migration.sql was missing, creating empty file to mark as applied.

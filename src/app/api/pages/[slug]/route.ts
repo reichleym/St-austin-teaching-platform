@@ -16,6 +16,18 @@ export async function GET(
         studentExperienceSections: {
           orderBy: { position: "asc" },
         },
+        donationsSections: {
+          orderBy: { position: "asc" },
+        },
+        admissionsSections: {
+          orderBy: { position: "asc" },
+        },
+        tuitionSections: {
+          orderBy: { position: "asc" },
+        },
+        governmentEmployeesSections: {
+          orderBy: { position: "asc" },
+        },
       },
     });
 
@@ -23,22 +35,41 @@ export async function GET(
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
     }
 
-    if (params.slug === "studentExperience") {
-      const resolvedSections =
-        page.studentExperienceSections && page.studentExperienceSections.length > 0
-          ? page.studentExperienceSections
-          : page.sections;
-      return NextResponse.json({
-        ...page,
-        sections: resolvedSections,
-      });
-    }
+    const p = page as any;
+    const resolvedSections = (() => {
+      if (params.slug === "studentExperience") {
+        return p.studentExperienceSections && p.studentExperienceSections.length > 0
+          ? p.studentExperienceSections
+          : p.sections;
+      }
+      if (params.slug === "donations") {
+        return p.donationsSections && p.donationsSections.length > 0
+          ? p.donationsSections
+          : p.sections;
+      }
+      if (params.slug === "admissions") {
+        return p.admissionsSections && p.admissionsSections.length > 0
+          ? p.admissionsSections
+          : p.sections;
+      }
+      if (params.slug === "tuition") {
+        return p.tuitionSections && p.tuitionSections.length > 0
+          ? p.tuitionSections
+          : p.sections;
+      }
+      if (params.slug === "government-employees") {
+        return p.governmentEmployeesSections && p.governmentEmployeesSections.length > 0
+          ? p.governmentEmployeesSections
+          : p.sections;
+      }
+      return p.sections;
+    })();
 
-    if (!page.sections || page.sections.length === 0) {
+    if (!resolvedSections || resolvedSections.length === 0) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 });
     }
 
-    return NextResponse.json(page);
+    return NextResponse.json({ ...page, sections: resolvedSections });
   } catch (error) {
     console.error("Error fetching page:", error);
     return NextResponse.json(

@@ -1,0 +1,5 @@
+-- Placeholder migration.
+--
+-- This migration directory existed but was missing `migration.sql`.
+-- Leaving this as a no-op to avoid destructive data loss (dropping legacy tables)
+-- without an explicit data-migration plan.

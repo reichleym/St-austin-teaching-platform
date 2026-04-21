@@ -162,39 +162,86 @@ function createDraftDonationsPage(): DynamicPage {
   return {
     id: "",
     slug: "donations",
-    title: "Donations",
+    title: "Donations Page",
     published: false,
     sections: [
       {
-        sectionKey: "hero",
+        sectionKey: "banner",
         componentType: "BannerSection",
         position: 0,
         content: {
           sourceLanguage: "en",
           translations: {
-            en: { title: "Support St. Austin's", description: "Your gift helps students achieve their goals.", bgImg: "/bannerImg.jpg" },
-            fr: { title: "Support St. Austin's", description: "Your gift helps students achieve their goals.", bgImg: "/bannerImg.jpg" },
+            en: { title: "Support Our Mission Through Donations", description: "Help Us Make Education Accessible to Everyone", bgImg: "/bannerImg.jpg" },
+            fr: { title: "Support Our Mission Through Donations", description: "Help Us Make Education Accessible to Everyone", bgImg: "/bannerImg.jpg" },
           },
         },
       },
       {
-        sectionKey: "how-to-give",
-        componentType: "IconCard",
+        sectionKey: "donationForm",
+        componentType: "DonationFormSection",
         position: 1,
         content: {
           sourceLanguage: "en",
           translations: {
-            en: { title: "How to Give", blockContent: [{ cardTitle: "Online", cardDescription: "Secure online donations.", icon: "/awards-icon.png" }] },
-            fr: { title: "How to Give", blockContent: [{ cardTitle: "Online", cardDescription: "Secure online donations.", icon: "/awards-icon.png" }] },
+            en: {
+              title: "Choose Your Donation Amount",
+              oneTimeAmounts: ["XAF 2,500", "XAF 5,000", "XAF 10,000", "XAF 25,000", "XAF 50,000", "XAF 100,000"],
+              designationOptions: ["Where It's Needed Most", "Student Scholarships", "Campus Ministry", "Academic Programs"],
+              paymentMethods: [
+                { value: "mtn_mobile_money", label: "MTN Mobile Money (CamPay)" },
+                { value: "orange_money", label: "Orange Money (CamPay)" },
+                { value: "credit_card", label: "Credit Card (CamPay)" },
+                { value: "bank_transfer", label: "Bank Payment" },
+              ],
+            },
+            fr: {
+              title: "Choose Your Donation Amount",
+              oneTimeAmounts: ["XAF 2,500", "XAF 5,000", "XAF 10,000"],
+              designationOptions: ["Where It's Needed Most"],
+              paymentMethods: [{ value: "mtn_mobile_money", label: "MTN Mobile Money (CamPay)" }],
+            },
           },
         },
       },
       {
-        sectionKey: "cta",
-        componentType: "CtaSection",
+        sectionKey: "whyGive",
+        componentType: "WhyGiveSection",
         position: 2,
-        content: { sourceLanguage: "en", translations: { en: { title: "Donate Now", desc: "Make a difference today.", buttons: ["Donate"] }, fr: { title: "Donate Now", desc: "Make a difference today.", buttons: ["Donate"] } } },
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: { stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives. Last year, donor-funded scholarships helped over 1,200 students complete their degrees and launch successful careers." },
+            fr: { stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives." },
+          },
+        },
       },
+      {
+        sectionKey: "otherWays",
+        componentType: "OtherWaysSection",
+        position: 3,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: { title: "Other Ways to Give", items: ["Mail a check to St. Austin University, Office of Advancement", "Donate stock, securities, or cryptocurrency", "Include St. Austin in your estate plans", "Set up a donor-advised fund gift"] },
+            fr: { title: "Other Ways to Give", items: ["Mail a check to St. Austin University, Office of Advancement"] },
+          },
+        },
+      },
+      {
+        sectionKey: "impact",
+        componentType: "Accreditation",
+        position: 4,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: { title: "Your Impact", blockContent: [ { cardTitle: "Student Scholarships", cardDescription: "Every dollar donated funds scholarships to help students achieve their degrees and transform their careers.", icon: "/carbon_gui-management.png" }, { cardTitle: "Academic Programs", cardDescription: "Support the development of innovative programs that prepare students for the demands of a modern workforce.", icon: "/tabler_message-check.png" }, { cardTitle: "Student Support Services", cardDescription: "Help fund mentoring, tutoring, career counseling, and wellness resources for our diverse student body.", icon: "/hugeicons_progress-04.png" } ] },
+            fr: { title: "Your Impact", blockContent: [] },
+          },
+        },
+      },
+      { sectionKey: "matchingGift", componentType: "MatchingGiftSection", position: 5, content: { sourceLanguage: "en", translations: { en: {}, fr: {} } } },
+      { sectionKey: "cta", componentType: "CtaSection", position: 6, content: { sourceLanguage: "en", translations: { en: {}, fr: {} } } },
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -624,85 +671,105 @@ function DonationFormSectionForm({ content, onUpdate }: { content: unknown; onUp
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
-
   const updateTranslation = (language: Language, nextValue: JsonObject) => {
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
-  const oneTime = Array.isArray(translations[sourceLanguage]?.oneTimeAmounts) ? translations[sourceLanguage].oneTimeAmounts as string[] : [];
-  const designations = Array.isArray(translations[sourceLanguage]?.designationOptions) ? translations[sourceLanguage].designationOptions as string[] : [];
-  const paymentMethods = Array.isArray(translations[sourceLanguage]?.paymentMethods) ? translations[sourceLanguage].paymentMethods as JsonObject[] : [];
+  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
+    const nextTranslations: Record<Language, JsonObject> = {} as Record<Language, JsonObject>;
+    for (const language of supportedLanguages) {
+      nextTranslations[language] = updater(translations[language] ?? {});
+    }
+    onUpdate({ sourceLanguage, translations: nextTranslations });
+  };
 
-  const addOneTime = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: [...oneTime, ""] });
-  const updateOneTime = (index: number, value: string) => { const next = oneTime.slice(); next[index] = value; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: next }); };
-  const removeOneTime = (index: number) => { const next = oneTime.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), oneTimeAmounts: next }); };
+  const oneTimeFor = (lang: Language) => (Array.isArray(translations[lang]?.oneTimeAmounts) ? translations[lang].oneTimeAmounts as string[] : []);
+  const designationsFor = (lang: Language) => (Array.isArray(translations[lang]?.designationOptions) ? translations[lang].designationOptions as string[] : []);
+  const paymentMethodsFor = (lang: Language) => (Array.isArray(translations[lang]?.paymentMethods) ? translations[lang].paymentMethods as JsonObject[] : []);
 
-  const addDesignation = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: [...designations, ""] });
-  const updateDesignation = (index: number, value: string) => { const next = designations.slice(); next[index] = value; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: next }); };
-  const removeDesignation = (index: number) => { const next = designations.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), designationOptions: next }); };
+  const addOneTime = () => updateAllTranslations((cur) => ({ ...cur, oneTimeAmounts: [...(Array.isArray(cur.oneTimeAmounts) ? cur.oneTimeAmounts : []), ""] }));
+  const updateOneTime = (language: Language, index: number, value: string) => { const items = oneTimeFor(language).slice(); items[index] = value; updateTranslation(language, { ...(translations[language] ?? {}), oneTimeAmounts: items }); };
+  const removeOneTime = (language: Language, index: number) => { const items = oneTimeFor(language).slice(); items.splice(index, 1); updateTranslation(language, { ...(translations[language] ?? {}), oneTimeAmounts: items }); };
 
-  const addPaymentMethod = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: [...paymentMethods, { value: "", label: "" }] });
-  const updatePaymentMethod = (index: number, key: "value" | "label", value: string) => { const next = paymentMethods.slice(); next[index] = { ...(next[index] ?? {}), [key]: value }; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: next }); };
-  const removePaymentMethod = (index: number) => { const next = paymentMethods.slice(); next.splice(index, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), paymentMethods: next }); };
+  const addDesignation = () => updateAllTranslations((cur) => ({ ...cur, designationOptions: [...(Array.isArray(cur.designationOptions) ? cur.designationOptions : []), ""] }));
+  const updateDesignation = (language: Language, index: number, value: string) => { const items = designationsFor(language).slice(); items[index] = value; updateTranslation(language, { ...(translations[language] ?? {}), designationOptions: items }); };
+  const removeDesignation = (language: Language, index: number) => { const items = designationsFor(language).slice(); items.splice(index, 1); updateTranslation(language, { ...(translations[language] ?? {}), designationOptions: items }); };
+
+  const addPaymentMethod = () => updateAllTranslations((cur) => ({ ...cur, paymentMethods: [...(Array.isArray(cur.paymentMethods) ? cur.paymentMethods : []), { value: "", label: "" }] }));
+  const updatePaymentMethod = (language: Language, index: number, key: "value" | "label", value: string) => { const items = paymentMethodsFor(language).slice(); items[index] = { ...(items[index] ?? {}), [key]: value }; updateTranslation(language, { ...(translations[language] ?? {}), paymentMethods: items }); };
+  const removePaymentMethod = (language: Language, index: number) => { const items = paymentMethodsFor(language).slice(); items.splice(index, 1); updateTranslation(language, { ...(translations[language] ?? {}), paymentMethods: items }); };
 
   return (
     <div className="space-y-4">
       <label className="grid gap-1.5 md:max-w-xs">
         <span className="brand-label">Primary Language</span>
         <select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>
-          {supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>{languageLabelFallback(lang)}</option>
+          ))}
         </select>
       </label>
 
-      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
-        <LanguageLegend language={sourceLanguage} isPrimary={true} />
-        <label className="grid gap-1.5">
-          <span className="brand-label">Title</span>
-          <input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} />
-        </label>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          const oneTime = oneTimeFor(lang);
+          const designations = designationsFor(lang);
+          const paymentMethods = paymentMethodsFor(lang);
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input className="brand-input" value={asString(fields.title)} onChange={(e) => updateTranslation(lang, { ...(translations[lang] ?? {}), title: e.target.value })} />
+              </label>
 
-        <div>
-          <h4 className="font-semibold">One-time Amounts</h4>
-          <div className="space-y-2">
-            {oneTime.map((amt, i) => (
-              <div key={i} className="flex gap-2">
-                <input className="brand-input flex-1" value={amt} onChange={(e) => updateOneTime(i, e.target.value)} />
-                <button type="button" onClick={() => removeOneTime(i)} className="text-xs font-semibold text-red-700">Remove</button>
-              </div>
-            ))}
-            <button type="button" onClick={addOneTime} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add amount</button>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-semibold">Designation Options</h4>
-          <div className="space-y-2">
-            {designations.map((d, i) => (
-              <div key={i} className="flex gap-2">
-                <input className="brand-input flex-1" value={d} onChange={(e) => updateDesignation(i, e.target.value)} />
-                <button type="button" onClick={() => removeDesignation(i)} className="text-xs font-semibold text-red-700">Remove</button>
-              </div>
-            ))}
-            <button type="button" onClick={addDesignation} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add option</button>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-semibold">Payment Methods</h4>
-          <div className="space-y-2">
-            {paymentMethods.map((m, i) => (
-              <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                <input className="brand-input" placeholder="value" value={asString(m.value)} onChange={(e) => updatePaymentMethod(i, "value", e.target.value)} />
-                <input className="brand-input" placeholder="label" value={asString(m.label)} onChange={(e) => updatePaymentMethod(i, "label", e.target.value)} />
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => removePaymentMethod(i)} className="text-xs font-semibold text-red-700">Remove</button>
+              <div>
+                <h4 className="font-semibold">One-time Amounts</h4>
+                <div className="space-y-2">
+                  {oneTime.map((amt, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input className="brand-input flex-1" value={amt} onChange={(e) => updateOneTime(lang, i, e.target.value)} />
+                      {isPrimary ? <button type="button" onClick={() => removeOneTime(lang, i)} className="text-xs font-semibold text-red-700">Remove</button> : null}
+                    </div>
+                  ))}
+                  {isPrimary ? <button type="button" onClick={addOneTime} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add amount</button> : null}
                 </div>
               </div>
-            ))}
-            <button type="button" onClick={addPaymentMethod} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add method</button>
-          </div>
-        </div>
-      </fieldset>
+
+              <div>
+                <h4 className="font-semibold">Designation Options</h4>
+                <div className="space-y-2">
+                  {designations.map((d, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input className="brand-input flex-1" value={d} onChange={(e) => updateDesignation(lang, i, e.target.value)} />
+                      {isPrimary ? <button type="button" onClick={() => removeDesignation(lang, i)} className="text-xs font-semibold text-red-700">Remove</button> : null}
+                    </div>
+                  ))}
+                  {isPrimary ? <button type="button" onClick={addDesignation} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add option</button> : null}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold">Payment Methods</h4>
+                <div className="space-y-2">
+                  {paymentMethods.map((m, i) => (
+                    <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <input className="brand-input" placeholder="value" value={asString(m.value)} onChange={(e) => updatePaymentMethod(lang, i, "value", e.target.value)} />
+                      <input className="brand-input" placeholder="label" value={asString(m.label)} onChange={(e) => updatePaymentMethod(lang, i, "label", e.target.value)} />
+                      <div className="flex items-center gap-2">
+                        {isPrimary ? <button type="button" onClick={() => removePaymentMethod(lang, i)} className="text-xs font-semibold text-red-700">Remove</button> : null}
+                      </div>
+                    </div>
+                  ))}
+                  {isPrimary ? <button type="button" onClick={addPaymentMethod} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">+ Add method</button> : null}
+                </div>
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -720,25 +787,38 @@ function WhyGiveSectionForm({ content, onUpdate }: { content: unknown; onUpdate:
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const f = translations[lang] ?? {};
           const items = asArrayOfObjects(f.blockContent);
+          const primaryCards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
+          const maxCount = Math.max(primaryCards.length, items.length);
           return (
             <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
-              <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} /></label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} />
+              </label>
               <div className="space-y-4">
-                {(isPrimary ? cards : items).map((_, i) => (
+                {Array.from({ length: maxCount }).map((_, i) => (
                   <div key={i} className="brand-panel rounded-lg p-4">
                     <input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} />
                     <textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} />
-                    <AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || cards[i]?.icon)} onChange={(next) => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it)] }))} compact />
-                    {isPrimary && <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button>}
+                    <AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || primaryCards[i]?.icon)} onChange={(next) => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it)] }))} compact />
+                    {isPrimary && (
+                      <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ))}
-                {lang === sourceLanguage && <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button>}
+                {lang === sourceLanguage && (
+                  <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">
+                    + Add card
+                  </button>
+                )}
               </div>
             </fieldset>
           );
@@ -780,22 +860,56 @@ function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onU
   const translations = envelope.translations;
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   const cards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
-  const addCard = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), blockContent: [...cards, { cardTitle: "", cardDescription: "", icon: "" }] });
+  const updateAll = (updater: (cur: JsonObject) => JsonObject) => {
+    const next = { ...translations } as Record<Language, JsonObject>;
+    for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {});
+    onUpdate({ sourceLanguage, translations: next });
+  };
+
+  const addCard = () => updateAll((current) => ({ ...current, blockContent: [...(Array.isArray(current.blockContent) ? current.blockContent : []), { cardTitle: "", cardDescription: "", icon: "" }] }));
   const updateCard = (lang: Language, idx: number, field: string, v: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.blockContent) ? [...f.blockContent] : []; items[idx] = { ...(items[idx] ?? {}), [field]: v }; updateTranslation(lang, { ...f, blockContent: items }); };
-  const removeCard = (idx: number) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), blockContent: (Array.isArray(translations[sourceLanguage]?.blockContent) ? translations[sourceLanguage].blockContent.filter((_: any, i: number) => i !== idx) : []) });
+  const removeCard = (idx: number) => updateAll((current) => ({ ...current, blockContent: (Array.isArray(current.blockContent) ? current.blockContent : []).filter((_: any, i: number) => i !== idx) }));
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const f = translations[lang] ?? {};
           const items = asArrayOfObjects(f.blockContent);
+          const primaryCards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
+          const maxCount = Math.max(primaryCards.length, items.length);
           return (
             <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
-              <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} /></label>
-              <div className="space-y-4">{(isPrimary ? cards : items).map((_, i) => (<div key={i} className="brand-panel rounded-lg p-4"><input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} /><textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} /><AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || cards[i]?.icon)} onChange={(next) => updateTranslation(lang, { ...f, blockContent: (Array.isArray(f.blockContent) ? f.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it) })} compact /><button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}<button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button></div>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} />
+              </label>
+              <div className="space-y-4">
+                {Array.from({ length: maxCount }).map((_, i) => (
+                  <div key={i} className="brand-panel rounded-lg p-4">
+                    <input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} />
+                    <textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} />
+                    <AdminImagePicker
+                      label="Icon (shared)"
+                      value={asString(items[i]?.icon || primaryCards[i]?.icon)}
+                      onChange={(next) => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it)] }))}
+                      compact
+                    />
+                    {isPrimary && (
+                      <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {lang === sourceLanguage && (
+                  <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">
+                    + Add card
+                  </button>
+                )}
+              </div>
             </fieldset>
           );
         })}
@@ -808,15 +922,39 @@ function MatchingGiftSectionForm({ content, onUpdate }: { content: unknown; onUp
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
+  const setSourceLanguage = (next: Language) => onUpdate({ sourceLanguage: next, translations });
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+
   return (
     <div className="space-y-4">
-      <label className="grid gap-1.5 md:max-w-xs"><span className="brand-label">Primary Language</span><select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>{supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}</select></label>
-      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
-        <LanguageLegend language={sourceLanguage} isPrimary={true} />
-        <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className="brand-label">Description</span><textarea className="brand-input" value={asString(translations[sourceLanguage]?.description)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), description: e.target.value })} rows={3} /></label>
-      </fieldset>
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>{languageLabelFallback(lang)}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input className="brand-input" value={asString(fields.title)} onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })} required={isPrimary} />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Description</span>
+                <textarea className="brand-input" value={asString(fields.description)} onChange={(e) => updateTranslation(lang, { ...fields, description: e.target.value })} rows={3} />
+              </label>
+            </fieldset>
+          );
+        })}
+      </div>
     </div>
   );
 }

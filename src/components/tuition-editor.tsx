@@ -162,7 +162,7 @@ function createDraftTuitionPage(): DynamicPage {
   return {
     id: "",
     slug: "tuition",
-    title: "Tuition & Financial Aid",
+    title: "Tuition & Financial Aid Page",
     published: false,
     sections: [
       {
@@ -172,87 +172,78 @@ function createDraftTuitionPage(): DynamicPage {
         content: {
           sourceLanguage: "en",
           translations: {
-            en: {
-              title: "Tuition & Financial Aid",
-              description: "Learn about tuition, fees, and financial aid options at St. Austin's International University.",
-              bgImg: "/bannerImg.jpg",
-            },
-            fr: {
-              title: "Tuition & Financial Aid",
-              description: "Learn about tuition, fees, and financial aid options at St. Austin's International University.",
-              bgImg: "/bannerImg.jpg",
-            },
+            en: { title: "Tuition & Financial Aid", description: "Affordable Education Options", bgImg: "/bannerImg.jpg" },
+            fr: { title: "Tuition & Financial Aid", description: "Affordable Education Options", bgImg: "/bannerImg.jpg" },
           },
         },
       },
       {
-        sectionKey: "tuition-fees",
-        componentType: "IconCard",
+        sectionKey: "tuitionTable",
+        componentType: "TuitionTableSection",
         position: 1,
         content: {
           sourceLanguage: "en",
           translations: {
             en: {
-              title: "Tuition & Fees Overview",
-              blockContent: [
-                { cardTitle: "Undergraduate Tuition", cardDescription: "Competitive per-credit rates for undergraduate programs.", icon: "/awards-icon.png" },
-                { cardTitle: "Graduate Tuition", cardDescription: "Graduate-level tuition and program fees.", icon: "/business-icon.png" },
-                { cardTitle: "Payment Plans", cardDescription: "Flexible payment options and schedule plans.", icon: "/nursing-icon.png" },
+              title: "Tuition & Financial Aid",
+              tableHeadings: ["Program Tuition", "Per Year", "Per Semester"],
+              tableData: [
+                { program: "Undergraduate (Online)", perYear: "$12,500", perCredit: "$12,500" },
+                { program: "Computer Science", perYear: "$14,000", perCredit: "$14,000" },
+                { program: "Data Science", perYear: "$13,000", perCredit: "$13,000" },
+                { program: "Master of Business Administration", perYear: "$20,000", perCredit: "$20,000" },
               ],
             },
             fr: {
-              title: "Tuition & Fees Overview",
-              blockContent: [
-                { cardTitle: "Undergraduate Tuition", cardDescription: "Competitive per-credit rates for undergraduate programs.", icon: "/awards-icon.png" },
-                { cardTitle: "Graduate Tuition", cardDescription: "Graduate-level tuition and program fees.", icon: "/business-icon.png" },
-                { cardTitle: "Payment Plans", cardDescription: "Flexible payment options and schedule plans.", icon: "/nursing-icon.png" },
-              ],
+              title: "Tableau des frais",
+              tableHeadings: ["Programme", "Par an", "Par semestre"],
+              tableData: [{ program: "Licence (En ligne)", perYear: "$12,300", perCredit: "$12,300" }],
             },
           },
         },
       },
       {
-        sectionKey: "financial-aid",
-        componentType: "LearnSchedule",
+        sectionKey: "scholarships",
+        componentType: "WhyAustin",
         position: 2,
         content: {
           sourceLanguage: "en",
           translations: {
             en: {
-              image: "/cta-img.png",
-              title: "Financial Aid & Scholarships",
-              description: "Information on grants, scholarships, and loans to support your studies.",
-              list: [
-                "Scholarships based on merit and need",
-                "Federal and private loan guidance",
-                "Work-study and assistantships",
+              secTitle: "Scholarships & Grants",
+              whiteCards: [
+                { icon: "/wedding-certificate.svg", title: "Academic Excellence", description: "Reward Orientation Carriere" },
+                { icon: "/global-learning.svg", title: "Flexible Learning", description: "Learn from experts and accomplished researchers" },
+                { icon: "/workspace-premium.svg", title: "Career-Focused", description: "92% placement rate with services of dedicated career and industry partnerships" },
+                { icon: "/award-trophy.svg", title: "Expert Faculty", description: "Learn from industry practitioners and accomplished researchers" },
               ],
             },
-            fr: {
-              image: "/cta-img.png",
-              title: "Financial Aid & Scholarships",
-              description: "Information on grants, scholarships, and loans to support your studies.",
-              list: [
-                "Scholarships based on merit and need",
-                "Federal and private loan guidance",
-                "Work-study and assistantships",
-              ],
-            },
+            fr: { secTitle: "Bourses", whiteCards: [{ icon: "/wedding-certificate.svg", title: "Excellence académique", description: "Récompense" }] },
           },
         },
       },
       {
-        sectionKey: "cta",
-        componentType: "CtaSection",
+        sectionKey: "paymentPlans",
+        componentType: "PaymentPlansSection",
         position: 3,
         content: {
           sourceLanguage: "en",
           translations: {
-            en: { title: "Questions about Tuition?", desc: "Contact our Admissions team for personalized guidance.", buttons: ["Contact Admissions"] },
-            fr: { title: "Questions about Tuition?", desc: "Contact our Admissions team for personalized guidance.", buttons: ["Contact Admissions"] },
+            en: {
+              title: "Payment Plans",
+              listContent: [
+                "Monthly installment plans with no interest",
+                "Military and veteran benefits accepted",
+                "Employer tuition reimbursement processing",
+                "Federal and state financial aid eligible",
+              ],
+              buttonText: "Contact the financial aid office",
+            },
+            fr: { title: "Plans de paiement", listContent: ["Plans d'échelonnement mensuels sans intérêt"], buttonText: "Contactez le bureau d'aide financière" },
           },
         },
       },
+      { sectionKey: "cta", componentType: "CtaSection", position: 4, content: { sourceLanguage: "en", translations: { en: {}, fr: {} } } },
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -779,36 +770,86 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
+  const setSourceLanguage = (next: Language) => onUpdate({ sourceLanguage: next, translations });
 
   const updateTranslation = (language: Language, nextValue: JsonObject) => {
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
-  const buttons = Array.isArray(translations[sourceLanguage]?.buttons) ? translations[sourceLanguage].buttons : [];
+  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
+    const nextTranslations = { ...translations } as Record<Language, JsonObject>;
+    for (const language of supportedLanguages) {
+      nextTranslations[language] = updater(translations[language] ?? {});
+    }
+    onUpdate({ sourceLanguage, translations: nextTranslations });
+  };
 
-  const updateButtons = (next: string[]) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), buttons: next });
+  const sourceButtons = Array.isArray(translations[sourceLanguage]?.buttons) ? (translations[sourceLanguage].buttons as string[]) : [];
+
+  const addButton = () => {
+    updateAllTranslations((current) => ({
+      ...current,
+      buttons: [...(Array.isArray(current.buttons) ? current.buttons : []), ""],
+    }));
+  };
+
+  const removeButton = (index: number) => {
+    updateAllTranslations((current) => ({
+      ...current,
+      buttons: (Array.isArray(current.buttons) ? current.buttons : []).filter((_, i: number) => i !== index),
+    }));
+  };
+
+  const updateButton = (language: Language, index: number, value: string) => {
+    const fields = translations[language] ?? {};
+    const buttons = Array.isArray(fields.buttons) ? [...fields.buttons] : [];
+    buttons[index] = value;
+    updateTranslation(language, { ...fields, buttons });
+  };
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3">
-        <input type="text" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.currentTarget.value })} className="brand-input" placeholder="Title" />
-        <textarea value={asString(translations[sourceLanguage]?.desc)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), desc: e.currentTarget.value })} className="brand-input" placeholder="Description" />
-      </div>
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>{languageLabelFallback(lang)}</option>
+          ))}
+        </select>
+      </label>
 
-      <div className="space-y-2">
-        {buttons.map((b: unknown, idx: number) => (
-          <div key={idx} className="flex items-center gap-2">
-            <input type="text" value={String(b ?? "")} onChange={(e) => {
-              const next = buttons.slice();
-              next[idx] = e.currentTarget.value;
-              updateButtons(next);
-            }} className="brand-input" />
-            <button type="button" onClick={() => { const next = buttons.slice(); next.splice(idx, 1); updateButtons(next); }} className="text-sm font-semibold text-red-700">Remove</button>
-          </div>
-        ))}
-        <div>
-          <button type="button" onClick={() => updateButtons([...buttons, "New Button"])} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold">Add button</button>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          const buttons = Array.isArray(fields.buttons) ? (fields.buttons as string[]) : [];
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input className="brand-input" value={asString(fields.title)} onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })} required={isPrimary} />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Description</span>
+                <textarea className="brand-input" value={asString(fields.desc)} onChange={(e) => updateTranslation(lang, { ...fields, desc: e.target.value })} rows={3} />
+              </label>
+
+              <div className="flex justify-between items-center mt-2">
+                <span className="brand-label">Buttons</span>
+                {isPrimary && <button type="button" onClick={addButton} className="btn-brand-secondary px-2 py-1 text-xs font-semibold">+ Add Button</button>}
+              </div>
+              <div className="space-y-2">
+                {(isPrimary ? sourceButtons : buttons).map((_, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input type="text" value={buttons[i] ?? ""} onChange={(e) => updateButton(lang, i, e.target.value)} className="brand-input flex-1 text-sm" />
+                    {isPrimary && <button type="button" onClick={() => removeButton(i)} className="text-xs font-semibold text-red-700">Remove</button>}
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          );
+        })}
       </div>
     </div>
   );
@@ -871,9 +912,15 @@ function WhyAustinSectionForm({ content, onUpdate }: { content: unknown; onUpdat
   const translations = envelope.translations;
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   const cards = asArrayOfObjects(translations[sourceLanguage]?.whiteCards);
-  const addCard = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), whiteCards: [...cards, { icon: "", title: "", description: "" }] });
+  const updateAll = (updater: (cur: JsonObject) => JsonObject) => {
+    const next = { ...translations } as Record<Language, JsonObject>;
+    for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {});
+    onUpdate({ sourceLanguage, translations: next });
+  };
+
+  const addCard = () => updateAll((c) => ({ ...c, whiteCards: [...(Array.isArray(c.whiteCards) ? c.whiteCards : []), { icon: "", title: "", description: "" }] }));
   const updateCard = (lang: Language, idx: number, field: string, v: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.whiteCards) ? [...f.whiteCards] : []; items[idx] = { ...(items[idx] ?? {}), [field]: v }; updateTranslation(lang, { ...f, whiteCards: items }); };
-  const removeCard = (idx: number) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), whiteCards: (Array.isArray(translations[sourceLanguage]?.whiteCards) ? translations[sourceLanguage].whiteCards.filter((_: any, i: number) => i !== idx) : []) });
+  const removeCard = (idx: number) => updateAll((c) => ({ ...c, whiteCards: (Array.isArray(c.whiteCards) ? c.whiteCards : []).filter((_: any, i: number) => i !== idx) }));
 
   return (
     <div className="space-y-4">
@@ -899,20 +946,61 @@ function PaymentPlansSectionForm({ content, onUpdate }: { content: unknown; onUp
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
+  const setSourceLanguage = (next: Language) => onUpdate({ sourceLanguage: next, translations });
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
-  const list = Array.isArray(translations[sourceLanguage]?.listContent) ? translations[sourceLanguage].listContent as string[] : [];
-  const addItem = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), listContent: [...list, ""] });
-  const updateItem = (i: number, v: string) => { const next = list.slice(); next[i] = v; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), listContent: next }); };
-  const removeItem = (i: number) => { const next = list.slice(); next.splice(i, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), listContent: next }); };
+
+  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
+    const nextTranslations = { ...translations } as Record<Language, JsonObject>;
+    for (const language of supportedLanguages) {
+      nextTranslations[language] = updater(translations[language] ?? {});
+    }
+    onUpdate({ sourceLanguage, translations: nextTranslations });
+  };
+
+  const sourceList = Array.isArray(translations[sourceLanguage]?.listContent) ? (translations[sourceLanguage].listContent as string[]) : [];
+  const listFor = (lang: Language) => (Array.isArray(translations[lang]?.listContent) ? (translations[lang].listContent as string[]) : []);
+
+  const addItem = () => updateAllTranslations((cur) => ({ ...cur, listContent: [...(Array.isArray(cur.listContent) ? cur.listContent : []), ""] }));
+  const removeItem = (index: number) => updateAllTranslations((cur) => ({ ...cur, listContent: (Array.isArray(cur.listContent) ? cur.listContent : []).filter((_: unknown, i: number) => i !== index) }));
+  const updateItem = (language: Language, index: number, value: string) => {
+    const fields = translations[language] ?? {};
+    const items = Array.isArray(fields.listContent) ? [...fields.listContent] : [];
+    items[index] = value;
+    updateTranslation(language, { ...fields, listContent: items });
+  };
 
   return (
     <div className="space-y-4">
-      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
-        <LanguageLegend language={sourceLanguage} isPrimary={true} />
-        <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} /></label>
-        <div className="space-y-2">{list.map((it, i) => (<div key={i} className="flex gap-2"><input className="brand-input flex-1" value={it} onChange={(e) => updateItem(i, e.target.value)} /><button type="button" onClick={() => removeItem(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}<button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">+ Add item</button></div>
-        <label className="grid gap-1.5 mt-2"><span className="brand-label">Button Text</span><input className="brand-input" value={asString(translations[sourceLanguage]?.buttonText)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), buttonText: e.target.value })} /></label>
-      </fieldset>
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
+          {supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const items = isPrimary ? sourceList : listFor(lang);
+          const fields = translations[lang] ?? {};
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(fields.title)} onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })} required={isPrimary} /></label>
+              <div className="space-y-2">
+                {items.map((it, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input className="brand-input flex-1" value={it} onChange={(e) => updateItem(lang, i, e.target.value)} />
+                    {isPrimary ? <button type="button" onClick={() => removeItem(i)} className="text-xs font-semibold text-red-700">Remove</button> : null}
+                  </div>
+                ))}
+                {isPrimary ? <button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">+ Add item</button> : null}
+              </div>
+              <label className="grid gap-1.5 mt-2"><span className="brand-label">Button Text</span><input className="brand-input" value={asString(fields.buttonText)} onChange={(e) => updateTranslation(lang, { ...fields, buttonText: e.target.value })} /></label>
+            </fieldset>
+          );
+        })}
+      </div>
     </div>
   );
 }
