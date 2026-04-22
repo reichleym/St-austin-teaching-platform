@@ -61,6 +61,13 @@ const COURSE_PROGRAM_LIST_MAX_ITEMS = 50;
 const COURSE_SCHEMA_MISMATCH_MESSAGE =
   "Course schema/client mismatch detected. Run latest Prisma migrations, run `npx prisma generate`, then restart your Next.js server.";
 
+const ALLOWED_DEGREE_LEVELS = [
+  "Bachelor’s Degree",
+  "Master’s Degree",
+  "Higher National Diploma (HND)",
+] as const;
+type DegreeLevelValue = (typeof ALLOWED_DEGREE_LEVELS)[number];
+
 function isDegreeLevelValue(value: string): value is DegreeLevelValue {
   return (ALLOWED_DEGREE_LEVELS as readonly string[]).includes(value);
 }

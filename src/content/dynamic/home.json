@@ -1,0 +1,73 @@
+{
+  "pageSlug": "home",
+  "name": "Home Page",
+  "route": "/",
+  "tableName": "HomePage",
+  "file": "src/app/page.tsx",
+  "sections": [
+    {
+      "sectionKey": "banner",
+      "componentType": "HeroSection",
+      "position": 0,
+      "content": {
+        "title": "Our Programs",
+        "description": "Discover career-focused programs designed for the modern professional.",
+        "bgImg": "/hero-banner.jpg"
+      }
+    },
+    {
+      "sectionKey": "explore",
+      "componentType": "ExplorePrograms",
+      "position": 1,
+      "content": {
+        "title": "Explore Programs",
+        "degreeLevel": "",
+        "fieldOfStudy": ""
+      }
+    },
+    {
+      "sectionKey": "featuredPrograms",
+      "componentType": "FeaturedPrograms",
+      "position": 2,
+      "content": {}
+    },
+    {
+      "sectionKey": "featuredStories",
+      "componentType": "FeaturedStories",
+      "position": 3,
+      "content": {}
+    },
+    {
+      "sectionKey": "whyAustin",
+      "componentType": "WhyAustin",
+      "position": 4,
+      "content": {
+        "title": "Why Choose Us",
+        "whyAustinDesc": "Learn from experienced faculty and flexible online options.",
+        "button": {
+          "label": "Learn More",
+          "href": "/about"
+        }
+      }
+    },
+    {
+      "sectionKey": "cta",
+      "componentType": "CtaSection",
+      "position": 5,
+      "content": {
+        "title": "Ready to Start?",
+        "description": "Apply today or request more information.",
+        "button": {
+          "label": "Apply Now",
+          "href": "/apply"
+        }
+      }
+    },
+    {
+      "sectionKey": "footer",
+      "componentType": "Footer",
+      "position": 6,
+      "content": {}
+    }
+  ]
+}

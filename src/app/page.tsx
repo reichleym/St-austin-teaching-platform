@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getRoleHomePath } from "@/lib/role-routing";
+import HomePageEditor from "@/components/home-page-editor";
 
 const formatRoleLabel = (role: string) => role.replace(/_/g, " ");
 
@@ -22,9 +23,14 @@ export default async function Home() {
               Dashboard
             </Link>
             {session.user.role === Role.SUPER_ADMIN ? (
-              <Link href="/dashboard/overview" className="underline">
-                Super Admin
-              </Link>
+              <>
+                <Link href="/dashboard/overview" className="underline">
+                  Super Admin
+                </Link>
+                <div className="mt-6">
+                  <HomePageEditor />
+                </div>
+              </>
             ) : null}
           </div>
           <LogoutButton role={session.user.role} />

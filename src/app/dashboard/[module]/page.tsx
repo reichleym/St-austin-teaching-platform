@@ -26,6 +26,7 @@ import TuitionEditor from "@/components/tuition-editor";
 import DonationsEditor from "@/components/donations-editor";
 import GovernmentEmployeesEditor from "@/components/government-employees-editor";
 import AdmissionsEditor from "@/components/admissions-editor";
+import HomePageEditor from "@/components/home-page-editor";
 import { StudentProgressModule } from "@/components/student-progress-module";
 import { getTodayTimelineEntries, normalizeDashboardCalendarEvents } from "@/lib/dashboard-calendar";
 import { getAnnouncementLocalizedValue } from "@/lib/announcement-translations";
@@ -1278,6 +1279,8 @@ export default async function DashboardPage({ params }: Props) {
           <EngagementModule role={roleForModules} />
         ) : selected.slug === "about" ? (
           <AboutPageEditor />
+        ) : selected.slug === "home" ? (
+          <HomePageEditor />
         ) : selected.slug === "student-experience" ? (
           <StudentExperienceEditor />
         ) : selected.slug === "tuition" ? (

@@ -795,34 +795,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <span className="brand-label">{t("label.courseTitle")}</span>
                 <input className="brand-input" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} maxLength={120} required />
               </label>
-              <label className="grid gap-1.5 md:max-w-sm">
-                <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
-                <select
-                  className="brand-input"
-                  value={createDegreeLevel}
-                  onChange={(event) => setCreateDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
-                  required
-                >
-                  <option value="" disabled>
-                    Select degree level
-                  </option>
-                  {DEGREE_LEVEL_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1.5 md:max-w-sm">
-                <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
-                <input
-                  className="brand-input"
-                  value={createFieldOfStudy}
-                  onChange={(event) => setCreateFieldOfStudy(event.currentTarget.value)}
-                  maxLength={120}
-                  required
-                />
-              </label>
+              {/* Degree level and field of study moved to Programs module; hidden on Course create */}
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
                   <span className="brand-label">{t("label.startDate")}</span>
@@ -1050,33 +1023,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
               <span className="brand-label">{t("label.courseTitle")}</span>
               <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} maxLength={120} required />
             </label>
-            <label className="grid gap-1.5 md:max-w-sm">
-              <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
-              <select
-                className="brand-input"
-                value={editDegreeLevel}
-                onChange={(event) => setEditDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
-              >
-                <option value="">
-                  Select degree level
-                </option>
-                {DEGREE_LEVEL_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 md:max-w-sm">
-              <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
-              <input
-                className="brand-input"
-                value={editFieldOfStudy}
-                onChange={(event) => setEditFieldOfStudy(event.currentTarget.value)}
-                maxLength={120}
-                required
-              />
-            </label>
+            {/* Degree level and field of study moved to Programs module; hidden on Course edit */}
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1.5">
                 <span className="brand-label">{t("label.startDate")}</span>
