@@ -60,12 +60,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const [pending, setPending] = useState(false);
 
   const [title, setTitle] = useState(course.title);
-  const [degreeLevel, setDegreeLevel] = useState<DegreeLevelValue | "">(
-    course.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(course.degreeLevel as DegreeLevelValue)
-      ? (course.degreeLevel as DegreeLevelValue)
-      : ""
-  );
-  const [fieldOfStudy, setFieldOfStudy] = useState(course.fieldOfStudy ?? "");
+  
   const [description, setDescription] = useState(course.description ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(course.startDate));
   const [endDate, setEndDate] = useState(toDateInputValue(course.endDate));
@@ -100,12 +95,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const openModal = () => {
     setError("");
     setTitle(course.title);
-    setDegreeLevel(
-      course.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(course.degreeLevel as DegreeLevelValue)
-        ? (course.degreeLevel as DegreeLevelValue)
-        : ""
-    );
-    setFieldOfStudy(course.fieldOfStudy ?? "");
+    
     setDescription(course.description ?? "");
     setStartDate(toDateInputValue(course.startDate));
     setEndDate(toDateInputValue(course.endDate));
@@ -191,10 +181,6 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
       setError(t("error.courseTitleRequired"));
       return;
     }
-    if (!fieldOfStudy.trim()) {
-      setError("Field of study is required.");
-      return;
-    }
     if (!startDate || !endDate) {
       setError(t("error.courseDatesRequired"));
       return;
@@ -211,8 +197,6 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
         body: JSON.stringify({
           courseId: course.id,
           title: nextTitle,
-          degreeLevel: degreeLevel || null,
-          fieldOfStudy: fieldOfStudy.trim(),
           description: description.trim(),
           startDate,
           endDate,
@@ -261,34 +245,7 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                     <span className="brand-label">{t("label.courseTitle")}</span>
                     <input className="brand-input" value={title} onChange={(event) => setTitle(event.currentTarget.value)} maxLength={120} required />
                   </label>
-                  <label className="grid gap-1.5 md:max-w-sm">
-                    <span className="brand-label">{t("label.degreeLevel", undefined, "Degree Level")}</span>
-                    <select
-                      className="brand-input"
-                      value={degreeLevel}
-                      onChange={(event) => setDegreeLevel(event.currentTarget.value as DegreeLevelValue | "")}
-                      required
-                    >
-                      <option value="" disabled>
-                        Select degree level
-                      </option>
-                      {DEGREE_LEVEL_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1.5 md:max-w-sm">
-                    <span className="brand-label">{t("label.fieldOfStudy", undefined, "Field of Study")}</span>
-                    <input
-                      className="brand-input"
-                      value={fieldOfStudy}
-                      onChange={(event) => setFieldOfStudy(event.currentTarget.value)}
-                      maxLength={120}
-                      required
-                    />
-                  </label>
+                  {/* Degree level and field of study moved to Programs module; hidden on Course edit */}
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-1.5">
                       <span className="brand-label">{t("label.startDate")}</span>

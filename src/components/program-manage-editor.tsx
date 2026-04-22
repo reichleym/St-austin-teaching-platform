@@ -70,6 +70,8 @@ export function ProgramManageEditor({ programId }: Props) {
   );
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [editTuitionAndFees, setEditTuitionAndFees] = useState("");
+  const [editDegreeLevel, setEditDegreeLevel] = useState<"Bachelor’s Degree" | "Master’s Degree" | "Higher National Diploma (HND)" | "">("");
+  const [editFieldOfStudy, setEditFieldOfStudy] = useState("");
   const [editCourseIds, setEditCourseIds] = useState<string[]>([]);
   const [editCourseSearch, setEditCourseSearch] = useState("");
   const [editPending, setEditPending] = useState(false);
@@ -81,6 +83,8 @@ export function ProgramManageEditor({ programId }: Props) {
     setEditLocalizations(getProgramLocalizationDrafts(nextProgram));
     setEditVisibility(nextProgram.visibility);
     setEditTuitionAndFees(nextProgram.programDetails?.tuitionAndFees ?? "");
+    setEditDegreeLevel((nextProgram as any).degreeLevel ?? "");
+    setEditFieldOfStudy((nextProgram as any).fieldOfStudy ?? "");
     setEditCourseIds(nextProgram.courses.map((course) => course.id));
     setEditCourseSearch("");
   }, []);
@@ -292,6 +296,15 @@ export function ProgramManageEditor({ programId }: Props) {
     setEditPending(true);
     setError("");
     const primaryLocalization = editLocalizations[editSourceLanguage];
+    // Validation: require primary title, degree level, field of study, overview and lists
+    const curriculumList = toListFromMultiline(primaryLocalization.curriculum ?? "");
+    const admissionList = toListFromMultiline(primaryLocalization.admissionRequirements ?? "");
+    const careerList = toListFromMultiline(primaryLocalization.careerOpportunities ?? "");
+    if (!primaryLocalization.title?.trim() || !editDegreeLevel || !editFieldOfStudy.trim() || !(primaryLocalization.overview?.trim()) || !curriculumList.length || !admissionList.length || !careerList.length) {
+      setError(t("error.requiredFields") || "All fields are required.");
+      setEditPending(false);
+      return;
+    }
     try {
       const response = await fetch("/api/admin/programs", {
         method: "PATCH",
@@ -302,6 +315,8 @@ export function ProgramManageEditor({ programId }: Props) {
           description: (primaryLocalization.description ?? "").trim() || null,
           sourceLanguage: editSourceLanguage,
           translations: editLocalizations,
+            degreeLevel: editDegreeLevel || null,
+            fieldOfStudy: editFieldOfStudy.trim() || null,
           visibility: editVisibility,
           programDetails: {
             overview: primaryLocalization.overview?.trim() || null,
@@ -403,6 +418,24 @@ export function ProgramManageEditor({ programId }: Props) {
             maxLength={160}
             placeholder="$12,500 / year"
           />
+        </label>
+
+        <label className="grid gap-1.5 md:max-w-sm">
+          <span className="brand-label">Degree Level</span>
+          <select
+            className="brand-input"
+            value={editDegreeLevel}
+            onChange={(e) => setEditDegreeLevel(e.currentTarget.value as any)}
+          >
+            <option value="">Select degree level</option>
+            <option value="Bachelor’s Degree">Bachelor’s Degree</option>
+            <option value="Master’s Degree">Master’s Degree</option>
+            <option value="Higher National Diploma (HND)">Higher National Diploma (HND)</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 md:max-w-sm">
+          <span className="brand-label">Field of Study</span>
+          <input className="brand-input" value={editFieldOfStudy} onChange={(e) => setEditFieldOfStudy(e.currentTarget.value)} maxLength={120} />
         </label>
 
         {/* <div className="grid gap-3 md:grid-cols-3">

@@ -235,8 +235,6 @@ model Course {
   id                 String              @id @default(cuid())
   code               String              @unique
   title              String
-  degreeLevel        String?
-  fieldOfStudy       String?
   description        String?
   programContent     String?
   startDate          DateTime?
@@ -258,6 +256,8 @@ model Program {
   id                 String   @id @default(cuid())
   code               String   @unique
   title              String
+  degreeLevel        String?
+  fieldOfStudy       String?
   description        String?
   programContent     String?
   sourceLanguage     String              @default("en")

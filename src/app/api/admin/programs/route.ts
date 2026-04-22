@@ -29,6 +29,8 @@ type CreateBody = {
   sourceLanguage?: string;
   translations?: unknown;
   visibility?: ProgramVisibilityValue;
+  degreeLevel?: string | null;
+  fieldOfStudy?: string | null;
   programDetails?: ProgramDetailsInput;
   courseIds?: string[];
 };
@@ -47,6 +49,8 @@ type ProgramRecord = {
   title: string;
   description: string | null;
   programContent: string | null;
+  degreeLevel: string | null;
+  fieldOfStudy: string | null;
   sourceLanguage: string;
   translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
@@ -65,6 +69,8 @@ type RawProgramRow = {
   title: string;
   description: string | null;
   programContent: string | null;
+  degreeLevel: string | null;
+  fieldOfStudy: string | null;
   sourceLanguage: string;
   translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
@@ -196,6 +202,8 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
         title: true,
         description: true,
         programContent: true,
+        degreeLevel: true,
+        fieldOfStudy: true,
         sourceLanguage: true,
         translations: true,
         visibility: true,
@@ -209,6 +217,8 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
           title: found.title,
           description: found.description,
           programContent: found.programContent,
+          degreeLevel: found.degreeLevel ?? null,
+          fieldOfStudy: found.fieldOfStudy ?? null,
           sourceLanguage: found.sourceLanguage,
           translations: found.translations as Prisma.JsonValue | null,
           visibility: found.visibility as ProgramVisibilityValue,
@@ -218,7 +228,7 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
   }
 
   const rows = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     WHERE "id" = ${programId}
     LIMIT 1
@@ -256,12 +266,14 @@ async function listProgramsWithCourses() {
     });
 
     return {
-      programs: programs.map((program) => ({
+        programs: programs.map((program) => ({
         id: program.id,
         code: program.code,
         title: program.title,
         description: program.description,
         programDetails: parseProgramContent(program.programContent),
+        degreeLevel: (program as any).degreeLevel ?? null,
+        fieldOfStudy: (program as any).fieldOfStudy ?? null,
         sourceLanguage: program.sourceLanguage,
         translations: program.translations,
         visibility: program.visibility as ProgramVisibilityValue,
@@ -273,7 +285,7 @@ async function listProgramsWithCourses() {
   }
 
   const programs = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     ORDER BY "createdAt" DESC
   `;
@@ -312,6 +324,8 @@ async function listProgramsWithCourses() {
       title: program.title,
       description: program.description,
       programDetails: parseProgramContent(program.programContent),
+      degreeLevel: (program as any).degreeLevel ?? null,
+      fieldOfStudy: (program as any).fieldOfStudy ?? null,
       sourceLanguage: program.sourceLanguage,
       translations: program.translations,
       visibility: program.visibility,
@@ -387,6 +401,8 @@ export async function GET() {
         code: program.code,
         title: program.title,
         description: program.description,
+        degreeLevel: (program as any).degreeLevel ?? null,
+        fieldOfStudy: (program as any).fieldOfStudy ?? null,
         programDetails: program.programDetails,
         sourceLanguage: program.sourceLanguage,
         translations: program.translations,
@@ -461,6 +477,8 @@ export async function POST(request: NextRequest) {
             title,
             description: normalizedDescription,
             programContent: serializedProgramContent,
+            degreeLevel: body.degreeLevel ?? null,
+            fieldOfStudy: body.fieldOfStudy ?? null,
             sourceLanguage,
             translations: locPayload.data.translations,
             visibility,
@@ -484,8 +502,8 @@ export async function POST(request: NextRequest) {
       createdId = makeId("prg");
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
-          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
-          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
+          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
+          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${body.degreeLevel ?? null}, ${body.fieldOfStudy ?? null}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
         `;
 
         if (coursesValidation.ids.length) {
@@ -505,6 +523,8 @@ export async function POST(request: NextRequest) {
           code,
           title,
           description: normalizedDescription,
+          degreeLevel: body.degreeLevel ?? null,
+          fieldOfStudy: body.fieldOfStudy ?? null,
           programDetails: normalizedProgramDetails.value,
           sourceLanguage,
           translations: locPayload.data.translations,
@@ -591,6 +611,14 @@ export async function PATCH(request: NextRequest) {
         translations: locPayload.data.translations,
         visibility,
       };
+      if (body.degreeLevel !== undefined) {
+        // @ts-ignore
+        data.degreeLevel = body.degreeLevel ?? null;
+      }
+      if (body.fieldOfStudy !== undefined) {
+        // @ts-ignore
+        data.fieldOfStudy = body.fieldOfStudy ?? null;
+      }
 
       await prisma.$transaction(async (tx) => {
         await tx.programCourse.deleteMany({ where: { programId } });
@@ -612,18 +640,22 @@ export async function PATCH(request: NextRequest) {
       const nextProgramContent = serializedProgramContent !== undefined ? serializedProgramContent : existing.programContent;
       const nextSourceLanguage = body.sourceLanguage !== undefined ? sourceLanguage : existing.sourceLanguage;
       const nextTranslations = body.translations !== undefined ? locPayload.data.translations : existing.translations;
+      const nextDegreeLevel = body.degreeLevel !== undefined ? body.degreeLevel ?? null : existing.degreeLevel;
+      const nextFieldOfStudy = body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy;
 
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
-          UPDATE "Program"
-          SET "title" = ${nextTitle},
+            UPDATE "Program"
+            SET "title" = ${nextTitle},
               "description" = ${nextDescription},
               "programContent" = ${nextProgramContent},
+              "degreeLevel" = ${nextDegreeLevel},
+              "fieldOfStudy" = ${nextFieldOfStudy},
               "sourceLanguage" = ${nextSourceLanguage},
               "translations" = ${JSON.stringify(nextTranslations)}::jsonb,
               "visibility" = CAST(${nextVisibility} AS "ProgramVisibility"),
               "updatedAt" = NOW()
-          WHERE "id" = ${programId}
+            WHERE "id" = ${programId}
         `;
 
         await tx.$executeRaw`DELETE FROM "ProgramCourse" WHERE "programId" = ${programId}`;
@@ -648,6 +680,8 @@ export async function PATCH(request: NextRequest) {
           serializedProgramContent !== undefined
             ? parseProgramContent(serializedProgramContent)
             : parseProgramContent(existing.programContent),
+        degreeLevel: body.degreeLevel !== undefined ? body.degreeLevel ?? null : existing.degreeLevel ?? null,
+        fieldOfStudy: body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy ?? null,
         sourceLanguage,
         translations: locPayload.data.translations,
         visibility: body.visibility !== undefined ? visibility : existing.visibility,

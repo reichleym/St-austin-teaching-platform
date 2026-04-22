@@ -18,8 +18,6 @@ import { prisma } from "@/lib/prisma";
 
 type CreateBody = {
   title?: string;
-  degreeLevel?: string | null;
-  fieldOfStudy?: string | null;
   description?: string | null;
   programDetails?: unknown;
   startDate?: string;
@@ -33,8 +31,6 @@ type CreateBody = {
 type UpdateBody = {
   courseId?: string;
   title?: string;
-  degreeLevel?: string | null;
-  fieldOfStudy?: string | null;
   description?: string | null;
   programDetails?: unknown;
   startDate?: string;
@@ -57,12 +53,6 @@ type CourseProgramDetails = {
   admissionRequirements: string[];
   careerOpportunities: string[];
 };
-const ALLOWED_DEGREE_LEVELS = [
-  "Bachelor’s Degree",
-  "Master’s Degree",
-  "Higher National Diploma (HND)",
-] as const;
-type DegreeLevelValue = (typeof ALLOWED_DEGREE_LEVELS)[number];
 const COURSE_FIELD_OF_STUDY_MAX_LENGTH = 120;
 const COURSE_PROGRAM_OVERVIEW_MAX_LENGTH = 3000;
 const COURSE_PROGRAM_TUITION_MAX_LENGTH = 160;
@@ -73,22 +63,6 @@ const COURSE_SCHEMA_MISMATCH_MESSAGE =
 
 function isDegreeLevelValue(value: string): value is DegreeLevelValue {
   return (ALLOWED_DEGREE_LEVELS as readonly string[]).includes(value);
-}
-
-function prismaClientSupportsCourseDegreeLevel() {
-  const scalarFieldEnum = (
-    Prisma as unknown as { CourseScalarFieldEnum?: Record<string, string> }
-  ).CourseScalarFieldEnum;
-  if (!scalarFieldEnum) return false;
-  return Object.values(scalarFieldEnum).includes("degreeLevel");
-}
-
-function prismaClientSupportsCourseFieldOfStudy() {
-  const scalarFieldEnum = (
-    Prisma as unknown as { CourseScalarFieldEnum?: Record<string, string> }
-  ).CourseScalarFieldEnum;
-  if (!scalarFieldEnum) return false;
-  return Object.values(scalarFieldEnum).includes("fieldOfStudy");
 }
 
 function prismaClientSupportsCourseProgramContent() {
@@ -174,17 +148,11 @@ function isCourseSchemaCompatibilityError(error: unknown) {
     error.message.includes("Unknown argument `startDate`") ||
     error.message.includes("Unknown field `endDate`") ||
     error.message.includes("Unknown argument `endDate`") ||
-    error.message.includes("Unknown field `degreeLevel`") ||
-    error.message.includes("Unknown argument `degreeLevel`") ||
-    error.message.includes("Unknown field `fieldOfStudy`") ||
-    error.message.includes("Unknown argument `fieldOfStudy`") ||
     error.message.includes("Unknown field `programContent`") ||
     error.message.includes("Unknown argument `programContent`") ||
     error.message.includes("column \"visibility\" does not exist") ||
     error.message.includes("column \"startDate\" does not exist") ||
     error.message.includes("column \"endDate\" does not exist") ||
-    error.message.includes("column \"degreeLevel\" does not exist") ||
-    error.message.includes("column \"fieldOfStudy\" does not exist") ||
     error.message.includes("column \"programContent\" does not exist") ||
     error.message.includes("does not exist in the current database") ||
     (error.message.includes("CourseVisibility") && error.message.includes("Invalid value for argument"))
@@ -194,15 +162,11 @@ function isCourseSchemaCompatibilityError(error: unknown) {
 async function ensureCourseMetadataSchema() {
   await prisma.$executeRawUnsafe(`
 ALTER TABLE "Course"
-ADD COLUMN IF NOT EXISTS "degreeLevel" TEXT;
-ALTER TABLE "Course"
-ADD COLUMN IF NOT EXISTS "fieldOfStudy" TEXT;
-ALTER TABLE "Course"
 ADD COLUMN IF NOT EXISTS "programContent" TEXT;
   `);
 }
 
-async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy" | "programContent") {
+async function doesCourseColumnExist(columnName: "programContent") {
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS (
@@ -220,29 +184,12 @@ async function doesCourseColumnExist(columnName: "degreeLevel" | "fieldOfStudy" 
 }
 
 async function resolveCourseMetadataWriteSupport() {
-  const clientSupportsDegreeLevel = prismaClientSupportsCourseDegreeLevel();
-  const clientSupportsFieldOfStudy = prismaClientSupportsCourseFieldOfStudy();
   const clientSupportsProgramContent = prismaClientSupportsCourseProgramContent();
-
-  if (!clientSupportsDegreeLevel && !clientSupportsFieldOfStudy && !clientSupportsProgramContent) {
-    return {
-      canWriteDegreeLevelWithPrismaClient: false,
-      canWriteFieldOfStudyWithPrismaClient: false,
-      canWriteProgramContentWithPrismaClient: false,
-    };
+  if (!clientSupportsProgramContent) {
+    return { canWriteProgramContentWithPrismaClient: false };
   }
-
-  const [hasDegreeLevelColumn, hasFieldOfStudyColumn, hasProgramContentColumn] = await Promise.all([
-    doesCourseColumnExist("degreeLevel"),
-    doesCourseColumnExist("fieldOfStudy"),
-    doesCourseColumnExist("programContent"),
-  ]);
-
-  return {
-    canWriteDegreeLevelWithPrismaClient: clientSupportsDegreeLevel && hasDegreeLevelColumn,
-    canWriteFieldOfStudyWithPrismaClient: clientSupportsFieldOfStudy && hasFieldOfStudyColumn,
-    canWriteProgramContentWithPrismaClient: clientSupportsProgramContent && hasProgramContentColumn,
-  };
+  const hasProgramContentColumn = await doesCourseColumnExist("programContent");
+  return { canWriteProgramContentWithPrismaClient: clientSupportsProgramContent && hasProgramContentColumn };
 }
 
 function getCourseAccessState(input: {
@@ -540,8 +487,6 @@ export async function GET(request: NextRequest) {
       id: string;
       code: string;
       title: string;
-      degreeLevel: string | null;
-      fieldOfStudy: string | null;
       description: string | null;
       programContent: string | null;
       startDate: Date | null;
@@ -616,8 +561,6 @@ export async function GET(request: NextRequest) {
       });
       courses = legacyCourses.map((course) => ({
         ...course,
-        degreeLevel: null,
-        fieldOfStudy: null,
         programContent: null,
         startDate: null,
         endDate: null,
@@ -715,8 +658,6 @@ export async function GET(request: NextRequest) {
           id: course.id,
           code: course.code,
           title: course.title,
-          degreeLevel: course.degreeLevel ?? null,
-          fieldOfStudy: course.fieldOfStudy ?? null,
           description: course.description,
           programDetails: parseCourseProgramContent(course.programContent),
           startDate: course.startDate?.toISOString() ?? null,
@@ -778,8 +719,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as CreateBody;
     const title = body.title?.trim() ?? "";
-    const degreeLevelInput = typeof body.degreeLevel === "string" ? body.degreeLevel.trim() : "";
-    const fieldOfStudyInput = typeof body.fieldOfStudy === "string" ? body.fieldOfStudy.trim() : "";
+    
     const normalizedProgramDetails = normalizeCourseProgramDetailsInput(body.programDetails);
     if (!normalizedProgramDetails.ok) {
       return NextResponse.json({ error: "Invalid program details format." }, { status: 400 });
@@ -793,21 +733,7 @@ export async function POST(request: NextRequest) {
 
     const titleError = validateCourseTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
-    if (!degreeLevelInput) {
-      return NextResponse.json({ error: "Degree level is required." }, { status: 400 });
-    }
-    if (!isDegreeLevelValue(degreeLevelInput)) {
-      return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
-    }
-    if (!fieldOfStudyInput) {
-      return NextResponse.json({ error: "Field of study is required." }, { status: 400 });
-    }
-    if (fieldOfStudyInput.length > COURSE_FIELD_OF_STUDY_MAX_LENGTH) {
-      return NextResponse.json(
-        { error: `Field of study must not exceed ${COURSE_FIELD_OF_STUDY_MAX_LENGTH} characters.` },
-        { status: 400 }
-      );
-    }
+    
     if (!startDate || !endDate) {
       return NextResponse.json({ error: "Course start date and end date are required." }, { status: 400 });
     }
@@ -837,8 +763,7 @@ export async function POST(request: NextRequest) {
     }
     await ensureCourseMetadataSchema().catch(() => {});
     await ensureDepartmentHeadCourseSchema();
-    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient, canWriteProgramContentWithPrismaClient } =
-      await resolveCourseMetadataWriteSupport();
+    const { canWriteProgramContentWithPrismaClient } = await resolveCourseMetadataWriteSupport();
 
     const code = await generateUniqueCourseCode(title);
 
@@ -847,8 +772,6 @@ export async function POST(request: NextRequest) {
         data: {
           code,
           title,
-          ...(canWriteDegreeLevelWithPrismaClient ? { degreeLevel: degreeLevelInput } : {}),
-          ...(canWriteFieldOfStudyWithPrismaClient ? { fieldOfStudy: fieldOfStudyInput } : {}),
           ...(canWriteProgramContentWithPrismaClient ? { programContent: serializedProgramContent } : {}),
           description,
           startDate,
@@ -885,20 +808,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (!canWriteDegreeLevelWithPrismaClient) {
-        await tx.$executeRaw`
-          UPDATE "Course"
-          SET "degreeLevel" = ${degreeLevelInput}
-          WHERE "id" = ${course.id}
-        `.catch(() => {});
-      }
-      if (!canWriteFieldOfStudyWithPrismaClient) {
-        await tx.$executeRaw`
-          UPDATE "Course"
-          SET "fieldOfStudy" = ${fieldOfStudyInput}
-          WHERE "id" = ${course.id}
-        `.catch(() => {});
-      }
+      // programContent fallbacks handled below if needed
       if (!canWriteProgramContentWithPrismaClient) {
         await tx.$executeRaw`
           UPDATE "Course"
@@ -958,8 +868,6 @@ export async function POST(request: NextRequest) {
           id: created.id,
           code: created.code,
           title: created.title,
-          degreeLevel: degreeLevelInput,
-          fieldOfStudy: fieldOfStudyInput,
           description: created.description,
           programDetails: normalizedProgramDetails.value,
           startDate: created.startDate?.toISOString() ?? null,
@@ -1010,8 +918,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     await ensureCourseMetadataSchema().catch(() => {});
-    const { canWriteDegreeLevelWithPrismaClient, canWriteFieldOfStudyWithPrismaClient, canWriteProgramContentWithPrismaClient } =
-      await resolveCourseMetadataWriteSupport();
+    const { canWriteProgramContentWithPrismaClient } = await resolveCourseMetadataWriteSupport();
 
     const access = await canManageCourse(courseId, user);
     if (!access.ok) {
@@ -1022,8 +929,6 @@ export async function PATCH(request: NextRequest) {
       | {
           id: string;
           title: string;
-          degreeLevel: string | null;
-          fieldOfStudy: string | null;
           description: string | null;
           programContent: string | null;
           startDate: Date | null;
@@ -1040,8 +945,6 @@ export async function PATCH(request: NextRequest) {
           select: {
             id: true,
             title: true,
-            degreeLevel: true,
-            fieldOfStudy: true,
             description: true,
             programContent: true,
             startDate: true,
@@ -1052,13 +955,11 @@ export async function PATCH(request: NextRequest) {
         });
         existing = result ? { ...result, legacySchema: false } : null;
       } else {
-        const result = await prisma.course.findUnique({
+          const result = await prisma.course.findUnique({
           where: { id: courseId },
           select: {
             id: true,
             title: true,
-            degreeLevel: true,
-            fieldOfStudy: true,
             description: true,
             startDate: true,
             endDate: true,
@@ -1093,8 +994,6 @@ export async function PATCH(request: NextRequest) {
       existing = legacy
         ? {
             ...legacy,
-            degreeLevel: null,
-            fieldOfStudy: null,
             programContent: null,
             startDate: null,
             endDate: null,
@@ -1108,8 +1007,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     const data: Prisma.CourseUpdateInput = {};
-    let pendingDegreeLevelUpdate: string | null | undefined = undefined;
-    let pendingFieldOfStudyUpdate: string | null | undefined = undefined;
     let pendingProgramContentUpdate: string | null | undefined = undefined;
 
     if (body.title !== undefined) {
@@ -1129,55 +1026,7 @@ export async function PATCH(request: NextRequest) {
       data.description = normalizeDescription(body.description);
     }
 
-    if (body.degreeLevel !== undefined) {
-      if (body.degreeLevel === null || body.degreeLevel === "") {
-        if (canWriteDegreeLevelWithPrismaClient) {
-          data.degreeLevel = null;
-        } else {
-          pendingDegreeLevelUpdate = null;
-        }
-      } else if (typeof body.degreeLevel === "string") {
-        const normalizedDegreeLevel = body.degreeLevel.trim();
-        if (!isDegreeLevelValue(normalizedDegreeLevel)) {
-          return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
-        }
-        if (canWriteDegreeLevelWithPrismaClient) {
-          data.degreeLevel = normalizedDegreeLevel;
-        } else {
-          pendingDegreeLevelUpdate = normalizedDegreeLevel;
-        }
-      } else {
-        return NextResponse.json({ error: "Invalid degree level." }, { status: 400 });
-      }
-    }
-
-    if (body.fieldOfStudy !== undefined) {
-      if (body.fieldOfStudy === null || body.fieldOfStudy === "") {
-        if (canWriteFieldOfStudyWithPrismaClient) {
-          data.fieldOfStudy = null;
-        } else {
-          pendingFieldOfStudyUpdate = null;
-        }
-      } else if (typeof body.fieldOfStudy === "string") {
-        const normalizedFieldOfStudy = body.fieldOfStudy.trim();
-        if (!normalizedFieldOfStudy) {
-          return NextResponse.json({ error: "Field of study is required." }, { status: 400 });
-        }
-        if (normalizedFieldOfStudy.length > COURSE_FIELD_OF_STUDY_MAX_LENGTH) {
-          return NextResponse.json(
-            { error: `Field of study must not exceed ${COURSE_FIELD_OF_STUDY_MAX_LENGTH} characters.` },
-            { status: 400 }
-          );
-        }
-        if (canWriteFieldOfStudyWithPrismaClient) {
-          data.fieldOfStudy = normalizedFieldOfStudy;
-        } else {
-          pendingFieldOfStudyUpdate = normalizedFieldOfStudy;
-        }
-      } else {
-        return NextResponse.json({ error: "Invalid field of study." }, { status: 400 });
-      }
-    }
+    
 
     if (body.programDetails !== undefined) {
       const normalizedProgramDetails = normalizeCourseProgramDetailsInput(body.programDetails);
@@ -1241,10 +1090,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const hasDirectDataUpdates = Object.keys(data).length > 0;
-    const hasRawFallbackUpdates =
-      pendingDegreeLevelUpdate !== undefined ||
-      pendingFieldOfStudyUpdate !== undefined ||
-      pendingProgramContentUpdate !== undefined;
+    const hasRawFallbackUpdates = pendingProgramContentUpdate !== undefined;
 
     if (!hasDirectDataUpdates && !hasRawFallbackUpdates) {
       if (!Array.isArray(studentIds) && !Array.isArray(departmentHeadIds)) {
@@ -1337,20 +1183,6 @@ export async function PATCH(request: NextRequest) {
         if (!updatedCourse) {
           throw new Error("Course not found.");
         }
-        if (pendingDegreeLevelUpdate !== undefined) {
-          await tx.$executeRaw`
-            UPDATE "Course"
-            SET "degreeLevel" = ${pendingDegreeLevelUpdate}
-            WHERE "id" = ${courseId}
-          `.catch(() => {});
-        }
-        if (pendingFieldOfStudyUpdate !== undefined) {
-          await tx.$executeRaw`
-            UPDATE "Course"
-            SET "fieldOfStudy" = ${pendingFieldOfStudyUpdate}
-            WHERE "id" = ${courseId}
-          `.catch(() => {});
-        }
         if (pendingProgramContentUpdate !== undefined) {
           await tx.$executeRaw`
             UPDATE "Course"
@@ -1406,20 +1238,6 @@ export async function PATCH(request: NextRequest) {
       if (!updatedCourse) {
         throw new Error("Course not found.");
       }
-      if (pendingDegreeLevelUpdate !== undefined) {
-        await tx.$executeRaw`
-          UPDATE "Course"
-          SET "degreeLevel" = ${pendingDegreeLevelUpdate}
-          WHERE "id" = ${courseId}
-        `.catch(() => {});
-      }
-      if (pendingFieldOfStudyUpdate !== undefined) {
-        await tx.$executeRaw`
-          UPDATE "Course"
-          SET "fieldOfStudy" = ${pendingFieldOfStudyUpdate}
-          WHERE "id" = ${courseId}
-        `.catch(() => {});
-      }
       if (pendingProgramContentUpdate !== undefined) {
         await tx.$executeRaw`
           UPDATE "Course"
@@ -1438,18 +1256,6 @@ export async function PATCH(request: NextRequest) {
       "visibility" in updated
         ? (updated.visibility as CourseVisibilityValue | undefined) ?? COURSE_VISIBILITY_PUBLISHED
         : COURSE_VISIBILITY_PUBLISHED;
-    const updatedDegreeLevel =
-      pendingDegreeLevelUpdate !== undefined
-        ? pendingDegreeLevelUpdate
-        : "degreeLevel" in updated
-          ? (updated.degreeLevel as string | null | undefined) ?? null
-          : null;
-    const updatedFieldOfStudy =
-      pendingFieldOfStudyUpdate !== undefined
-        ? pendingFieldOfStudyUpdate
-        : "fieldOfStudy" in updated
-          ? (updated.fieldOfStudy as string | null | undefined) ?? null
-          : null;
     const updatedProgramDetails =
       pendingProgramContentUpdate !== undefined
         ? parseCourseProgramContent(pendingProgramContentUpdate)
@@ -1463,8 +1269,6 @@ export async function PATCH(request: NextRequest) {
         id: updated.id,
         code: updated.code,
         title: updated.title,
-        degreeLevel: updatedDegreeLevel,
-        fieldOfStudy: updatedFieldOfStudy,
         description: updated.description,
         programDetails: updatedProgramDetails,
         startDate: existing.legacySchema ? null : updatedStartDate?.toISOString() ?? null,

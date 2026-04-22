@@ -8,12 +8,6 @@ import { LoadingIndicator } from "@/components/loading-indicator";
 import { useLanguage } from "@/components/language-provider";
 
 type AppRole = "SUPER_ADMIN" | "DEPARTMENT_HEAD" | "TEACHER" | "STUDENT" | "ADMIN";
-const DEGREE_LEVEL_OPTIONS = [
-  "Bachelor’s Degree",
-  "Master’s Degree",
-  "Higher National Diploma (HND)",
-] as const;
-type DegreeLevelValue = (typeof DEGREE_LEVEL_OPTIONS)[number];
 type ProgramDetails = {
   overview: string | null;
   tuitionAndFees: string | null;
@@ -164,8 +158,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [showCreate, setShowCreate] = useState(false);
   const [editCourseId, setEditCourseId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
-  const [createDegreeLevel, setCreateDegreeLevel] = useState<DegreeLevelValue | "">("");
-  const [createFieldOfStudy, setCreateFieldOfStudy] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
   const [createEndDate, setCreateEndDate] = useState("");
@@ -179,8 +171,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [createPending, setCreatePending] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
-  const [editDegreeLevel, setEditDegreeLevel] = useState<DegreeLevelValue | "">("");
-  const [editFieldOfStudy, setEditFieldOfStudy] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -255,12 +245,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
     if (!selected) return;
 
     setEditTitle(selected.title);
-    setEditDegreeLevel(
-      selected.degreeLevel && DEGREE_LEVEL_OPTIONS.includes(selected.degreeLevel as DegreeLevelValue)
-        ? (selected.degreeLevel as DegreeLevelValue)
-        : ""
-    );
-    setEditFieldOfStudy(selected.fieldOfStudy ?? "");
     setEditDescription(selected.description ?? "");
     setEditStartDate(toDateInputValue(selected.startDate));
     setEditEndDate(toDateInputValue(selected.endDate));
@@ -389,8 +373,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: createTitle,
-          degreeLevel: createDegreeLevel,
-          fieldOfStudy: createFieldOfStudy,
           description: createDescription,
           startDate: createStartDate,
           endDate: createEndDate,
@@ -411,8 +393,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
 
       setShowCreate(false);
       setCreateTitle("");
-      setCreateDegreeLevel("");
-      setCreateFieldOfStudy("");
+      
       setCreateDescription("");
       setCreateStartDate("");
       setCreateEndDate("");
@@ -447,8 +428,6 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         body: JSON.stringify({
           courseId: editCourseId,
           title: editTitle,
-          degreeLevel: editDegreeLevel,
-          fieldOfStudy: editFieldOfStudy,
           description: editDescription,
           startDate: editStartDate,
           endDate: editEndDate,
@@ -693,8 +672,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                       <td className="px-3 py-2 font-semibold">{course.code}</td>
                       <td className="px-3 py-2">
                         <p>{course.title}</p>
-                        {course.degreeLevel ? <p className="mt-1 text-xs text-[#3768ac]">Degree Level: {course.degreeLevel}</p> : null}
-                        {course.fieldOfStudy ? <p className="mt-1 text-xs text-[#3768ac]">Field of Study: {course.fieldOfStudy}</p> : null}
+                        {/* Degree level and field of study moved to Programs; hidden on Courses */}
                         {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                         {course.programDetails?.tuitionAndFees ? (
                           <p className="mt-1 text-xs text-[#3768ac]">Tuition & Fees: {course.programDetails.tuitionAndFees}</p>
