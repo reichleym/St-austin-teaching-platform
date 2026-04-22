@@ -27,9 +27,9 @@ export default async function Home() {
                 <Link href="/dashboard/overview" className="underline">
                   Super Admin
                 </Link>
-                <div className="mt-6">
+                {/* <div className="mt-6">
                   <HomePageEditor />
-                </div>
+                </div> */}
               </>
             ) : null}
           </div>
