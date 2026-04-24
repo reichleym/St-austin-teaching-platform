@@ -61,30 +61,30 @@ function createDraftAdmissionsPage(): DynamicPage {
           },
         },
       },
-      {
-        sectionKey: "requirements",
-        componentType: "IconCard",
-        position: 1,
-        content: {
-          sourceLanguage: "en",
-          translations: {
-            en: {
-              title: "Admission Requirements",
-              blockContent: [
-                { cardTitle: "Undergraduate", cardDescription: "High school transcript and completed application.", icon: "/icons/undergrad.png" },
-                { cardTitle: "Graduate", cardDescription: "Official transcripts and letters of recommendation.", icon: "/icons/graduate.png" },
-              ],
-            },
-            fr: {
-              title: "Exigences d'admission",
-              blockContent: [
-                { cardTitle: "Premier cycle", cardDescription: "Relevé de notes et formulaire de demande.", icon: "/icons/undergrad.png" },
-                { cardTitle: "Deuxième cycle", cardDescription: "Relevés officiels et lettres de recommandation.", icon: "/icons/graduate.png" },
-              ],
-            },
-          },
-        },
-      },
+      // {
+      //   sectionKey: "requirements",
+      //   componentType: "IconCard",
+      //   position: 1,
+      //   content: {
+      //     sourceLanguage: "en",
+      //     translations: {
+      //       en: {
+      //         title: "Admission Requirements",
+      //         blockContent: [
+      //           { cardTitle: "Undergraduate", cardDescription: "High school transcript and completed application.", icon: "/icons/undergrad.png" },
+      //           { cardTitle: "Graduate", cardDescription: "Official transcripts and letters of recommendation.", icon: "/icons/graduate.png" },
+      //         ],
+      //       },
+      //       fr: {
+      //         title: "Exigences d'admission",
+      //         blockContent: [
+      //           { cardTitle: "Premier cycle", cardDescription: "Relevé de notes et formulaire de demande.", icon: "/icons/undergrad.png" },
+      //           { cardTitle: "Deuxième cycle", cardDescription: "Relevés officiels et lettres de recommandation.", icon: "/icons/graduate.png" },
+      //         ],
+      //       },
+      //     },
+      //   },
+      // },
       {
         sectionKey: "steps",
         componentType: "StepsSection",
@@ -232,12 +232,12 @@ export default function AdmissionsEditor() {
 
       {error ? (<section className="brand-card border border-red-100 bg-red-50 p-4"><p className="text-sm font-semibold text-red-800">{error}</p></section>) : null}
 
-      {!page ? (<section className="brand-card p-6"><p className="text-sm font-semibold text-[#083672]">Page data is unavailable.</p><p className="brand-muted mt-1 text-sm">Press Refresh to try again.</p></section>) : (<section className="space-y-6">{page.sections.slice().sort((a, b) => a.position - b.position).map((section) => (<SectionCard key={section.id || section.sectionKey} section={section} onUpdate={(content) => setPage((prev) => { if (!prev) return prev; const nextSections = prev.sections.map((s) => (s.id && s.id === section.id) || (!s.id && s.sectionKey === section.sectionKey) ? { ...s, content } : s); return { ...prev, sections: nextSections }; })} />))}</section>)}
+      {!page ? (<section className="brand-card p-6"><p className="text-sm font-semibold text-[#083672]">Page data is unavailable.</p><p className="brand-muted mt-1 text-sm">Press Refresh to try again.</p></section>) : (<section className="space-y-6">{page.sections.slice().sort((a, b) => a.position - b.position).map((section,index) => (<SectionCard key={section.id || section.sectionKey} section={section} index={index} onUpdate={(content) => setPage((prev) => { if (!prev) return prev; const nextSections = prev.sections.map((s) => (s.id && s.id === section.id) || (!s.id && s.sectionKey === section.sectionKey) ? { ...s, content } : s); return { ...prev, sections: nextSections }; })} />))}</section>)}
     </section>
   );
 }
 
-function SectionCard({ section, onUpdate }: { section: PageSection; onUpdate: (content: JsonObject) => void }) {
+function SectionCard({ section,index, onUpdate }: { section: PageSection; index: number; onUpdate: (content: JsonObject) => void }) {
   const sectionConfig: Record<string, { label: string; description: string }> = {
     BannerSection: { label: "Hero Banner", description: "Intro banner with title, description, and background image." },
     IconCard: { label: "Admission Requirements", description: "List of admission requirements and steps." },
@@ -257,7 +257,8 @@ function SectionCard({ section, onUpdate }: { section: PageSection; onUpdate: (c
           <h3 className="brand-title text-2xl font-black">{config.label}</h3>
           <p className="brand-muted text-sm">{config.description}</p>
         </div>
-        <span className="brand-chip">SECTION {section.position + 1}</span>
+        <span className="brand-chip">SECTION {index + 1}</span>
+        {/* <span className="brand-chip">SECTION {section.position + 1}</span> */}
       </div>
 
       {section.componentType === "BannerSection" && <BannerSectionForm content={section.content} onUpdate={onUpdate} />}
@@ -806,7 +807,7 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
-  
+
   const setSourceLanguage = (next: Language) => {
     onUpdate({ sourceLanguage: next, translations });
   };

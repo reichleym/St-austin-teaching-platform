@@ -18,7 +18,8 @@ export default async function GovEmployeesAdminPage() {
       { sectionKey: "discountCard", componentType: "GovernmentEmployeeDiscountCard", position: 1, content: {} },
       { sectionKey: "howItWorks", componentType: "HowItWorksSection", position: 2, content: {} },
       { sectionKey: "supportGroups", componentType: "SupportGroupsSection", position: 3, content: {} },
-      { sectionKey: "cta", componentType: "CtaSection", position: 4, content: {} },
+      { sectionKey: "quickLinks", componentType: "QuickLinksSection", position: 4, content: {} },
+      { sectionKey: "cta", componentType: "CtaSection", position: 5, content: {} },
     ],
   };
 

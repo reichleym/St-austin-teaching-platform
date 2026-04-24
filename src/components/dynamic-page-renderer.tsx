@@ -219,6 +219,26 @@ const CustomSectionComponents: Record<string, React.ComponentType<{ content: Jso
       </div>
     </section>
   ),
+
+  QuickLinksSection: ({ content }) => (
+    <section className="py-16 px-4 md:px-8">
+      <div className="max-w-6xl mx-auto">
+        {asString(content["title"]) ? <h2 className="text-3xl font-bold mb-2 text-center">{asString(content["title"])}</h2> : null}
+        {asString(content["subtitle"]) ? <p className="text-center text-gray-600 mb-8">{asString(content["subtitle"])}</p> : null}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {asArrayOfObjects(content["links"]).map((link, index) => (
+            <a
+              key={index}
+              href={asString(link["href"]) || "#"}
+              className="block p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition border border-gray-100"
+            >
+              <h3 className="font-semibold text-blue-600">{asString(link["title"])}</h3>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  ),
 };
 
 export default function DynamicPageRenderer({ page }: DynamicPageRendererProps) {

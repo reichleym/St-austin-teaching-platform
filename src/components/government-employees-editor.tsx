@@ -330,9 +330,35 @@ function createDraftGovernmentEmployeesPage(): DynamicPage {
         },
       },
       {
+        sectionKey: "quickLinks",
+        componentType: "QuickLinksSection",
+        position: 4,
+        content: {
+          sourceLanguage: "en" as Language,
+          translations: {
+            en: {
+              title: "Quick Links & Resources",
+              subtitle: "Government Employees Services at St. Austin University",
+              links: [
+                { title: "Application Portal", href: "/apply" },
+                { title: "Program Catalog", href: "/program" },
+              ],
+            },
+            fr: {
+              title: "Liens rapides et ressources",
+              subtitle: "Services pour employés du gouvernement à l'Université St. Austin",
+              links: [
+                { title: "Portail de candidature", href: "/apply" },
+                { title: "Catalogue des programmes", href: "/program" },
+              ],
+            },
+          },
+        },
+      },
+      {
         sectionKey: "cta",
         componentType: "CtaSection",
-        position: 4,
+        position: 5,
         content: {
           sourceLanguage: "en" as Language,
           translations: {
@@ -589,6 +615,10 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       label: "Support Groups",
       description: "Government employee categories with tailored support.",
     },
+    QuickLinksSection: {
+      label: "Quick Links & Resources",
+      description: "Quick links with titles and URLs for government employee services.",
+    },
     CtaSection: {
       label: "Call to Action",
       description: "Final section with title and action buttons.",
@@ -622,6 +652,9 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       {section.componentType === "SupportGroupsSection" && (
         <SupportGroupsSectionForm content={section.content} onUpdate={onUpdate} />
       )}
+      {section.componentType === "QuickLinksSection" && (
+        <QuickLinksSectionForm content={section.content} onUpdate={onUpdate} />
+      )}
       {section.componentType === "CtaSection" && (
         <CtaSectionForm content={section.content} onUpdate={onUpdate} />
       )}
@@ -631,6 +664,7 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
         "GovernmentEmployeeDiscountCard",
         "HowItWorksSection",
         "SupportGroupsSection",
+        "QuickLinksSection",
         "CtaSection",
       ].includes(section.componentType) && (
         <GenericSectionForm content={section.content} onUpdate={onUpdate} />
@@ -1115,6 +1149,123 @@ function SupportGroupsSectionForm({ content, onUpdate }: { content: unknown; onU
                         <button type="button" onClick={() => removeGroup(gIndex)} className="rounded-md border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-900">Remove Group</button>
                       ) : null}
                     </div>
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function QuickLinksSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+
+  const setSourceLanguage = (next: Language) => {
+    onUpdate({ sourceLanguage: next, translations });
+  };
+
+  const updateTranslation = (language: Language, nextValue: JsonObject) => {
+    onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  };
+
+  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
+    const nextTranslations: Record<Language, JsonObject> = {} as Record<Language, JsonObject>;
+    for (const language of supportedLanguages) {
+      nextTranslations[language] = updater(translations[language] ?? {});
+    }
+    onUpdate({ sourceLanguage, translations: nextTranslations });
+  };
+
+  const sourceLinks = asArrayOfObjects(translations[sourceLanguage]?.links);
+
+  const addLink = () => {
+    updateAllTranslations((current) => ({
+      ...current,
+      links: [...(Array.isArray(current.links) ? current.links : []), { title: "", href: "" }],
+    }));
+  };
+
+  const removeLink = (index: number) => {
+    updateAllTranslations((current) => ({
+      ...current,
+      links: (Array.isArray(current.links) ? current.links : []).filter((_: any, i: number) => i !== index),
+    }));
+  };
+
+  const updateLinkField = (language: Language, index: number, field: "title" | "href", value: string) => {
+    const fields = translations[language] ?? {};
+    const links = Array.isArray(fields.links) ? [...fields.links] : [];
+    const link = { ...links[index] };
+    link[field] = value;
+    links[index] = link;
+    updateTranslation(language, { ...fields, links });
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>{languageLabelFallback(lang)}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          const links = asArrayOfObjects(fields.links);
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input
+                  className="brand-input"
+                  value={asString(fields.title)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })}
+                  required={isPrimary}
+                />
+              </label>
+              {/* <label className="grid gap-1.5">
+                <span className="brand-label">Subtitle</span>
+                <input
+                  className="brand-input"
+                  value={asString(fields.subtitle)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, subtitle: e.target.value })}
+                />
+              </label> */}
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold">Links</span>
+                {isPrimary && <button type="button" onClick={addLink} className="btn-brand-secondary px-2 py-1 text-sm font-semibold">+ Add Link</button>}
+              </div>
+              <div className="space-y-2">
+                {(isPrimary ? sourceLinks : links).map((link: JsonObject, i: number) => (
+                  <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <input
+                      type="text"
+                      value={asString(link.title)}
+                      onChange={(e) => updateLinkField(lang, i, "title", e.target.value)}
+                      className="brand-input"
+                      placeholder="Link Title"
+                    />
+                    <input
+                      type="text"
+                      value={asString(link.href)}
+                      onChange={(e) => updateLinkField(lang, i, "href", e.target.value)}
+                      className="brand-input"
+                      placeholder="/apply"
+                    />
+                    {isPrimary && (
+                      <button type="button" onClick={() => removeLink(i)} className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-900 md:col-span-2">Remove</button>
+                    )}
                   </div>
                 ))}
               </div>

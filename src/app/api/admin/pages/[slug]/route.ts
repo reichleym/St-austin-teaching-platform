@@ -98,6 +98,7 @@ export async function GET(
         admissionsSections: { orderBy: { position: "asc" } },
         tuitionSections: { orderBy: { position: "asc" } },
         governmentEmployeesSections: { orderBy: { position: "asc" } },
+        homeSections: { orderBy: { position: "asc" } },
       },
     });
 
@@ -113,6 +114,7 @@ export async function GET(
       if (params.slug === "admissions") return (p.admissionsSections && p.admissionsSections.length > 0) ? p.admissionsSections : p.sections;
       if (params.slug === "tuition") return (p.tuitionSections && p.tuitionSections.length > 0) ? p.tuitionSections : p.sections;
       if (params.slug === "government-employees") return (p.governmentEmployeesSections && p.governmentEmployeesSections.length > 0) ? p.governmentEmployeesSections : p.sections;
+      if (params.slug === "home") return (p.homeSections && p.homeSections.length > 0) ? p.homeSections : p.sections;
       return p.sections;
     })();
 
@@ -172,6 +174,8 @@ export async function PUT(
     // Delete existing sections for this page (model depends on slug)
     if (params.slug === "studentExperience") {
       await prisma.studentExperience.deleteMany({ where: { page: { slug: params.slug } } });
+    } else if (params.slug === "home") {
+      await prisma.homeSection.deleteMany({ where: { page: { slug: params.slug } } });
     } else if (params.slug === "donations") {
       await prisma.donationsSection.deleteMany({ where: { page: { slug: params.slug } } });
     } else if (params.slug === "admissions") {
@@ -205,6 +209,7 @@ export async function PUT(
         admissionsSections: { orderBy: { position: "asc" } },
         tuitionSections: { orderBy: { position: "asc" } },
         governmentEmployeesSections: { orderBy: { position: "asc" } },
+        homeSections: { orderBy: { position: "asc" } },
       },
     };
 
@@ -224,6 +229,9 @@ export async function PUT(
     } else if (params.slug === "government-employees") {
       upsertArgs.update.governmentEmployeesSections = { create: createPayload };
       upsertArgs.create.governmentEmployeesSections = { create: createPayload };
+    } else if (params.slug === "home") {
+      upsertArgs.update.homeSections = { create: createPayload };
+      upsertArgs.create.homeSections = { create: createPayload };
     } else {
       upsertArgs.update.sections = { create: createPayload };
       upsertArgs.create.sections = { create: createPayload };
@@ -239,6 +247,7 @@ export async function PUT(
       if (params.slug === "admissions") return (p.admissionsSections && p.admissionsSections.length > 0) ? p.admissionsSections : p.sections;
       if (params.slug === "tuition") return (p.tuitionSections && p.tuitionSections.length > 0) ? p.tuitionSections : p.sections;
       if (params.slug === "government-employees") return (p.governmentEmployeesSections && p.governmentEmployeesSections.length > 0) ? p.governmentEmployeesSections : p.sections;
+      if (params.slug === "home") return (p.homeSections && p.homeSections.length > 0) ? p.homeSections : p.sections;
       return p.sections;
     })();
 

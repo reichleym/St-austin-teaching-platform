@@ -132,6 +132,10 @@ input[type="reset"]:disabled {
   cursor: not-allowed;
 }
 
+input.brand-input.grants-spacing {
+    margin-bottom: 15px;
+}
+
 .brand-label {
   font-size: 0.9rem;
   font-weight: 600;
@@ -295,3 +299,4 @@ body.modal-open .brand-glass:hover {
   color: #002f74;
   font-weight: 700;
 }
+

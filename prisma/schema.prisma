@@ -354,6 +354,34 @@ model Assignment {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
+model HomePage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  route     String
+  sections  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model HomeSection {
+  id           String   @id @default(cuid())
+  pageId       String
+  page         DynamicPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey   String
+  componentType String
+  position     Int      @default(0)
+  content      Json
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([pageId, sectionKey])
+  @@index([pageId, position])
+}
 
 model Discussion {
   id             String                    @id @default(cuid())
@@ -537,6 +565,7 @@ model DynamicPage {
   admissionsSections AdmissionsSection[]
   tuitionSections TuitionSection[]
   governmentEmployeesSections GovernmentEmployeesSection[]
+  homeSections HomeSection[]
   updatedById String?
   updatedBy User? @relation("PagesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
