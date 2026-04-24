@@ -330,9 +330,43 @@ function createDraftStudentExperiencePage(): DynamicPage {
         },
       },
       {
+        sectionKey: "studentTestimonials",
+        componentType: "StudentTestimonialsSection",
+        position: 4,
+        content: {
+          sourceLanguage: "en",
+          translations: {
+            en: {
+              title: "Student Testimonials",
+              description: "Hear from our students about their experiences at St. Austin's International University.",
+              testimonials: [
+                {
+                  name: "John Smith",
+                  course: "Computer Science",
+                  experience: "Studying at St. Austin's has been transformative. The flexible online format allowed me to balance work and education while gaining practical skills that advanced my career.",
+                  profileImage: "",
+                },
+              ],
+            },
+            fr: {
+              title: "Témoignages d'étudiants",
+              description: "Découvrez les expériences de nos étudiants à l'Université Internationale St. Austin.",
+              testimonials: [
+                {
+                  name: "John Smith",
+                  course: "Informatique",
+                  experience: "Étudier à St. Austin a été transformateur. Le format en ligne flexible m'a permis de concilier travail et éducation tout en acquérant des compétences pratiques qui ont fait progresser ma carrière.",
+                  profileImage: "",
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
         sectionKey: "cta",
         componentType: "CtaSection",
-        position: 4,
+        position: 5,
         content: {
           sourceLanguage: "en",
           translations: {
@@ -625,6 +659,10 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       label: "Your Learning Dashboard",
       description: "Two-column layout with content left, image right, primary button.",
     },
+    StudentTestimonialsSection: {
+      label: "Student Testimonials",
+      description: "Student testimonials with name, course, experience text, and profile image.",
+    },
     CtaSection: {
       label: "Call to Action",
       description: "Full-width blue CTA with gradient image overlay and 3 buttons.",
@@ -656,6 +694,9 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       {section.componentType === "LearningDashboardCta" && (
         <LearningDashboardCtaForm content={section.content} onUpdate={onUpdate} />
       )}
+      {section.componentType === "StudentTestimonialsSection" && (
+        <StudentTestimonialsSectionForm content={section.content} onUpdate={onUpdate} />
+      )}
       {section.componentType === "CtaSection" && (
         <CtaSectionForm content={section.content} onUpdate={onUpdate} />
       )}
@@ -665,6 +706,7 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
         "IconCard",
         "LearnSchedule",
         "LearningDashboardCta",
+        "StudentTestimonialsSection",
         "CtaSection",
       ].includes(section.componentType) && (
         <div className="space-y-2">
@@ -1183,6 +1225,151 @@ function IconCardSectionForm({
                     </div>
                   );
                 })}
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StudentTestimonialsSectionForm({
+  content,
+  onUpdate,
+}: {
+  content: unknown;
+  onUpdate: (content: JsonObject) => void;
+}) {
+  const envelope = getLocalizedSectionEnvelopeDraft(content);
+  const sourceLanguage = envelope.sourceLanguage;
+  const translations = envelope.translations;
+
+  const setSourceLanguage = (next: Language) => {
+    onUpdate({ sourceLanguage: next, translations });
+  };
+
+  const updateTranslation = (language: Language, nextValue: JsonObject) => {
+    onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
+  };
+
+  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
+    const nextTranslations = { ...translations } as Record<Language, JsonObject>;
+    for (const language of supportedLanguages) {
+      nextTranslations[language] = updater(translations[language] ?? {});
+    }
+    onUpdate({ sourceLanguage, translations: nextTranslations });
+  };
+
+  const sourceTestimonials = asArrayOfObjects(translations[sourceLanguage]?.testimonials);
+
+  const addTestimonial = () => {
+    updateAllTranslations((current) => ({
+      ...current,
+      testimonials: [
+        ...(Array.isArray(current.testimonials) ? current.testimonials : []),
+        { name: "", course: "", experience: "", profileImage: "" },
+      ],
+    }));
+  };
+
+  const removeTestimonial = (index: number) => {
+    updateAllTranslations((current) => ({
+      ...current,
+      testimonials: (Array.isArray(current.testimonials) ? current.testimonials : []).filter((_: any, i: number) => i !== index),
+    }));
+  };
+
+  const updateTestimonialField = (
+    language: Language,
+    index: number,
+    field: "name" | "course" | "experience" | "profileImage",
+    value: string
+  ) => {
+    const fields = translations[language] ?? {};
+    const testimonials = Array.isArray(fields.testimonials) ? [...fields.testimonials] : [];
+    const testimonial = { ...testimonials[index] };
+    testimonial[field] = value;
+    testimonials[index] = testimonial;
+    updateTranslation(language, { ...fields, testimonials });
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>{languageLabelFallback(lang)}</option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          const testimonials = asArrayOfObjects(fields.testimonials);
+          return (
+            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input
+                  className="brand-input"
+                  value={asString(fields.title)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })}
+                  required={isPrimary}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Description</span>
+                <textarea
+                  className="brand-input"
+                  value={asString(fields.description)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, description: e.target.value })}
+                  rows={3}
+                />
+              </label>
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold">Testimonials</span>
+                {isPrimary && <button type="button" onClick={addTestimonial} className="btn-brand-secondary px-3 py-1 text-sm font-semibold">+ Add Testimonial</button>}
+              </div>
+              <div className="space-y-4">
+                {(isPrimary ? sourceTestimonials : testimonials).map((t: JsonObject, i: number) => (
+                  <div key={i} className="brand-panel rounded-lg p-4 space-y-3">
+                    <input
+                      type="text"
+                      placeholder="Student Name"
+                      value={asString(testimonials[i]?.name)}
+                      onChange={(e) => updateTestimonialField(lang, i, "name", e.target.value)}
+                      className="brand-input text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Course"
+                      value={asString(testimonials[i]?.course)}
+                      onChange={(e) => updateTestimonialField(lang, i, "course", e.target.value)}
+                      className="brand-input text-sm"
+                    />
+                    <textarea
+                      placeholder="Student Experience"
+                      value={asString(testimonials[i]?.experience)}
+                      onChange={(e) => updateTestimonialField(lang, i, "experience", e.target.value)}
+                      className="brand-input text-sm"
+                      rows={3}
+                    />
+                    <AdminImagePicker
+                      label="Profile Image"
+                      value={asString(testimonials[i]?.profileImage)}
+                      onChange={(next) => updateTestimonialField(lang, i, "profileImage", next)}
+                      compact
+                    />
+                    {isPrimary && (
+                      <button type="button" onClick={() => removeTestimonial(i)} className="rounded-md border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-900">Remove Testimonial</button>
+                    )}
+                  </div>
+                ))}
               </div>
             </fieldset>
           );

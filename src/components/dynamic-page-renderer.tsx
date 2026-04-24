@@ -239,6 +239,35 @@ const CustomSectionComponents: Record<string, React.ComponentType<{ content: Jso
       </div>
     </section>
   ),
+
+  StudentTestimonialsSection: ({ content }) => (
+    <section className="py-16 px-4 md:px-8 bg-gray-50">
+      <div className="max-w-6xl mx-auto">
+        {asString(content["title"]) ? <h2 className="text-3xl font-bold mb-2 text-center">{asString(content["title"])}</h2> : null}
+        {asString(content["description"]) ? <p className="text-center text-gray-600 mb-12">{asString(content["description"])}</p> : null}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {asArrayOfObjects(content["testimonials"]).map((testimonial, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-sm p-6 flex flex-col">
+              {asString(testimonial["profileImage"]) ? (
+                <div className="mb-4 flex justify-center">
+                  <img
+                    src={asString(testimonial["profileImage"])}
+                    alt={asString(testimonial["name"])}
+                    className="w-20 h-20 rounded-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <p className="text-gray-700 italic flex-1 mb-4">"{asString(testimonial["experience"])}"</p>
+              <div className="mt-auto">
+                <h4 className="font-bold text-gray-900">{asString(testimonial["name"])}</h4>
+                <p className="text-sm text-blue-600">{asString(testimonial["course"])}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  ),
 };
 
 export default function DynamicPageRenderer({ page }: DynamicPageRendererProps) {
