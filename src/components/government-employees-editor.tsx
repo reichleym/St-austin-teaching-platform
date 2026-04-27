@@ -707,37 +707,8 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
-  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
-    const nextTranslations: Record<Language, JsonObject> = {} as Record<Language, JsonObject>;
-    for (const language of supportedLanguages) {
-      nextTranslations[language] = updater(translations[language] ?? {});
-    }
-    onUpdate({ sourceLanguage, translations: nextTranslations });
-  };
-
-  const sharedBgImg = asString(translations[sourceLanguage]?.bgImg);
-
   return (
     <div className="space-y-4">
-      <AdminImagePicker
-        label="Background image (shared)"
-        value={sharedBgImg}
-        onChange={(next) =>
-          updateAllTranslations((current) => ({
-            ...current,
-            bgImg: next,
-            bgImgStorageKey: undefined,
-          }))
-        }
-        onUpload={(result) =>
-          updateAllTranslations((current) => ({
-            ...current,
-            bgImg: result.publicUrl,
-            bgImgStorageKey: result.storageKey,
-          }))
-        }
-      />
-
       <div className="grid gap-3">
         <label className="grid gap-1.5 md:max-w-xs">
           <span className="brand-label">{t("announcement.sourceLanguage") || "Primary Language"}</span>
@@ -761,6 +732,13 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
             return (
               <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
                 <LanguageLegend language={lang} isPrimary={isPrimary} />
+                <AdminImagePicker
+                  label="Background image"
+                  value={asString(fields.bgImg)}
+                  onChange={(next) => updateTranslation(lang, { ...fields, bgImg: next, bgImgStorageKey: undefined })}
+                  onUpload={(result) => updateTranslation(lang, { ...fields, bgImg: result.publicUrl, bgImgStorageKey: result.storageKey })}
+                  compact
+                />
                 <label className="grid gap-1.5">
                   <span className="brand-label">Title</span>
                   <input

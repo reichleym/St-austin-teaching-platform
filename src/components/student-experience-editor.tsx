@@ -715,8 +715,6 @@ function LearnScheduleForm({
     onUpdate({ sourceLanguage, translations: nextTranslations });
   };
 
-  const sharedImage = asString(translations[sourceLanguage]?.image);
-
   const sourceList = Array.isArray(translations[sourceLanguage]?.list) ? (translations[sourceLanguage].list as unknown[]) : [];
 
   const addListItem = () => {
@@ -742,21 +740,6 @@ function LearnScheduleForm({
 
   return (
     <div className="space-y-4">
-      <AdminImagePicker
-        label="Image (shared)"
-        value={sharedImage}
-        onChange={(next) =>
-          updateAllTranslations((current) => ({ ...current, image: next, imageStorageKey: undefined }))
-        }
-        onUpload={(result) =>
-          updateAllTranslations((current) => ({
-            ...current,
-            image: result.publicUrl,
-            imageStorageKey: result.storageKey,
-          }))
-        }
-      />
-
       <div className="grid gap-4 xl:grid-cols-2">
         {supportedLanguages.map((entryLanguage) => {
           const fields = translations[entryLanguage] ?? {};
@@ -764,6 +747,13 @@ function LearnScheduleForm({
           return (
             <fieldset key={entryLanguage} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={entryLanguage} isPrimary={entryLanguage === sourceLanguage} />
+              <AdminImagePicker
+                label="Image"
+                value={asString(fields.image)}
+                onChange={(next) => updateTranslation(entryLanguage, { ...fields, image: next, imageStorageKey: undefined })}
+                onUpload={(result) => updateTranslation(entryLanguage, { ...fields, image: result.publicUrl, imageStorageKey: result.storageKey })}
+                compact
+              />
 
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -850,25 +840,8 @@ function LearningDashboardCtaForm({
     onUpdate({ sourceLanguage, translations: nextTranslations });
   };
 
-  const sharedImage = asString(translations[sourceLanguage]?.image);
-
   return (
     <div className="space-y-4">
-      <AdminImagePicker
-        label="Image (shared)"
-        value={sharedImage}
-        onChange={(next) =>
-          updateAllTranslations((current) => ({ ...current, image: next, imageStorageKey: undefined }))
-        }
-        onUpload={(result) =>
-          updateAllTranslations((current) => ({
-            ...current,
-            image: result.publicUrl,
-            imageStorageKey: result.storageKey,
-          }))
-        }
-      />
-
       <div className="grid gap-4 xl:grid-cols-2">
         {supportedLanguages.map((entryLanguage) => {
           const fields = translations[entryLanguage] ?? {};
@@ -876,6 +849,13 @@ function LearningDashboardCtaForm({
           return (
             <fieldset key={entryLanguage} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={entryLanguage} isPrimary={entryLanguage === sourceLanguage} />
+              <AdminImagePicker
+                label="Image"
+                value={asString(fields.image)}
+                onChange={(next) => updateTranslation(entryLanguage, { ...fields, image: next, imageStorageKey: undefined })}
+                onUpload={(result) => updateTranslation(entryLanguage, { ...fields, image: result.publicUrl, imageStorageKey: result.storageKey })}
+                compact
+              />
 
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -947,33 +927,8 @@ function BannerSectionForm({
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
-  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
-    const nextTranslations = { ...translations } as Record<Language, JsonObject>;
-    for (const language of supportedLanguages) {
-      nextTranslations[language] = updater(translations[language] ?? {});
-    }
-    onUpdate({ sourceLanguage, translations: nextTranslations });
-  };
-
-  const sharedBgImg = asString(translations[sourceLanguage]?.bgImg);
-
   return (
     <div className="space-y-4">
-      <AdminImagePicker
-        label="Background image (shared)"
-        value={sharedBgImg}
-        onChange={(next) =>
-          updateAllTranslations((current) => ({ ...current, bgImg: next, bgImgStorageKey: undefined }))
-        }
-        onUpload={(result) =>
-          updateAllTranslations((current) => ({
-            ...current,
-            bgImg: result.publicUrl,
-            bgImgStorageKey: result.storageKey,
-          }))
-        }
-      />
-
       <div className="grid gap-3">
         <label className="grid gap-1.5 md:max-w-xs">
           <span className="brand-label">{t("announcement.sourceLanguage") || "Primary Language"}</span>
@@ -1000,6 +955,13 @@ function BannerSectionForm({
                 className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4"
               >
                 <LanguageLegend language={entryLanguage} isPrimary={isPrimary} />
+                <AdminImagePicker
+                  label="Background image"
+                  value={asString(fields.bgImg)}
+                  onChange={(next) => updateTranslation(entryLanguage, { ...fields, bgImg: next, bgImgStorageKey: undefined })}
+                  onUpload={(result) => updateTranslation(entryLanguage, { ...fields, bgImg: result.publicUrl, bgImgStorageKey: result.storageKey })}
+                  compact
+                />
 
                 <label className="grid gap-1.5">
                   <span className="brand-label">Title</span>
@@ -1076,31 +1038,25 @@ function IconCardSectionForm({
     }));
   };
 
-  const updateSharedCardField = (index: number, field: "icon", value: string, storageKey?: string) => {
-    updateAllTranslations((current) => {
-      const cards = Array.isArray(current.blockContent) ? [...current.blockContent] : [];
-      const existing = cards[index] ?? {};
-      const nextCard = { ...existing, [field]: value } as JsonObject;
+  const updateCardField = (
+    language: Language,
+    index: number,
+    field: "cardTitle" | "cardDescription" | "icon",
+    value: string,
+    storageKey?: string
+  ) => {
+    const fields = translations[language] ?? {};
+    const cards = Array.isArray(fields.blockContent) ? [...fields.blockContent] : [];
+    const existing = cards[index] ?? {};
+    const nextCard = { ...existing, [field]: value } as JsonObject;
+    if (field === "icon") {
       if (storageKey === undefined) {
         delete nextCard.iconStorageKey;
       } else {
         nextCard.iconStorageKey = storageKey;
       }
-      cards[index] = nextCard;
-      return { ...current, blockContent: cards };
-    });
-  };
-
-  const updateCardField = (
-    language: Language,
-    index: number,
-    field: "cardTitle" | "cardDescription",
-    value: string
-  ) => {
-    const fields = translations[language] ?? {};
-    const cards = Array.isArray(fields.blockContent) ? [...fields.blockContent] : [];
-    const existing = cards[index] ?? {};
-    cards[index] = { ...existing, [field]: value };
+    }
+    cards[index] = nextCard;
     updateTranslation(language, { ...fields, blockContent: cards });
   };
 
@@ -1153,9 +1109,9 @@ function IconCardSectionForm({
 
               <div className="space-y-4">
                 {(entryLanguage === sourceLanguage ? sourceCards : cards).map((_, i: number) => {
-                  const sharedIcon = asString((cards[i] as JsonObject)?.icon || (sourceCards[i] as JsonObject)?.icon);
                   const titleValue = asString((cards[i] as JsonObject)?.cardTitle);
                   const descValue = asString((cards[i] as JsonObject)?.cardDescription);
+                  const iconValue = asString((cards[i] as JsonObject)?.icon);
                   return (
                     <div key={i} className="brand-panel rounded-lg p-4">
                       <div className="space-y-2">
@@ -1179,10 +1135,10 @@ function IconCardSectionForm({
                         </div>
                         <div>
                           <AdminImagePicker
-                            label="Icon (shared)"
-                            value={sharedIcon}
-                            onChange={(next) => updateSharedCardField(i, "icon", next)}
-                            onUpload={(result) => updateSharedCardField(i, "icon", result.publicUrl, result.storageKey)}
+                            label="Icon"
+                            value={iconValue}
+                            onChange={(next) => updateCardField(entryLanguage, i, "icon", next)}
+                            onUpload={(result) => updateCardField(entryLanguage, i, "icon", result.publicUrl, result.storageKey)}
                             compact
                           />
                         </div>

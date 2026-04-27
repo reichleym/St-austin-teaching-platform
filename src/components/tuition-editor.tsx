@@ -572,25 +572,8 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
-  const updateAllTranslations = (updater: (current: JsonObject) => JsonObject) => {
-    const nextTranslations = { ...translations } as Record<Language, JsonObject>;
-    for (const language of supportedLanguages) {
-      nextTranslations[language] = updater(translations[language] ?? {});
-    }
-    onUpdate({ sourceLanguage, translations: nextTranslations });
-  };
-
-  const sharedBgImg = asString(translations[sourceLanguage]?.bgImg);
-
   return (
     <div className="space-y-4">
-      <AdminImagePicker
-        label="Background image (shared)"
-        value={sharedBgImg}
-        onChange={(next) => updateAllTranslations((current) => ({ ...current, bgImg: next, bgImgStorageKey: undefined }))}
-        onUpload={(result) => updateAllTranslations((current) => ({ ...current, bgImg: result.publicUrl, bgImgStorageKey: result.storageKey }))}
-      />
-
       <label className="grid gap-1.5 md:max-w-xs">
         <span className="brand-label">Primary Language</span>
         <select className="brand-input" value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value as Language)}>
@@ -607,6 +590,13 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
           return (
             <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <AdminImagePicker
+                label="Background image"
+                value={asString(fields.bgImg)}
+                onChange={(next) => updateTranslation(lang, { ...fields, bgImg: next, bgImgStorageKey: undefined })}
+                onUpload={(result) => updateTranslation(lang, { ...fields, bgImg: result.publicUrl, bgImgStorageKey: result.storageKey })}
+                compact
+              />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
                 <input className="brand-input" value={asString(fields.title)} onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })} required={isPrimary} />
@@ -660,15 +650,7 @@ function IconCardSectionForm({ content, onUpdate }: { content: unknown; onUpdate
     }));
   };
 
-  const updateSharedCardField = (index: number, field: "icon", value: string) => {
-    updateAllTranslations((current) => {
-      const cards = Array.isArray(current.blockContent) ? [...current.blockContent] : [];
-      cards[index] = { ...(cards[index] ?? {}), [field]: value };
-      return { ...current, blockContent: cards };
-    });
-  };
-
-  const updateCardField = (language: Language, index: number, field: "cardTitle" | "cardDescription", value: string) => {
+  const updateCardField = (language: Language, index: number, field: "cardTitle" | "cardDescription" | "icon", value: string) => {
     const fields = translations[language] ?? {};
     const cards = Array.isArray(fields.blockContent) ? [...fields.blockContent] : [];
     cards[index] = { ...(cards[index] ?? {}), [field]: value };
@@ -715,9 +697,9 @@ function IconCardSectionForm({ content, onUpdate }: { content: unknown; onUpdate
                     <input type="text" placeholder="Card Title" value={asString(cards[i]?.cardTitle)} onChange={(e) => updateCardField(lang, i, "cardTitle", e.target.value)} className="brand-input text-sm" />
                     <textarea placeholder="Description" value={asString(cards[i]?.cardDescription)} onChange={(e) => updateCardField(lang, i, "cardDescription", e.target.value)} className="brand-input text-sm" rows={2} />
                     <AdminImagePicker
-                      label="Icon (shared)"
-                      value={asString(cards[i]?.icon || sourceCards[i]?.icon)}
-                      onChange={(next) => updateSharedCardField(i, "icon", next)}
+                      label="Icon"
+                      value={asString(cards[i]?.icon)}
+                      onChange={(next) => updateCardField(lang, i, "icon", next)}
                       compact
                     />
                     {isPrimary && <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove Card</button>}
@@ -1009,7 +991,7 @@ function WhyAustinSectionForm({ content, onUpdate }: { content: unknown; onUpdat
             <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5"><span className="brand-label">Section Title</span><input className="brand-input" value={asString(f.secTitle)} onChange={(e) => updateTranslation(lang, { ...f, secTitle: e.target.value })} required={isPrimary} /></label>
-              <div className="space-y-4">{(isPrimary ? cards : items).map((_, i) => (<div key={i} className="brand-panel rounded-lg p-4"><input className="brand-input grants-spacing" placeholder="Card title" value={asString(items[i]?.title)} onChange={(e) => updateCard(lang, i, "title", e.target.value)} /><textarea className="brand-input" placeholder="Description" rows={2} value={asString(items[i]?.description)} onChange={(e) => updateCard(lang, i, "description", e.target.value)} /><AdminImagePicker label="Icon (shared)" value={asString(items[i]?.icon || cards[i]?.icon)} onChange={(next) => updateTranslation(lang, { ...f, whiteCards: (Array.isArray(f.whiteCards) ? f.whiteCards : []).map((it: any, idx: number) => idx === i ? { ...(it ?? {}), icon: next } : it) })} compact /><button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}<button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button></div>
+              <div className="space-y-4">{(isPrimary ? cards : items).map((_, i) => (<div key={i} className="brand-panel rounded-lg p-4"><input className="brand-input grants-spacing" placeholder="Card title" value={asString(items[i]?.title)} onChange={(e) => updateCard(lang, i, "title", e.target.value)} /><textarea className="brand-input" placeholder="Description" rows={2} value={asString(items[i]?.description)} onChange={(e) => updateCard(lang, i, "description", e.target.value)} /><AdminImagePicker label="Icon" value={asString(items[i]?.icon)} onChange={(next) => updateCard(lang, i, "icon", next)} compact />{isPrimary ? <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">Remove</button> : null}</div>))}{isPrimary ? <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">+ Add card</button> : null}</div>
             </fieldset>
           );
         })}
