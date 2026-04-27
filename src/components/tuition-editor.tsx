@@ -482,7 +482,7 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
     TuitionTableSection: { label: "Tuition Table", description: "Table of programs and tuition rates." },
     WhyAustin: { label: "Scholarships & Grants", description: "Highlight cards for scholarships and grants." },
     PaymentPlansSection: { label: "Payment Plans", description: "List of payment plan benefits and CTA." },
-    CtaSection: { label: "Call to Action", description: "Bottom section with title, description, and buttons." },
+    // CtaSection: { label: "Call to Action", description: "Bottom section with title, description, and buttons." },
   };
 
   const config = sectionConfig[section.componentType] || { label: section.sectionKey, description: "Edit this section." };
@@ -1054,7 +1054,7 @@ function PaymentPlansSectionForm({ content, onUpdate }: { content: unknown; onUp
                 ))}
                 {isPrimary ? <button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">+ Add item</button> : null}
               </div>
-              <label className="grid gap-1.5 mt-2"><span className="brand-label">Button Text</span><input className="brand-input" value={asString(fields.buttonText)} onChange={(e) => updateTranslation(lang, { ...fields, buttonText: e.target.value })} /></label>
+              {/* <label className="grid gap-1.5 mt-2"><span className="brand-label">Button Text</span><input className="brand-input" value={asString(fields.buttonText)} onChange={(e) => updateTranslation(lang, { ...fields, buttonText: e.target.value })} /></label> */}
             </fieldset>
           );
         })}

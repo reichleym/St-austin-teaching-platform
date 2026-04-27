@@ -730,7 +730,7 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
             const isPrimary = lang === sourceLanguage;
             const fields = translations[lang] ?? {};
             return (
-              <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
                 <LanguageLegend language={lang} isPrimary={isPrimary} />
                 <AdminImagePicker
                   label="Background image"
@@ -801,7 +801,7 @@ function DiscountCardSectionForm({ content, onUpdate }: { content: unknown; onUp
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Discount Percent</span>
@@ -893,7 +893,7 @@ function HowItWorksSectionForm({ content, onUpdate }: { content: unknown; onUpda
           const fields = translations[lang] ?? {};
           const steps: string[] = Array.isArray(fields.steps) ? (fields.steps as string[]) : [];
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -1024,7 +1024,7 @@ function SupportGroupsSectionForm({ content, onUpdate }: { content: unknown; onU
           const fields = translations[lang] ?? {};
           const groups = asArrayOfObjects(fields.groups);
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={lang === sourceLanguage} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Section Title</span>
@@ -1285,7 +1285,7 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
           const fields = translations[lang] ?? {};
           const buttons = asArrayOfObjects(fields.buttons);
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={lang === sourceLanguage} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
