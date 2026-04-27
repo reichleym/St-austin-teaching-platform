@@ -4,13 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { supportedLanguages, type Language } from "@/lib/i18n";
 import { getLocalizedSectionEnvelopeDraft } from "@/lib/dynamic-page-localization";
+import { uploadAdminImage } from "@/lib/admin-image-upload";
 
 type JsonObject = Record<string, unknown>;
 
 function isJsonObject(value: unknown): value is JsonObject { return !!value && typeof value === "object" && !Array.isArray(value); }
 function asString(value: unknown) { return typeof value === "string" ? value : ""; }
-
-async function uploadAdminImage(file: File) { if (!file.type.startsWith("image/")) throw new Error("Please select an image file."); const formData = new FormData(); formData.append("file", file); const res = await fetch("/api/admin/uploads", { method: "POST", body: formData }); const raw = await res.text(); const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}; if (!res.ok) { const message = typeof parsed.error === "string" ? parsed.error : "Upload failed."; throw new Error(message); } const publicUrl = typeof parsed.publicUrl === "string" ? parsed.publicUrl : ""; const storageKey = typeof parsed.storageKey === "string" ? parsed.storageKey : ""; if (!publicUrl || !storageKey) throw new Error("Upload failed: missing publicUrl or storageKey."); return { publicUrl, storageKey }; }
 
 function AdminImagePicker({ label, value, onChange, onUpload, compact = false }: { label: string; value: string; onChange: (next: string) => void; onUpload?: (result: { publicUrl: string; storageKey: string }) => void; compact?: boolean }) {
   const inputRef = useRef<HTMLInputElement | null>(null);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { supportedLanguages, type Language } from "@/lib/i18n";
+import { uploadAdminImage } from "@/lib/admin-image-upload";
 
 type JsonObject = Record<string, unknown>;
 
@@ -56,19 +57,6 @@ function LanguageLegend({ language, isPrimary }: { language: Language; isPrimary
       {isPrimary ? <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">Primary</span> : null}
     </div>
   );
-}
-
-async function uploadAdminImage(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch("/api/admin/uploads", { method: "POST", body: formData });
-  const raw = await res.text();
-  const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-  if (!res.ok) throw new Error(typeof parsed.error === "string" ? parsed.error : "Upload failed.");
-  const publicUrl = typeof parsed.publicUrl === "string" ? parsed.publicUrl : "";
-  const storageKey = typeof parsed.storageKey === "string" ? parsed.storageKey : "";
-  if (!publicUrl || !storageKey) throw new Error("Upload failed: missing publicUrl or storageKey.");
-  return { publicUrl, storageKey };
 }
 
 function AdminImagePicker({ label, value, onChange, onUpload, compact = false }: {
@@ -990,4 +978,3 @@ function FeaturedStoriesForm({ content, onUpdate }: { content: unknown; onUpdate
     </div>
   );
 }
-
