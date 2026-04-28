@@ -23,6 +23,7 @@ function AdminImagePicker({ label, value, onChange, onUpload, compact = false }:
   onUpload?: (result: { publicUrl: string; storageKey: string }) => void;
   compact?: boolean;
 }) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -42,19 +43,19 @@ function AdminImagePicker({ label, value, onChange, onUpload, compact = false }:
               onChange(result.publicUrl);
               onUpload?.(result);
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Failed to upload image.");
+              setError(err instanceof Error ? err.message : t("error.uploadImage"));
             } finally {
               setIsUploading(false);
             }
           }} disabled={isUploading} />
           <button type="button" onClick={() => inputRef.current?.click()} className="btn-brand-secondary px-3 py-1.5 text-sm font-semibold disabled:opacity-60" disabled={isUploading}>
-            {isUploading ? "Uploading…" : "Pick image"}
+            {isUploading ? t("status.uploading") : t("action.pickImage")}
           </button>
-          {value ? <button type="button" onClick={() => onChange("")} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700" disabled={isUploading}>Clear</button> : null}
+          {value ? <button type="button" onClick={() => onChange("")} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700" disabled={isUploading}>{t("action.clear")}</button> : null}
         </div>
       </div>
-      <input type="text" value={value} onChange={(e) => onChange(e.currentTarget.value)} className={compact ? "brand-input text-sm" : "brand-input"} placeholder="Paste image URL or pick" disabled={isUploading} />
-      {value ? <div className="flex items-center gap-3"><img src={value} alt="" className={compact ? "h-12 w-12 rounded object-cover" : "h-20 w-20 rounded object-cover"} />{compact ? null : <div className="min-w-0"><p className="text-sm font-semibold text-gray-700">Current</p><p className="text-xs text-gray-500 break-all">{value}</p></div>}</div> : null}
+      <input type="text" value={value} onChange={(e) => onChange(e.currentTarget.value)} className={compact ? "brand-input text-sm" : "brand-input"} placeholder={t("dynamicPages.imageUrlPlaceholder")} disabled={isUploading} />
+      {value ? <div className="flex items-center gap-3"><img src={value} alt="" className={compact ? "h-12 w-12 rounded object-cover" : "h-20 w-20 rounded object-cover"} />{compact ? null : <div className="min-w-0"><p className="text-sm font-semibold text-gray-700">{t("dynamicPages.current")}</p><p className="text-xs text-gray-500 break-all">{value}</p></div>}</div> : null}
       {error ? <p className="text-sm font-semibold text-red-700">{error}</p> : null}
     </div>
   );
@@ -89,13 +90,13 @@ function createDraftDynamicPage(slug: string): DynamicPage {
         sectionKey: "hero",
         componentType: "BannerSection",
         position: 0,
-        content: { sourceLanguage: "en", translations: { en: { title: "Welcome", description: "..." }, fr: { title: "Welcome", description: "..." } } },
+        content: { sourceLanguage: "en", translations: { en: { title: "Welcome", description: "..." }, fr: { title: "Bienvenue", description: "..." } } },
       },
       {
         sectionKey: "cta",
         componentType: "CtaSection",
         position: 1,
-        content: { sourceLanguage: "en", translations: { en: { title: "Get Started", desc: "..." }, fr: { title: "Get Started", desc: "..." } } },
+        content: { sourceLanguage: "en", translations: { en: { title: "Get Started", desc: "..." }, fr: { title: "Commencer", desc: "..." } } },
       },
     ],
     createdAt: new Date().toISOString(),
@@ -103,14 +104,13 @@ function createDraftDynamicPage(slug: string): DynamicPage {
   };
 }
 
-const languageLabelFallback = (language: Language) => language === "fr" ? "French" : "English";
-
 function LanguageLegend({ language, isPrimary }: { language: Language; isPrimary: boolean; }) {
   const { t } = useLanguage();
+  const languageLabel = language === "fr" ? t("french") : t("english");
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm font-semibold text-[#0b3e81]">{languageLabelFallback(language)} version</span>
-      {isPrimary ? <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">Primary</span> : null}
+      <span className="text-sm font-semibold text-[#0b3e81]">{t("announcement.languageVersion", { language: languageLabel })}</span>
+      {isPrimary ? <span className="rounded-full border border-[#b8d3f6] bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1f518f]">{t("announcement.primaryLanguage")}</span> : null}
     </div>
   );
 }
@@ -121,6 +121,7 @@ function apiErrorMessage(parsed: Record<string, unknown>, fallback: string) {
 }
 
 export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: { slug: string; draft: DynamicPage; }) {
+  const { t } = useLanguage();
   const [page, setPage] = useState<DynamicPage | null>(initialDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,11 +148,11 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
       }
       const raw = await res.text();
       const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-      setError(apiErrorMessage(parsed, "Failed to load page."));
+      setError(apiErrorMessage(parsed, t("dynamicPages.toast.loadFailedSingle")));
       setPage(createDraftDynamicPage(slug));
     } catch (err) {
       console.error("Fetch error:", err);
-      setError("Failed to load page.");
+      setError(t("dynamicPages.toast.loadFailedSingle"));
       setPage(createDraftDynamicPage(slug));
     } finally {
       setLoading(false);
@@ -177,10 +178,10 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
       } else {
         const raw = await res.text();
         const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-        setError(apiErrorMessage(parsed, "Failed to save."));
+        setError(apiErrorMessage(parsed, t("dynamicPages.toast.saveFailed")));
       }
     } catch (err) {
-      setError("Failed to save.");
+      setError(t("dynamicPages.toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -200,19 +201,19 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
     });
   };
 
-  if (loading) return <section className="brand-card p-6"><p>Loading {slug} page…</p></section>;
+  if (loading) return <section className="brand-card p-6"><p>{t("dynamicPages.editor.loading", { slug })}</p></section>;
 
   return (
     <section className="space-y-6">
       <header className="brand-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="brand-title text-2xl font-black">{slug} Editor</h3>
-          <p className="brand-muted text-sm">Manage content.</p>
+          <h3 className="brand-title text-2xl font-black">{t("dynamicPages.editor.title", { slug })}</h3>
+          <p className="brand-muted text-sm">{t("dynamicPages.editor.subtitle")}</p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={fetchPage} disabled={loading} className="btn-brand-secondary px-4 py-2 text-sm disabled:opacity-60">Refresh</button>
+          <button type="button" onClick={fetchPage} disabled={loading} className="btn-brand-secondary px-4 py-2 text-sm disabled:opacity-60">{t("action.refresh")}</button>
           <button type="button" onClick={handleSave} disabled={saving || !page} className="btn-brand-primary px-5 py-2.5 text-sm disabled:opacity-60">
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("status.saving") : t("action.save")}
           </button>
         </div>
       </header>
@@ -222,15 +223,15 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
       {page ? (
         <>
           <section className="brand-card p-6">
-            <h4 className="brand-title text-xl font-black">Settings</h4>
+            <h4 className="brand-title text-xl font-black">{t("dynamicPages.editor.settings")}</h4>
             <div className="grid gap-4 mt-4">
               <label className="grid gap-1.5">
-                <span className="brand-label">Title</span>
+                <span className="brand-label">{t("label.title")}</span>
                 <input type="text" value={page.title} onChange={(e) => setPage({...page, title: e.target.value})} className="brand-input" />
               </label>
               <label className="flex items-center gap-3">
                 <input type="checkbox" checked={page.published} onChange={(e) => setPage({...page, published: e.target.checked})} />
-                <span>Published</span>
+                <span>{t("dynamicPages.publishPage")}</span>
               </label>
             </div>
           </section>
@@ -239,7 +240,7 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
               <section key={section.id || section.sectionKey} className="brand-card p-6">
                 <div className="mb-6 flex justify-between items-center">
                   <h3 className="text-2xl font-black">{section.componentType} ({section.sectionKey})</h3>
-                  <span>Pos {section.position}</span>
+                  <span>{t("dynamicPages.editor.positionShort", { position: section.position })}</span>
                 </div>
                 <pre className="bg-slate-900 text-green-400 p-4 rounded font-mono text-sm max-h-96 overflow-auto">
                   {JSON.stringify(section.content, null, 2)}
@@ -255,7 +256,7 @@ export default function GenericDynamicPageEditor({ slug, draft: initialDraft }: 
                   }}
                   className="brand-input w-full mt-4 p-3 font-mono text-sm"
                   rows={10}
-                  placeholder="Edit JSON content here..."
+                  placeholder={t("dynamicPages.editor.editJsonPlaceholder")}
                 />
               </section>
             ))}

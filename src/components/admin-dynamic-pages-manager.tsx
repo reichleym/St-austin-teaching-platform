@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useLanguage } from "@/components/language-provider";
 
 interface PageSection {
   id?: string;
@@ -31,6 +32,7 @@ function showToast(message: string, type: "success" | "error" = "success") {
 }
 
 export default function AdminDynamicPagesManager() {
+  const { t } = useLanguage();
   const [pages, setPages] = useState<DynamicPage[]>([]);
   const [selectedPage, setSelectedPage] = useState<DynamicPage | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -47,11 +49,11 @@ export default function AdminDynamicPagesManager() {
         const data = await res.json();
         setPages(data);
       } else {
-        showToast("Failed to load pages", "error");
+        showToast(t("dynamicPages.toast.loadFailed"), "error");
       }
     } catch (error) {
       console.error("Error fetching pages:", error);
-      showToast("Failed to load pages", "error");
+      showToast(t("dynamicPages.toast.loadFailed"), "error");
     } finally {
       setLoading(false);
     }
@@ -82,17 +84,21 @@ export default function AdminDynamicPagesManager() {
         setSelectedPage(null);
         setIsEditing(false);
         showToast(
-          `Page "${updated.title}" ${selectedPage.id ? "updated" : "created"} successfully`
+          selectedPage.id
+            ? t("dynamicPages.toast.updated", { title: updated.title })
+            : t("dynamicPages.toast.created", { title: updated.title })
         );
+      } else {
+        showToast(t("dynamicPages.toast.saveFailed"), "error");
       }
     } catch (error) {
       console.error("Error saving page:", error);
-      showToast("Failed to save page", "error");
+      showToast(t("dynamicPages.toast.saveFailed"), "error");
     }
   };
 
   const handleDeletePage = async (pageId: string, slug: string) => {
-    if (!confirm("Are you sure you want to delete this page?")) return;
+    if (!confirm(t("dynamicPages.confirmDelete"))) return;
 
     try {
       const res = await fetch(`/api/admin/pages/${slug}`, {
@@ -102,11 +108,13 @@ export default function AdminDynamicPagesManager() {
       if (res.ok) {
         setPages((prev) => prev.filter((p) => p.id !== pageId));
         setSelectedPage(null);
-        showToast("Page deleted successfully");
+        showToast(t("dynamicPages.toast.deleted"));
+      } else {
+        showToast(t("dynamicPages.toast.deleteFailed"), "error");
       }
     } catch (error) {
       console.error("Error deleting page:", error);
-      showToast("Failed to delete page", "error");
+      showToast(t("dynamicPages.toast.deleteFailed"), "error");
     }
   };
 
@@ -138,13 +146,13 @@ export default function AdminDynamicPagesManager() {
   };
 
   if (loading) {
-    return <div className="p-6">Loading pages...</div>;
+    return <div className="p-6">{t("dynamicPages.loading")}</div>;
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Dynamic Pages Management</h1>
+        <h1 className="text-3xl font-bold">{t("dynamicPages.title")}</h1>
         <button
           onClick={() => {
             setSelectedPage({
@@ -160,14 +168,14 @@ export default function AdminDynamicPagesManager() {
           }}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Create Page
+          {t("dynamicPages.createPage")}
         </button>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
         {/* Pages List */}
         <div className="col-span-1 border rounded-lg p-4 bg-gray-50">
-          <h2 className="text-lg font-semibold mb-4">Pages</h2>
+          <h2 className="text-lg font-semibold mb-4">{t("dynamicPages.pages")}</h2>
           <div className="space-y-2">
             {pages.map((page) => (
               <div
@@ -186,9 +194,9 @@ export default function AdminDynamicPagesManager() {
                 <div className="text-sm text-gray-500">{page.slug}</div>
                 <div className="text-xs mt-1">
                   {page.published ? (
-                    <span className="text-green-600">Published</span>
+                    <span className="text-green-600">{t("dynamicPages.statusPublished")}</span>
                   ) : (
-                    <span className="text-gray-500">Draft</span>
+                    <span className="text-gray-500">{t("dynamicPages.statusDraft")}</span>
                   )}
                 </div>
               </div>
@@ -201,13 +209,13 @@ export default function AdminDynamicPagesManager() {
           {selectedPage && isEditing ? (
             <div className="border rounded-lg p-6 bg-white">
               <h2 className="text-xl font-semibold mb-4">
-                {selectedPage.id ? "Edit Page" : "Create New Page"}
+                {selectedPage.id ? t("dynamicPages.editPage") : t("dynamicPages.createNewPage")}
               </h2>
 
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Page Title
+                    {t("dynamicPages.pageTitle")}
                   </label>
                   <input
                     type="text"
@@ -224,7 +232,7 @@ export default function AdminDynamicPagesManager() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Page Slug
+                    {t("dynamicPages.pageSlug")}
                   </label>
                   <input
                     type="text"
@@ -252,19 +260,19 @@ export default function AdminDynamicPagesManager() {
                     }
                     className="mr-2"
                   />
-                  <label className="text-sm font-medium">Publish Page</label>
+                  <label className="text-sm font-medium">{t("dynamicPages.publishPage")}</label>
                 </div>
               </div>
 
               {/* Sections Editor */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Sections</h3>
+                  <h3 className="text-lg font-semibold">{t("dynamicPages.sections")}</h3>
                   <button
                     onClick={addSection}
                     className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
                   >
-                    + Add Section
+                    {t("dynamicPages.addSection")}
                   </button>
                 </div>
 
@@ -274,7 +282,7 @@ export default function AdminDynamicPagesManager() {
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <label className="block text-sm font-medium mb-1">
-                            Section Key
+                            {t("dynamicPages.sectionKey")}
                           </label>
                           <input
                             type="text"
@@ -292,7 +300,7 @@ export default function AdminDynamicPagesManager() {
 
                       <div className="mb-3">
                         <label className="block text-sm font-medium mb-1">
-                          Component Type
+                          {t("dynamicPages.componentType")}
                         </label>
                         <input
                           type="text"
@@ -309,7 +317,7 @@ export default function AdminDynamicPagesManager() {
 
                       <div className="mb-3">
                         <label className="block text-sm font-medium mb-1">
-                          Content (JSON)
+                          {t("dynamicPages.contentJson")}
                         </label>
                         <textarea
                           value={JSON.stringify(section.content, null, 2)}
@@ -333,7 +341,7 @@ export default function AdminDynamicPagesManager() {
                         onClick={() => removeSection(index)}
                         className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
                       >
-                        Remove Section
+                        {t("dynamicPages.removeSection")}
                       </button>
                     </div>
                   ))}
@@ -345,7 +353,7 @@ export default function AdminDynamicPagesManager() {
                   onClick={handleSavePage}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  Save Page
+                  {t("dynamicPages.savePage")}
                 </button>
                 <button
                   onClick={() => {
@@ -354,7 +362,7 @@ export default function AdminDynamicPagesManager() {
                   }}
                   className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                 >
-                  Cancel
+                  {t("action.cancel")}
                 </button>
               </div>
             </div>
@@ -365,13 +373,13 @@ export default function AdminDynamicPagesManager() {
                   <h2 className="text-2xl font-semibold">{selectedPage.title}</h2>
                   <p className="text-gray-600 text-sm">/{selectedPage.slug}</p>
                   <p className="text-gray-500 text-sm mt-1">
-                    Status:{" "}
+                    {t("dynamicPages.statusLabel")}:{" "}
                     {selectedPage.published ? (
                       <span className="text-green-600 font-medium">
-                        Published
+                        {t("dynamicPages.statusPublished")}
                       </span>
                     ) : (
-                      <span className="text-gray-600 font-medium">Draft</span>
+                      <span className="text-gray-600 font-medium">{t("dynamicPages.statusDraft")}</span>
                     )}
                   </p>
                 </div>
@@ -380,7 +388,7 @@ export default function AdminDynamicPagesManager() {
                     onClick={() => setIsEditing(true)}
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
-                    Edit
+                    {t("action.edit")}
                   </button>
                   <button
                     onClick={() =>
@@ -388,13 +396,13 @@ export default function AdminDynamicPagesManager() {
                     }
                     className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                   >
-                    Delete
+                    {t("action.delete")}
                   </button>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">Sections</h3>
+                <h3 className="text-lg font-semibold mb-4">{t("dynamicPages.sections")}</h3>
                 <div className="space-y-4">
                   {selectedPage.sections.map((section, index) => (
                     <div key={index} className="border-l-4 border-blue-500 pl-4 py-2">
@@ -402,7 +410,7 @@ export default function AdminDynamicPagesManager() {
                         {section.sectionKey}
                       </div>
                       <div className="text-sm text-gray-600">
-                        Component: {section.componentType}
+                        {t("dynamicPages.componentLabel")}: {section.componentType}
                       </div>
                       <pre className="text-xs bg-gray-100 p-2 rounded mt-2 overflow-auto max-h-40">
                         {JSON.stringify(section.content, null, 2)}
@@ -414,7 +422,7 @@ export default function AdminDynamicPagesManager() {
             </div>
           ) : (
             <div className="border rounded-lg p-6 bg-gray-50 text-center text-gray-500">
-              Select a page to view details or create a new one
+              {t("dynamicPages.empty")}
             </div>
           )}
         </div>

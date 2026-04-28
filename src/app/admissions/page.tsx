@@ -1,7 +1,9 @@
 import DynamicPageRenderer from '@/components/dynamic-page-renderer';
 import { prisma } from '@/lib/prisma';
+import { createServerTranslator } from "@/lib/i18n-server";
 
 export default async function Page() {
+  const t = await createServerTranslator();
   const pageRow = await prisma.dynamicPage.findUnique({
     where: { slug: 'admissions' },
     include: {
@@ -9,7 +11,7 @@ export default async function Page() {
       admissionsSections: { orderBy: { position: 'asc' } },
     },
   });
-  if (!pageRow) return <div className="max-w-6xl mx-auto p-8">Admissions page not found.</div>;
+  if (!pageRow) return <div className="max-w-6xl mx-auto p-8">{t("dynamicPages.public.admissionsNotFound")}</div>;
 
   const p = pageRow as any;
   const resolved = (p.admissionsSections && p.admissionsSections.length > 0) ? p.admissionsSections : p.sections;

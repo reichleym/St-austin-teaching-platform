@@ -155,12 +155,6 @@ function createDraftHomePage(): DynamicPage {
       //     content: {},
       //   },
       {
-        sectionKey: "featuredStories",
-        componentType: "FeaturedStories",
-        position: 3,
-        content: {},
-      },
-      {
         sectionKey: "whyAustin",
         componentType: "WhyAustin",
         position: 4,
@@ -186,7 +180,7 @@ function createDraftHomePage(): DynamicPage {
         sectionKey: "learningExp",
         componentType: "LearningExp",
         position: 7,
-        content: { cards: [{ title: { en: "", fr: "" }, desc: { en: "", fr: "" }, image: "" }] },
+        content: { image: "", cards: [{ title: { en: "", fr: "" }, desc: { en: "", fr: "" }, icon: "" }] },
       },
       {
         sectionKey: "newsAnnouncements",
@@ -232,7 +226,13 @@ export default function HomePageEditor() {
         const data = (await res.json()) as Partial<DynamicPage> & { sections?: unknown };
         const hasSections = Array.isArray(data.sections) && (data.sections as unknown[]).length > 0;
         if (hasSections) {
-          setPage(data as DynamicPage);
+          const next = data as DynamicPage;
+          setPage({
+            ...next,
+            sections: Array.isArray(next.sections)
+              ? next.sections.filter((section) => section?.componentType !== "FeaturedStories")
+              : next.sections,
+          });
           return;
         }
         const draft = createDraftHomePage();
@@ -273,7 +273,12 @@ export default function HomePageEditor() {
     setSaving(true);
     setError("");
     try {
-      const sanitized = { ...page } as DynamicPage;
+      const sanitized = {
+        ...page,
+        sections: Array.isArray(page.sections)
+          ? page.sections.filter((section) => section?.componentType !== "FeaturedStories")
+          : page.sections,
+      } as DynamicPage;
       const res = await fetch(`/api/admin/pages/${page.slug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -369,6 +374,7 @@ export default function HomePageEditor() {
             {page.sections
               .slice()
               .sort((a, b) => a.position - b.position)
+              .filter((section) => section?.componentType !== "FeaturedStories")
               .map((section) => (
                 <SectionCard key={section.id || section.sectionKey} section={section} onUpdate={(content) => updateSectionContent(section.id, section.sectionKey, content)} />
               ))}
@@ -384,7 +390,6 @@ function SectionCard({ section, onUpdate }: { section: PageSection; onUpdate: (c
     HeroSection: { label: "Hero Banner", description: "Intro hero banner with background image, centered title and description." },
     ExplorePrograms: { label: "Explore Programs", description: "Prominent callout to explore programs and filters." },
     // FeaturedPrograms: { label: "Featured Programs", description: "Highlight a small selection of programs." },
-    FeaturedStories: { label: "Featured Stories", description: "Stories or testimonials." },
     WhyAustin: { label: "Why Choose Us", description: "Short reasons to choose the university." },
     CtaSection: { label: "Call to Action", description: "Full-width CTA with button." },
     LearnSomething: { label: "Learn Something", description: "Cards highlighting key benefits or features." },
@@ -415,7 +420,6 @@ function SectionCard({ section, onUpdate }: { section: PageSection; onUpdate: (c
       {section.componentType === "CtaSection" && <CtaForm content={section.content} onUpdate={onUpdate} />}
       {section.componentType === "WhyAustin" && <WhyAustinForm content={section.content} onUpdate={onUpdate} />}
       {/* {section.componentType === "FeaturedPrograms" && <div className="text-sm text-gray-600">No visual editor for Featured Programs.</div>} */}
-      {section.componentType === "FeaturedStories" && <FeaturedStoriesForm content={section.content} onUpdate={onUpdate} />}
       {section.componentType === "Footer" && <div className="text-sm text-gray-600">Footer content managed elsewhere.</div>}
     </section>
   );
@@ -522,10 +526,6 @@ function CtaForm({ content, onUpdate }: { content: unknown; onUpdate: (content: 
   const titleFr = localizedString(c.title, "fr");
   const descEn = localizedString(c.description, "en");
   const descFr = localizedString(c.description, "fr");
-  const button = typeof c.button === "object" && c.button ? (c.button as Record<string, unknown>) : {};
-  const labelEn = localizedString(button.label, "en");
-  const labelFr = localizedString(button.label, "fr");
-  const href = typeof button.href === "string" ? button.href : "";
 
   return (
     <div>
@@ -541,10 +541,6 @@ function CtaForm({ content, onUpdate }: { content: unknown; onUpdate: (content: 
               <span className="brand-label">Description</span>
               <textarea className="brand-input" rows={3} value={descEn} onChange={(e) => onUpdate(setLocalized(c, "description", "en", e.target.value))} />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Button label</span>
-              <input className="brand-input" value={labelEn} onChange={(e) => onUpdate({ ...c, button: { ...(c.button as object), label: setLocalized(button, "label", "en", e.target.value).label } })} />
-            </label>
           </div>
         </div>
 
@@ -558,10 +554,6 @@ function CtaForm({ content, onUpdate }: { content: unknown; onUpdate: (content: 
             <label className="grid gap-1.5">
               <span className="brand-label">Description</span>
               <textarea className="brand-input" rows={3} value={descFr} onChange={(e) => onUpdate(setLocalized(c, "description", "fr", e.target.value))} />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Button label</span>
-              <input className="brand-input" value={labelFr} onChange={(e) => onUpdate({ ...c, button: { ...(c.button as object), label: setLocalized(button, "label", "fr", e.target.value).label } })} />
             </label>
           </div>
         </div>
@@ -785,14 +777,17 @@ function TestimonialForm({ content, onUpdate }: { content: unknown; onUpdate: (c
 
 function LearningExpForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
   const c = isJsonObject(content) ? content : {};
+  const sectionImage = typeof c.image === "string" ? c.image : "";
   const cards = Array.isArray(c.cards) ? (c.cards as Array<Record<string, unknown>>) : [];
 
   const updateCard = (idx: number, next: Record<string, unknown>) => onUpdate({ ...c, cards: cards.map((it, i) => (i === idx ? next : it)) });
-  const addCard = () => onUpdate({ ...c, cards: [...cards, { title: { en: "", fr: "" }, desc: { en: "", fr: "" }, image: "" }] });
+  const addCard = () => onUpdate({ ...c, cards: [...cards, { title: { en: "", fr: "" }, desc: { en: "", fr: "" }, icon: "" }] });
   const removeCard = (idx: number) => onUpdate({ ...c, cards: cards.filter((_, i) => i !== idx) });
 
   return (
     <div className="space-y-3">
+      <AdminImagePicker label="Section image" value={sectionImage} onChange={(v) => onUpdate({ ...c, image: v })} />
+
       {cards.map((card, idx) => (
         <div key={idx} className="grid gap-3 rounded-md border border-slate-100 p-3">
           <div className="grid md:grid-cols-2 gap-4">
@@ -815,7 +810,15 @@ function LearningExpForm({ content, onUpdate }: { content: unknown; onUpdate: (c
 
           <div className="grid md:grid-cols-2 gap-3 items-end">
             <div>
-              <AdminImagePicker label="Image" value={String(card.image ?? "")} compact onChange={(v) => updateCard(idx, { ...(card as object), image: v })} />
+              <AdminImagePicker
+                label="Icon"
+                value={String(card.icon ?? card.image ?? "")}
+                compact
+                onChange={(v) => {
+                  const { image, ...rest } = card as Record<string, unknown>;
+                  updateCard(idx, { ...rest, icon: v });
+                }}
+              />
             </div>
             <div className="flex justify-end">
               <button type="button" className="btn-outline" onClick={() => removeCard(idx)}>
@@ -904,75 +907,6 @@ function NewsAnnouncementsForm({ content, onUpdate }: { content: unknown; onUpda
       <div>
         <button type="button" className="btn-brand-secondary w-fit px-4 py-2 text-sm font-semibold rounded-md shadow-sm" onClick={addItem}>
           Add item
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FeaturedStoriesForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
-  const c = isJsonObject(content) ? content : {};
-  const items = Array.isArray(c.items) ? (c.items as Array<Record<string, unknown>>) : [];
-
-  const updateItem = (idx: number, next: Record<string, unknown>) => {
-    const nextItems = items.slice();
-    nextItems[idx] = next;
-    onUpdate({ ...c, items: nextItems });
-  };
-
-  const addItem = () => onUpdate({ ...c, items: [...items, { title: { en: "", fr: "" }, excerpt: { en: "", fr: "" }, image: "", href: "" }] });
-  const removeItem = (idx: number) => onUpdate({ ...c, items: items.filter((_, i) => i !== idx) });
-
-  return (
-    <div className="space-y-4">
-      {items.map((it, idx) => (
-        <div key={idx} className="grid gap-3 rounded-md border border-slate-100 p-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="brand-panel p-3">
-              <LanguageLegend language="en" isPrimary={true} />
-              <div className="mt-3 grid gap-2">
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Title</span>
-                  <input className="brand-input" value={localizedString(it.title, "en")} onChange={(e) => updateItem(idx, setLocalized(it, "title", "en", e.target.value))} />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Excerpt</span>
-                  <textarea className="brand-input" rows={2} value={localizedString(it.excerpt, "en")} onChange={(e) => updateItem(idx, setLocalized(it, "excerpt", "en", e.target.value))} />
-                </label>
-              </div>
-            </div>
-
-            <div className="brand-panel p-3">
-              <LanguageLegend language="fr" isPrimary={false} />
-              <div className="mt-3 grid gap-2">
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Title</span>
-                  <input className="brand-input" value={localizedString(it.title, "fr")} onChange={(e) => updateItem(idx, setLocalized(it, "title", "fr", e.target.value))} />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="brand-label">Excerpt</span>
-                  <textarea className="brand-input" rows={2} value={localizedString(it.excerpt, "fr")} onChange={(e) => updateItem(idx, setLocalized(it, "excerpt", "fr", e.target.value))} />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-3 items-end">
-            <div>
-              <AdminImagePicker label="Image" value={String(it.image ?? "")} compact onChange={(v) => updateItem(idx, { ...(it as object), image: v })} />
-            </div>
-            <div className="flex justify-end">
-              <button type="button" className="btn-outline" onClick={() => removeItem(idx)}>
-                Remove
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      <div>
-        <button type="button" className="btn-brand-secondary w-fit px-4 py-2 text-sm font-semibold rounded-md shadow-sm" onClick={addItem}>
-          Add story
         </button>
       </div>
     </div>
