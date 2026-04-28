@@ -150,7 +150,11 @@ export function AssignmentStudentSubmission(props: Props) {
     const now = new Date().toISOString();
     setQuizStartedAt(now);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(timerKey, now);
+      try {
+        window.localStorage.setItem(timerKey, now);
+      } catch {
+        // Ignore storage failures (private mode / disabled storage) and keep the timer in-memory.
+      }
     }
   };
 
@@ -250,7 +254,11 @@ export function AssignmentStudentSubmission(props: Props) {
       if (timerMinutes && !quizStartedAt) {
         setQuizStartedAt(resolvedQuizStartedAt);
         if (typeof window !== "undefined") {
-          window.localStorage.setItem(timerKey, resolvedQuizStartedAt as string);
+          try {
+            window.localStorage.setItem(timerKey, resolvedQuizStartedAt as string);
+          } catch {
+            // Ignore storage failures.
+          }
         }
       }
 
@@ -359,7 +367,8 @@ export function AssignmentStudentSubmission(props: Props) {
                       value={studentShortAnswers[question.id] ?? ""}
                       onChange={(event) => {
                         startQuizTimerIfNeeded();
-                        setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }));
+                        const value = event.currentTarget.value;
+                        setStudentShortAnswers((prev) => ({ ...prev, [question.id]: value }));
                       }}
                     />
                   </label>

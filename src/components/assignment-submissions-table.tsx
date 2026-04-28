@@ -252,17 +252,19 @@ export function AssignmentSubmissionsTable({ module, assignmentId, submissions, 
                                   className="brand-input w-24"
                                   placeholder={t('placeholder.score')}
                                   value={gradeRawScoreById[row.id] ?? ""}
-                                  onChange={(event) =>
-                                    setGradeRawScoreById((prev) => ({ ...prev, [row.id]: event.currentTarget.value }))
-                                  }
+                                  onChange={(event) => {
+                                    const value = event.currentTarget.value;
+                                    setGradeRawScoreById((prev) => ({ ...prev, [row.id]: value }));
+                                  }}
                                 />
                                 <input
                                   className="brand-input w-48"
                                   placeholder={t('placeholder.feedback')}
                                   value={gradeFeedbackById[row.id] ?? ""}
-                                  onChange={(event) =>
-                                    setGradeFeedbackById((prev) => ({ ...prev, [row.id]: event.currentTarget.value }))
-                                  }
+                                  onChange={(event) => {
+                                    const value = event.currentTarget.value;
+                                    setGradeFeedbackById((prev) => ({ ...prev, [row.id]: value }));
+                                  }}
                                 />
                                 <button
                                   type="button"

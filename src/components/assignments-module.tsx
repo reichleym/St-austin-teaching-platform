@@ -1731,17 +1731,18 @@ export function AssignmentsModule({ role }: Props) {
                       {(question.questionType ?? "MCQ") === "SHORT_ANSWER" ? (
                         <label className="mt-2 grid gap-1.5">
                           <span className="brand-label">{t("assignment.shortAnswer")}</span>
-                          <textarea
-                            className="brand-input min-h-[90px]"
-                            placeholder={t("assignment.typeAnswer")}
-                            value={studentShortAnswers[question.id] ?? ""}
-                            onChange={(event) => {
-                              startStudentQuizTimerIfNeeded();
-                              setStudentShortAnswers((prev) => ({ ...prev, [question.id]: event.currentTarget.value }));
-                            }}
-                          />
-                        </label>
-                      ) : (
+                            <textarea
+                              className="brand-input min-h-[90px]"
+                              placeholder={t("assignment.typeAnswer")}
+                              value={studentShortAnswers[question.id] ?? ""}
+                              onChange={(event) => {
+                                startStudentQuizTimerIfNeeded();
+                                const value = event.currentTarget.value;
+                                setStudentShortAnswers((prev) => ({ ...prev, [question.id]: value }));
+                              }}
+                            />
+                          </label>
+                        ) : (
                         <div className="mt-2 grid gap-2">
                           {question.options.map((option, optionIndex) => (
                             <label key={`${question.id}_${optionIndex}`} className="inline-flex items-center gap-2 text-sm text-[#234f8f]">
