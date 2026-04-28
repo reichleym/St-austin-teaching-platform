@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { getDepartmentHeadAssignedCourseIds } from "@/lib/department-head-access";
 
 type ActionBody =
   | {
@@ -145,6 +146,14 @@ async function listAccessibleCourses(user: { id: string; role: Role | string }) 
   if (user.role === Role.TEACHER) {
     return prisma.course.findMany({
       where: { teacherId: user.id },
+      orderBy: [{ createdAt: "desc" }],
+      select: { id: true, code: true, title: true, teacherId: true },
+    });
+  }
+  if (user.role === Role.DEPARTMENT_HEAD) {
+    const courseIds = await getDepartmentHeadAssignedCourseIds(user.id);
+    return prisma.course.findMany({
+      where: { id: { in: courseIds.length ? courseIds : ["__none__"] } },
       orderBy: [{ createdAt: "desc" }],
       select: { id: true, code: true, title: true, teacherId: true },
     });

@@ -9,6 +9,7 @@ import {
 } from "@/lib/courses";
 import { isSuperAdminRole, PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { apiErrorResponse } from "@/lib/api-error-response";
 
 type CreateModuleBody = {
   courseId?: string;
@@ -244,14 +245,34 @@ async function getCourseAccess(user: { id: string; role: Role | string }, course
   if (!course) return { ok: false as const, status: 404, error: "Course not found." };
 
   const canManage = isSuperAdminRole(user.role) || (user.role === Role.TEACHER && course.teacherId === user.id);
+  let canViewAsDepartmentHead = false;
+  if (user.role === Role.DEPARTMENT_HEAD) {
+    try {
+      const tableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT to_regclass('public."DepartmentHeadCourseAssignment"') IS NOT NULL AS "exists"
+      `;
+      if (tableExists[0]?.exists) {
+        const assigned = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+          SELECT EXISTS(
+            SELECT 1
+            FROM "DepartmentHeadCourseAssignment"
+            WHERE "courseId" = ${courseId} AND "departmentHeadId" = ${user.id}
+          ) AS "exists"
+        `;
+        canViewAsDepartmentHead = Boolean(assigned[0]?.exists);
+      }
+    } catch {
+      canViewAsDepartmentHead = false;
+    }
+  }
   const canViewAsStudent =
     user.role === Role.STUDENT && course.visibility === COURSE_VISIBILITY_PUBLISHED && course.enrollments.length > 0;
 
-  if (!canManage && !canViewAsStudent) {
+  if (!canManage && !canViewAsStudent && !canViewAsDepartmentHead) {
     return { ok: false as const, status: 403, error: "You do not have access to this course." };
   }
 
-  return { ok: true as const, course, canManage, canViewAsStudent };
+  return { ok: true as const, course, canManage, canViewAsStudent, canViewAsDepartmentHead };
 }
 
 async function listModulesRaw(courseId: string, user: { id: string; role: Role | string }, canManage: boolean) {
@@ -373,7 +394,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(await listModulesRaw(courseId, user, access.canManage));
     }
 
-  const modules = await courseModule.findMany({
+    const modules = await courseModule.findMany({
       where: { courseId },
       orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       include: {
@@ -454,8 +475,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof PermissionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    const message = error instanceof Error ? error.message : "Unable to load modules.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(error, { fallbackMessage: "Unable to load modules." });
   }
 }
 

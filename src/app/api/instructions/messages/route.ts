@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isCourseExpired } from "@/lib/courses";
-import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
+import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 
-const STAFF_ROLES = ["TEACHER", "DEPARTMENT_HEAD", "SUPER_ADMIN"];
+const STAFF_ROLES = ["TEACHER", "SUPER_ADMIN"];
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     const thread = await prisma.instructionThread.findUniqueOrThrow({
       where: { id: threadId },
-      select: { status: true, studentId: true, course: { select: { endDate: true } } },
+      select: { status: true, studentId: true, course: { select: { endDate: true, teacherId: true } } },
     });
 
     if (thread.status === "CLOSED") {
@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
       if (!parent || parent.threadId !== threadId) {
         return NextResponse.json({ error: "Invalid parentId." }, { status: 400 });
       }
+    }
+
+    if (user.role === Role.TEACHER && thread.course.teacherId !== user.id) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
+    if (user.role === Role.DEPARTMENT_HEAD) {
+      return NextResponse.json({ error: "Department heads have view-only access to student questions." }, { status: 403 });
     }
 
     const isStaff = STAFF_ROLES.includes(String(user.role));
@@ -107,7 +114,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const isAuthor = msg.authorId === user.id;
-    const isAdmin = ["SUPER_ADMIN", "DEPARTMENT_HEAD"].includes(String(user.role));
+    const isAdmin = isSuperAdminRole(user.role);
 
     if (!isAuthor && !isAdmin) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });

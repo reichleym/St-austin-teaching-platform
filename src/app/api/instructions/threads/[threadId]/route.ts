@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isCourseExpired } from "@/lib/courses";
-import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
+import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
+import { isDepartmentHeadAssignedToCourse } from "@/lib/department-head-access";
 
 type FlatMessage = {
   id: string;
@@ -57,12 +58,21 @@ export async function GET(
       },
     });
 
-    if (
-      user.role === Role.STUDENT &&
-      thread.isPrivate &&
-      thread.studentId !== user.id
-    ) {
-      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    if (user.role === Role.STUDENT) {
+      if (thread.isPrivate && thread.studentId !== user.id) {
+        return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+      }
+    } else if (!isSuperAdminRole(user.role)) {
+      if (user.role === Role.TEACHER) {
+        if (thread.course.teacherId !== user.id) {
+          return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+        }
+      } else if (user.role === Role.DEPARTMENT_HEAD) {
+        const assigned = await isDepartmentHeadAssignedToCourse(user.id, thread.course.id);
+        if (!assigned) {
+          return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+        }
+      }
     }
 
     return NextResponse.json({
@@ -90,20 +100,23 @@ export async function PATCH(
     const user = await requireAuthenticatedUser();
     const { threadId } = await params;
 
-    const staffRoles: string[] = ["TEACHER", "DEPARTMENT_HEAD", "SUPER_ADMIN"];
-    if (!staffRoles.includes(String(user.role))) {
-      return NextResponse.json({ error: "Only teachers can manage threads." }, { status: 403 });
+    const canManage = isSuperAdminRole(user.role) || user.role === Role.TEACHER;
+    if (!canManage) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
     const { action } = (await request.json()) as { action: "close" | "togglePin" };
 
     const thread = await prisma.instructionThread.findUniqueOrThrow({
       where: { id: threadId },
-      select: { isPinned: true, status: true, course: { select: { endDate: true } } },
+      select: { isPinned: true, status: true, course: { select: { endDate: true, teacherId: true } } },
     });
 
     if (isCourseExpired(thread.course.endDate ?? null)) {
       return NextResponse.json({ error: "Course is expired and read-only." }, { status: 403 });
+    }
+    if (!isSuperAdminRole(user.role) && thread.course.teacherId !== user.id) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
     const data =

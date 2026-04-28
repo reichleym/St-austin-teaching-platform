@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isCourseExpired } from "@/lib/courses";
-import { PermissionError, requireAuthenticatedUser } from "@/lib/permissions";
+import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
+import { isDepartmentHeadAssignedToCourse } from "@/lib/department-head-access";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,20 @@ export async function GET(request: NextRequest) {
 
     if (!courseId) {
       return NextResponse.json({ error: "courseId is required." }, { status: 400 });
+    }
+
+    if (!isSuperAdminRole(user.role)) {
+      if (user.role === Role.TEACHER) {
+        const course = await prisma.course.findUnique({ where: { id: courseId }, select: { teacherId: true } });
+        if (!course || course.teacherId !== user.id) {
+          return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+        }
+      } else if (user.role === Role.DEPARTMENT_HEAD) {
+        const assigned = await isDepartmentHeadAssignedToCourse(user.id, courseId);
+        if (!assigned) {
+          return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+        }
+      }
     }
 
     const where =

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
+import { isDepartmentHeadAssignedToCourse } from "@/lib/department-head-access";
 
 type GradeLifecycleState =
   | "NOT_SUBMITTED"
@@ -861,8 +862,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (!isSuperAdminRole(user.role) && !(user.role === Role.TEACHER && config.teacherId === user.id)) {
-      return NextResponse.json({ error: "Only admin or assigned teacher can view submissions." }, { status: 403 });
+    const canViewAsStaff =
+      isSuperAdminRole(user.role) ||
+      (user.role === Role.TEACHER && config.teacherId === user.id) ||
+      (user.role === Role.DEPARTMENT_HEAD && (await isDepartmentHeadAssignedToCourse(user.id, config.courseId)));
+
+    if (!canViewAsStaff) {
+      return NextResponse.json({ error: "You do not have access to view submissions for this course." }, { status: 403 });
     }
 
     const submissions = await prisma.$queryRaw<

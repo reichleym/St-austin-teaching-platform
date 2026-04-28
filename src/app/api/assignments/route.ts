@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PermissionError, isSuperAdminRole, requireAuthenticatedUser } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { COURSE_VISIBILITY_PUBLISHED, isCourseExpired } from "@/lib/courses";
+import { getDepartmentHeadAssignedCourseIds } from "@/lib/department-head-access";
 
 type AssignmentType = "HOMEWORK" | "QUIZ" | "EXAM";
 type SubmissionType = "TEXT" | "FILE";
@@ -196,6 +197,22 @@ async function getAccessibleCourses(user: { id: string; role: Role | string }) {
   if (user.role === Role.TEACHER) {
     return prisma.course.findMany({
       where: { teacherId: user.id },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        endDate: true,
+        teacherId: true,
+        teacher: { select: { name: true, email: true } },
+      },
+    });
+  }
+
+  if (user.role === Role.DEPARTMENT_HEAD) {
+    const courseIds = await getDepartmentHeadAssignedCourseIds(user.id);
+    return prisma.course.findMany({
+      where: { id: { in: courseIds.length ? courseIds : ["__none__"] } },
       orderBy: [{ createdAt: "desc" }],
       select: {
         id: true,

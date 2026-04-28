@@ -262,7 +262,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   const [error, setError] = useState<string | null>(null);
   const [actionPending, startAction] = useTransition();
 
-  const isStaff = ["TEACHER", "DEPARTMENT_HEAD", "SUPER_ADMIN"].includes(currentUserRole);
+  const canModerate = ["TEACHER", "SUPER_ADMIN", "ADMIN"].includes(currentUserRole);
 
   const loadThread = useCallback(async () => {
     try {
@@ -316,7 +316,8 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
   }
 
   const s = STATUS_CONFIG[thread.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.CLOSED;
-  const canReply = thread.status !== "CLOSED";
+  const canReply =
+    thread.status !== "CLOSED" && ["STUDENT", "TEACHER", "SUPER_ADMIN", "ADMIN"].includes(currentUserRole);
 
   return (
     <section className="brand-card p-5">
@@ -373,7 +374,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
           </div>
 
           {/* Teacher controls */}
-          {isStaff && (
+          {canModerate && (
             <div className="flex flex-shrink-0 items-center gap-2">
               <button
                 onClick={() => handleAction("togglePin")}
@@ -401,7 +402,7 @@ export function ThreadDetailView({ threadId, currentUserId, currentUserRole, onB
 
       {/* Messages */}
       <div className="mb-5 space-y-1">
-        {thread.messages.map((msg) => (
+          {thread.messages.map((msg) => (
           <MessageBubble
             key={msg.id}
             message={msg}

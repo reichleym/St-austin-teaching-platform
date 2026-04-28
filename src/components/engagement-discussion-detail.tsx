@@ -109,6 +109,7 @@ type Props = {
 
 export function EngagementDiscussionDetail({ role, discussionId, courseId }: Props) {
   const canModerate = role === "SUPER_ADMIN" || role === "ADMIN" || role === "TEACHER";
+  const canPost = role === "STUDENT" || role === "TEACHER";
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
@@ -154,6 +155,7 @@ export function EngagementDiscussionDetail({ role, discussionId, courseId }: Pro
 
   const onCreatePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canPost) return;
     if (!selectedDiscussionId || !postContent.trim()) return;
     const blockedReason = getPostingBlockReason(selectedDiscussion, canModerate);
     if (blockedReason) {
@@ -212,7 +214,7 @@ export function EngagementDiscussionDetail({ role, discussionId, courseId }: Pro
     }
   };
 
-  const postingBlockReason = getPostingBlockReason(selectedDiscussion, canModerate);
+  const postingBlockReason = canPost ? getPostingBlockReason(selectedDiscussion, canModerate) : "View-only access.";
   const canPostInCurrentDiscussion = !postingBlockReason;
   const courseLabel = useMemo(() => {
     if (!selectedCourseId) return "";
