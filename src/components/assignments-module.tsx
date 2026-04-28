@@ -1645,10 +1645,10 @@ export function AssignmentsModule({ role }: Props) {
         {!loading && !filteredAssignments.length ? (
           <p className="brand-muted mt-3 text-sm">
             {activeMenu === "SUBMITTED"
-              ? t("assignment.empty.submitted")
+              ? t("assignment.empty.submitted", undefined, "No assignment")
               : activeMenu === "DUE"
-                ? t("assignment.empty.due")
-                : t("assignment.empty.all")}
+                ? t("assignment.empty.due", undefined, "No assignment")
+                : t("assignment.empty.all", undefined, "No assignment")}
           </p>
         ) : null}
       </section>

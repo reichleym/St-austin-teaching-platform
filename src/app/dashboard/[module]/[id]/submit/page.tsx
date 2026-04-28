@@ -53,56 +53,108 @@ const formatDateTime = (value?: Date | string | null) => {
 };
 
 async function getAssignmentConfig(assignmentId: string) {
-  const rows = await prisma.$queryRaw<
-    Array<{
-      assignmentType: string;
-      allowedSubmissionTypes: Prisma.JsonValue;
-      maxAttempts: number;
-      allowLateSubmissions: boolean | null;
-      timerMinutes: number | null;
-      startAt: Date | null;
-      endAt: Date | null;
-      courseId: string;
-      courseVisibility: string | null;
-      courseEndDate: Date | null;
-    }>
-  >`
-    SELECT
-      COALESCE(cfg."assignmentType", 'HOMEWORK') AS "assignmentType",
-      COALESCE(cfg."allowedSubmissionTypes", '["TEXT","FILE"]'::jsonb) AS "allowedSubmissionTypes",
-      COALESCE(cfg."maxAttempts", 1) AS "maxAttempts",
-      COALESCE(cfg."allowLateSubmissions", true) AS "allowLateSubmissions",
-      cfg."timerMinutes",
-      cfg."startAt",
-      a."dueAt" AS "endAt",
-      a."courseId",
-      c."visibility"::text AS "courseVisibility",
-      c."endDate" AS "courseEndDate"
-    FROM "Assignment" a
-    JOIN "Course" c ON c."id" = a."courseId"
-    LEFT JOIN "AssignmentConfig" cfg ON cfg."assignmentId" = a."id"
-    WHERE a."id" = ${assignmentId}
-    LIMIT 1
-  `;
+  const configTableExists = await prisma
+    .$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public."AssignmentConfig"') IS NOT NULL AS "exists"
+    `
+    .then((rows) => Boolean(rows[0]?.exists))
+    .catch(() => false);
 
-  const row = rows[0];
-  if (!row) return null;
-  const assignmentType = parseAssignmentType(row.assignmentType);
-  return {
-    assignmentId,
-    assignmentType,
-    allowedSubmissionTypes: assignmentType === "QUIZ"
-      ? parseSubmissionTypes(row.allowedSubmissionTypes as unknown[], { allowEmpty: true })
-      : parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
-    maxAttempts: parseMaxAttempts(row.maxAttempts, assignmentType),
-    allowLateSubmissions: row.allowLateSubmissions !== false,
-    timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
-    startAt: row.startAt ?? null,
-    endAt: row.endAt ?? null,
-    courseId: row.courseId,
-    courseVisibility: row.courseVisibility,
-    courseEndDate: row.courseEndDate ?? null,
-  } as AssignmentConfigRecord & { courseId: string; courseVisibility: string | null };
+  const loadBase = async () => {
+    const baseRows = await prisma.$queryRaw<
+      Array<{
+        endAt: Date | null;
+        courseId: string;
+        courseVisibility: string | null;
+        courseEndDate: Date | null;
+      }>
+    >`
+      SELECT
+        a."dueAt" AS "endAt",
+        a."courseId",
+        c."visibility"::text AS "courseVisibility",
+        c."endDate" AS "courseEndDate"
+      FROM "Assignment" a
+      JOIN "Course" c ON c."id" = a."courseId"
+      WHERE a."id" = ${assignmentId}
+      LIMIT 1
+    `;
+    const base = baseRows[0];
+    if (!base) return null;
+    return {
+      assignmentId,
+      assignmentType: "HOMEWORK",
+      allowedSubmissionTypes: ["TEXT", "FILE"],
+      maxAttempts: 1,
+      allowLateSubmissions: true,
+      timerMinutes: null,
+      startAt: null,
+      endAt: base.endAt ?? null,
+      courseEndDate: base.courseEndDate ?? null,
+      courseId: base.courseId,
+      courseVisibility: base.courseVisibility,
+    } as AssignmentConfigRecord & { courseId: string; courseVisibility: string | null };
+  };
+
+  if (!configTableExists) {
+    return loadBase();
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<
+      Array<{
+        assignmentType: string;
+        allowedSubmissionTypes: Prisma.JsonValue;
+        maxAttempts: number;
+        allowLateSubmissions: boolean | null;
+        timerMinutes: number | null;
+        startAt: Date | null;
+        endAt: Date | null;
+        courseId: string;
+        courseVisibility: string | null;
+        courseEndDate: Date | null;
+      }>
+    >`
+      SELECT
+        COALESCE(cfg."assignmentType", 'HOMEWORK') AS "assignmentType",
+        COALESCE(cfg."allowedSubmissionTypes", '["TEXT","FILE"]'::jsonb) AS "allowedSubmissionTypes",
+        COALESCE(cfg."maxAttempts", 1) AS "maxAttempts",
+        COALESCE(cfg."allowLateSubmissions", true) AS "allowLateSubmissions",
+        cfg."timerMinutes",
+        cfg."startAt",
+        a."dueAt" AS "endAt",
+        a."courseId",
+        c."visibility"::text AS "courseVisibility",
+        c."endDate" AS "courseEndDate"
+      FROM "Assignment" a
+      JOIN "Course" c ON c."id" = a."courseId"
+      LEFT JOIN "AssignmentConfig" cfg ON cfg."assignmentId" = a."id"
+      WHERE a."id" = ${assignmentId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) return null;
+    const assignmentType = parseAssignmentType(row.assignmentType);
+    return {
+      assignmentId,
+      assignmentType,
+      allowedSubmissionTypes:
+        assignmentType === "QUIZ"
+          ? parseSubmissionTypes(row.allowedSubmissionTypes as unknown[], { allowEmpty: true })
+          : parseSubmissionTypes(row.allowedSubmissionTypes as unknown[]),
+      maxAttempts: parseMaxAttempts(row.maxAttempts, assignmentType),
+      allowLateSubmissions: row.allowLateSubmissions !== false,
+      timerMinutes: row.timerMinutes !== null && Number.isInteger(Number(row.timerMinutes)) ? Number(row.timerMinutes) : null,
+      startAt: row.startAt ?? null,
+      endAt: row.endAt ?? null,
+      courseId: row.courseId,
+      courseVisibility: row.courseVisibility,
+      courseEndDate: row.courseEndDate ?? null,
+    } as AssignmentConfigRecord & { courseId: string; courseVisibility: string | null };
+  } catch {
+    return loadBase();
+  }
 }
 
 async function getStudentSubmissions(assignmentId: string, studentId: string) {
