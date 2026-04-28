@@ -268,14 +268,6 @@ export function AssignmentSubmissionsTable({ module, assignmentId, submissions, 
                                 />
                                 <button
                                   type="button"
-                                  className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-                                  disabled={gradePendingId === row.id}
-                                  onClick={() => void onGrade(row.id, false)}
-                                >
-                                  {gradePendingId === row.id ? "Saving..." : "Save Draft"}
-                                </button>
-                                <button
-                                  type="button"
                                   className="rounded-md border border-[#2d6fbf] bg-[#edf5ff] px-2 py-1 text-xs font-semibold text-[#114b8d]"
                                   disabled={gradePendingId === row.id}
                                   onClick={() => void onGrade(row.id, true)}

@@ -162,7 +162,7 @@ export function SubmissionGradePanel({ submissionId, assignmentId, studentId, st
           ) : null}
         </div>
       ) : (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
           <input
             className="brand-input w-24"
             placeholder="Score"
@@ -175,14 +175,6 @@ export function SubmissionGradePanel({ submissionId, assignmentId, studentId, st
             value={feedbackInput}
             onChange={(event) => setFeedbackInput(event.currentTarget.value)}
           />
-          <button
-            type="button"
-            className="rounded-md border border-[#9bbfed] px-2 py-1 text-xs font-semibold text-[#1f518f]"
-            disabled={pending}
-            onClick={() => void onGrade(false)}
-          >
-            {pending ? "Saving..." : "Save Draft"}
-          </button>
           <button
             type="button"
             className="rounded-md border border-[#2d6fbf] bg-[#edf5ff] px-2 py-1 text-xs font-semibold text-[#114b8d]"
