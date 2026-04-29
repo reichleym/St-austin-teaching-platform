@@ -26,6 +26,7 @@ type CourseOption = {
   id: string;
   code: string;
   title: string;
+  titleFr: string | null;
 };
 
 type ProgramItem = {
@@ -33,6 +34,10 @@ type ProgramItem = {
   code: string;
   title: string;
   description: string | null;
+  degreeLevel: string | null;
+  degreeLevelFr: string | null;
+  fieldOfStudy: string | null;
+  fieldOfStudyFr: string | null;
   sourceLanguage: string;
   translations: unknown;
   programDetails: ProgramDetails | null;
@@ -44,6 +49,31 @@ type ProgramItem = {
 
 type Props = {
   programId: string;
+};
+
+const DEGREE_LEVEL_OPTIONS = [
+  "Bachelor’s Degree",
+  "Master’s Degree",
+  "Higher National Diploma (HND)",
+] as const;
+type DegreeLevelValue = (typeof DEGREE_LEVEL_OPTIONS)[number];
+
+const DEGREE_LEVEL_OPTIONS_FR = [
+  "Licence",
+  "Master",
+  "Diplôme National Supérieur (HND)",
+] as const;
+
+const coerceDegreeLevelValue = (value: string | null | undefined): DegreeLevelValue | "" =>
+  value && (DEGREE_LEVEL_OPTIONS as readonly string[]).includes(value) ? (value as DegreeLevelValue) : "";
+
+const getDegreeLevelFrOptions = (current: string) => {
+  const options = [...DEGREE_LEVEL_OPTIONS_FR] as string[];
+  const normalized = current.trim();
+  if (normalized && !options.includes(normalized)) {
+    options.unshift(normalized);
+  }
+  return options;
 };
 
 const toMultilineValue = (items: string[] | undefined) => (items && items.length ? items.join("\n") : "");
@@ -70,8 +100,10 @@ export function ProgramManageEditor({ programId }: Props) {
   );
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [editTuitionAndFees, setEditTuitionAndFees] = useState("");
-  const [editDegreeLevel, setEditDegreeLevel] = useState<"Bachelor’s Degree" | "Master’s Degree" | "Higher National Diploma (HND)" | "">("");
+  const [editDegreeLevel, setEditDegreeLevel] = useState<DegreeLevelValue | "">("");
   const [editFieldOfStudy, setEditFieldOfStudy] = useState("");
+  const [editDegreeLevelFr, setEditDegreeLevelFr] = useState("");
+  const [editFieldOfStudyFr, setEditFieldOfStudyFr] = useState("");
   const [editCourseIds, setEditCourseIds] = useState<string[]>([]);
   const [editCourseSearch, setEditCourseSearch] = useState("");
   const [editPending, setEditPending] = useState(false);
@@ -83,8 +115,10 @@ export function ProgramManageEditor({ programId }: Props) {
     setEditLocalizations(getProgramLocalizationDrafts(nextProgram));
     setEditVisibility(nextProgram.visibility);
     setEditTuitionAndFees(nextProgram.programDetails?.tuitionAndFees ?? "");
-    setEditDegreeLevel((nextProgram as any).degreeLevel ?? "");
-    setEditFieldOfStudy((nextProgram as any).fieldOfStudy ?? "");
+    setEditDegreeLevel(coerceDegreeLevelValue(nextProgram.degreeLevel));
+    setEditFieldOfStudy(nextProgram.fieldOfStudy ?? "");
+    setEditDegreeLevelFr(nextProgram.degreeLevelFr ?? "");
+    setEditFieldOfStudyFr(nextProgram.fieldOfStudyFr ?? "");
     setEditCourseIds(nextProgram.courses.map((course) => course.id));
     setEditCourseSearch("");
   }, []);
@@ -138,7 +172,8 @@ export function ProgramManageEditor({ programId }: Props) {
     return courses.filter((course) => {
       const code = (course.code ?? "").toLowerCase();
       const title = course.title.toLowerCase();
-      return code.includes(query) || title.includes(query);
+      const titleFr = (course.titleFr ?? "").toLowerCase();
+      return code.includes(query) || title.includes(query) || titleFr.includes(query);
     });
   }, [courses, editCourseSearch]);
 
@@ -157,6 +192,8 @@ export function ProgramManageEditor({ programId }: Props) {
   }, [editLocalizations, editSourceLanguage]);
 
   const languageLabel = (value: Language) => (value === "fr" ? t("french") : t("english"));
+  const getCourseTitle = (course: CourseOption, targetLanguage: Language) =>
+    targetLanguage === "fr" && course.titleFr ? course.titleFr : course.title;
 
   const updateLocalization = (
     targetLanguage: Language,
@@ -300,7 +337,17 @@ export function ProgramManageEditor({ programId }: Props) {
     const curriculumList = toListFromMultiline(primaryLocalization.curriculum ?? "");
     const admissionList = toListFromMultiline(primaryLocalization.admissionRequirements ?? "");
     const careerList = toListFromMultiline(primaryLocalization.careerOpportunities ?? "");
-    if (!primaryLocalization.title?.trim() || !editDegreeLevel || !editFieldOfStudy.trim() || !(primaryLocalization.overview?.trim()) || !curriculumList.length || !admissionList.length || !careerList.length) {
+    if (
+      !primaryLocalization.title?.trim() ||
+      !editDegreeLevel ||
+      !editDegreeLevelFr.trim() ||
+      !editFieldOfStudy.trim() ||
+      !editFieldOfStudyFr.trim() ||
+      !(primaryLocalization.overview?.trim()) ||
+      !curriculumList.length ||
+      !admissionList.length ||
+      !careerList.length
+    ) {
       setError(t("error.requiredFields") || "All fields are required.");
       setEditPending(false);
       return;
@@ -316,7 +363,9 @@ export function ProgramManageEditor({ programId }: Props) {
           sourceLanguage: editSourceLanguage,
           translations: editLocalizations,
             degreeLevel: editDegreeLevel || null,
+            degreeLevelFr: editDegreeLevelFr.trim() || null,
             fieldOfStudy: editFieldOfStudy.trim() || null,
+            fieldOfStudyFr: editFieldOfStudyFr.trim() || null,
           visibility: editVisibility,
           programDetails: {
             overview: primaryLocalization.overview?.trim() || null,
@@ -420,23 +469,56 @@ export function ProgramManageEditor({ programId }: Props) {
           />
         </label>
 
-        <label className="grid gap-1.5 md:max-w-sm">
-          <span className="brand-label">Degree Level</span>
-          <select
-            className="brand-input"
-            value={editDegreeLevel}
-            onChange={(e) => setEditDegreeLevel(e.currentTarget.value as any)}
-          >
-            <option value="">Select degree level</option>
-            <option value="Bachelor’s Degree">Bachelor’s Degree</option>
-            <option value="Master’s Degree">Master’s Degree</option>
-            <option value="Higher National Diploma (HND)">Higher National Diploma (HND)</option>
-          </select>
-        </label>
-        <label className="grid gap-1.5 md:max-w-sm">
-          <span className="brand-label">Field of Study</span>
-          <input className="brand-input" value={editFieldOfStudy} onChange={(e) => setEditFieldOfStudy(e.currentTarget.value)} maxLength={120} />
-        </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.degreeLevel")} (${t("english")})`}</span>
+            <select
+              className="brand-input"
+              value={editDegreeLevel}
+              onChange={(e) => setEditDegreeLevel(e.currentTarget.value as DegreeLevelValue | "")}
+              required
+            >
+              <option value="">Select degree level</option>
+              {DEGREE_LEVEL_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.degreeLevel")} (${t("french")})`}</span>
+            <select
+              className="brand-input"
+              value={editDegreeLevelFr}
+              onChange={(e) => setEditDegreeLevelFr(e.currentTarget.value)}
+              required
+            >
+              <option value="">Sélectionner le niveau d&apos;études</option>
+              {getDegreeLevelFrOptions(editDegreeLevelFr).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.fieldOfStudy")} (${t("english")})`}</span>
+            <input
+              className="brand-input"
+              value={editFieldOfStudy}
+              onChange={(e) => setEditFieldOfStudy(e.currentTarget.value)}
+              maxLength={120}
+              required
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.fieldOfStudy")} (${t("french")})`}</span>
+            <input
+              className="brand-input"
+              value={editFieldOfStudyFr}
+              onChange={(e) => setEditFieldOfStudyFr(e.currentTarget.value)}
+              maxLength={120}
+              required
+            />
+          </label>
+        </div>
 
         {/* <div className="grid gap-3 md:grid-cols-3">
           <label className="grid gap-1.5">
@@ -499,7 +581,7 @@ export function ProgramManageEditor({ programId }: Props) {
             <div className="flex flex-wrap gap-2 text-xs">
               {selectedEditCourses.map((course) => (
                 <span key={course.id} className="inline-flex items-center gap-2 rounded-full border border-[#9bbfed] bg-[#eff6ff] px-3 py-1 font-semibold text-[#0b3e81]">
-                  {course.code} - {course.title}
+                  {course.code} - {getCourseTitle(course, editSourceLanguage)}
                   <button type="button" className="text-[#1f518f] hover:text-[#0b3e81]" onClick={() => toggleEditCourse(course.id)}>
                     x
                   </button>
@@ -529,7 +611,7 @@ export function ProgramManageEditor({ programId }: Props) {
                         }}
                       >
                         <span className="truncate">
-                          {course.code} - {course.title}
+                          {course.code} - {getCourseTitle(course, editSourceLanguage)}
                         </span>
                       </button>
                     ))}

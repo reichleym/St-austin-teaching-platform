@@ -30,7 +30,9 @@ type CreateBody = {
   translations?: unknown;
   visibility?: ProgramVisibilityValue;
   degreeLevel?: string | null;
+  degreeLevelFr?: string | null;
   fieldOfStudy?: string | null;
+  fieldOfStudyFr?: string | null;
   programDetails?: ProgramDetailsInput;
   courseIds?: string[];
 };
@@ -50,7 +52,9 @@ type ProgramRecord = {
   description: string | null;
   programContent: string | null;
   degreeLevel: string | null;
+  degreeLevelFr: string | null;
   fieldOfStudy: string | null;
+  fieldOfStudyFr: string | null;
   sourceLanguage: string;
   translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
@@ -61,6 +65,7 @@ type CourseOption = {
   id: string;
   code: string;
   title: string;
+  titleFr: string | null;
 };
 
 type RawProgramRow = {
@@ -70,7 +75,9 @@ type RawProgramRow = {
   description: string | null;
   programContent: string | null;
   degreeLevel: string | null;
+  degreeLevelFr: string | null;
   fieldOfStudy: string | null;
+  fieldOfStudyFr: string | null;
   sourceLanguage: string;
   translations: Prisma.JsonValue | null;
   visibility: ProgramVisibilityValue;
@@ -82,6 +89,7 @@ type RawProgramCourseRow = {
   id: string;
   code: string;
   title: string;
+  titleFr: string | null;
 };
 
 function getProgramDelegate() {
@@ -150,6 +158,18 @@ ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMES
 ALTER TABLE "Program"
 ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "degreeLevel" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "fieldOfStudy" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "degreeLevelFr" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "fieldOfStudyFr" TEXT;
+
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1
@@ -210,25 +230,36 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
         createdAt: true,
       },
     });
-    return found
-      ? {
-          id: found.id,
-          code: found.code,
-          title: found.title,
-          description: found.description,
-          programContent: found.programContent,
-          degreeLevel: found.degreeLevel ?? null,
-          fieldOfStudy: found.fieldOfStudy ?? null,
-          sourceLanguage: found.sourceLanguage,
-          translations: found.translations as Prisma.JsonValue | null,
-          visibility: found.visibility as ProgramVisibilityValue,
-          createdAt: found.createdAt,
-        }
-      : null;
+    if (!found) return null;
+    const french = await prisma
+      .$queryRaw<Array<{ degreeLevelFr: string | null; fieldOfStudyFr: string | null }>>`
+        SELECT "degreeLevelFr", "fieldOfStudyFr"
+        FROM "Program"
+        WHERE "id" = ${programId}
+        LIMIT 1
+      `
+      .then((rows) => rows[0] ?? { degreeLevelFr: null, fieldOfStudyFr: null })
+      .catch(() => ({ degreeLevelFr: null, fieldOfStudyFr: null }));
+
+    return {
+      id: found.id,
+      code: found.code,
+      title: found.title,
+      description: found.description,
+      programContent: found.programContent,
+      degreeLevel: found.degreeLevel ?? null,
+      degreeLevelFr: french.degreeLevelFr ?? null,
+      fieldOfStudy: found.fieldOfStudy ?? null,
+      fieldOfStudyFr: french.fieldOfStudyFr ?? null,
+      sourceLanguage: found.sourceLanguage,
+      translations: found.translations as Prisma.JsonValue | null,
+      visibility: found.visibility as ProgramVisibilityValue,
+      createdAt: found.createdAt,
+    };
   }
 
   const rows = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     WHERE "id" = ${programId}
     LIMIT 1
@@ -265,6 +296,40 @@ async function listProgramsWithCourses() {
       orderBy: [{ title: "asc" }],
     });
 
+    const programIds = programs.map((program) => program.id);
+    const programFrenchRows = programIds.length
+      ? await prisma.$queryRaw<Array<{ id: string; degreeLevelFr: string | null; fieldOfStudyFr: string | null }>>`
+          SELECT "id", "degreeLevelFr", "fieldOfStudyFr"
+          FROM "Program"
+          WHERE "id" IN (${Prisma.join(programIds)})
+        `.catch(() => [])
+      : [];
+    const programFrenchById = new Map(programFrenchRows.map((row) => [row.id, row]));
+
+    const courseIdSet = new Set<string>();
+    for (const course of courseOptions) courseIdSet.add(course.id);
+    for (const program of programs) {
+      for (const relation of program.courses) {
+        courseIdSet.add(relation.course.id);
+      }
+    }
+    const courseIds = Array.from(courseIdSet);
+    const courseFrenchRows = courseIds.length
+      ? await prisma.$queryRaw<Array<{ id: string; titleFr: string | null }>>`
+          SELECT "id", "titleFr"
+          FROM "Course"
+          WHERE "id" IN (${Prisma.join(courseIds)})
+        `.catch(() => [])
+      : [];
+    const courseTitleFrById = new Map(courseFrenchRows.map((row) => [row.id, row.titleFr ?? null]));
+
+    const withFrenchTitle = (course: { id: string; code: string; title: string }): CourseOption => ({
+      id: course.id,
+      code: course.code,
+      title: course.title,
+      titleFr: courseTitleFrById.get(course.id) ?? null,
+    });
+
     return {
         programs: programs.map((program) => ({
         id: program.id,
@@ -272,25 +337,27 @@ async function listProgramsWithCourses() {
         title: program.title,
         description: program.description,
         programDetails: parseProgramContent(program.programContent),
-        degreeLevel: (program as any).degreeLevel ?? null,
-        fieldOfStudy: (program as any).fieldOfStudy ?? null,
+        degreeLevel: program.degreeLevel ?? null,
+        degreeLevelFr: programFrenchById.get(program.id)?.degreeLevelFr ?? null,
+        fieldOfStudy: program.fieldOfStudy ?? null,
+        fieldOfStudyFr: programFrenchById.get(program.id)?.fieldOfStudyFr ?? null,
         sourceLanguage: program.sourceLanguage,
         translations: program.translations,
         visibility: program.visibility as ProgramVisibilityValue,
         createdAt: program.createdAt,
-        courses: program.courses.map((item) => item.course),
+        courses: program.courses.map((item) => withFrenchTitle(item.course)),
       })),
-      courses: courseOptions,
+      courses: courseOptions.map((course) => withFrenchTitle(course)),
     };
   }
 
   const programs = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     ORDER BY "createdAt" DESC
   `;
   const courses = await prisma.$queryRaw<CourseOption[]>`
-    SELECT "id", "code", "title"
+    SELECT "id", "code", "title", "titleFr"
     FROM "Course"
     ORDER BY "title" ASC
   `;
@@ -298,7 +365,7 @@ async function listProgramsWithCourses() {
   const programIds = programs.map((item) => item.id);
   const relations = programIds.length
     ? await prisma.$queryRaw<RawProgramCourseRow[]>`
-        SELECT pc."programId", c."id", c."code", c."title"
+        SELECT pc."programId", c."id", c."code", c."title", c."titleFr"
         FROM "ProgramCourse" pc
         JOIN "Course" c ON c."id" = pc."courseId"
         WHERE pc."programId" IN (${Prisma.join(programIds)})
@@ -313,6 +380,7 @@ async function listProgramsWithCourses() {
       id: relation.id,
       code: relation.code,
       title: relation.title,
+      titleFr: relation.titleFr ?? null,
     });
     relationMap.set(relation.programId, current);
   }
@@ -324,8 +392,10 @@ async function listProgramsWithCourses() {
       title: program.title,
       description: program.description,
       programDetails: parseProgramContent(program.programContent),
-      degreeLevel: (program as any).degreeLevel ?? null,
-      fieldOfStudy: (program as any).fieldOfStudy ?? null,
+      degreeLevel: program.degreeLevel ?? null,
+      fieldOfStudy: program.fieldOfStudy ?? null,
+      degreeLevelFr: program.degreeLevelFr ?? null,
+      fieldOfStudyFr: program.fieldOfStudyFr ?? null,
       sourceLanguage: program.sourceLanguage,
       translations: program.translations,
       visibility: program.visibility,
@@ -401,8 +471,10 @@ export async function GET() {
         code: program.code,
         title: program.title,
         description: program.description,
-        degreeLevel: (program as any).degreeLevel ?? null,
-        fieldOfStudy: (program as any).fieldOfStudy ?? null,
+        degreeLevel: program.degreeLevel ?? null,
+        degreeLevelFr: program.degreeLevelFr ?? null,
+        fieldOfStudy: program.fieldOfStudy ?? null,
+        fieldOfStudyFr: program.fieldOfStudyFr ?? null,
         programDetails: program.programDetails,
         sourceLanguage: program.sourceLanguage,
         translations: program.translations,
@@ -454,6 +526,10 @@ export async function POST(request: NextRequest) {
     const normalizedDescription = description.trim() ? description : null;
     const visibility = parseProgramVisibility(body.visibility ?? PROGRAM_VISIBILITY_DRAFT) ?? PROGRAM_VISIBILITY_DRAFT;
     const courseIdsRaw = Array.isArray(body.courseIds) ? body.courseIds : [];
+    const degreeLevelFr =
+      typeof body.degreeLevelFr === "string" ? body.degreeLevelFr.trim() || null : body.degreeLevelFr ?? null;
+    const fieldOfStudyFr =
+      typeof body.fieldOfStudyFr === "string" ? body.fieldOfStudyFr.trim() || null : body.fieldOfStudyFr ?? null;
 
     const titleError = validateProgramTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
@@ -485,6 +561,13 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        await tx.$executeRaw`
+          UPDATE "Program"
+          SET "degreeLevelFr" = ${degreeLevelFr},
+              "fieldOfStudyFr" = ${fieldOfStudyFr}
+          WHERE "id" = ${program.id}
+        `.catch(() => {});
+
         if (coursesValidation.ids.length) {
           await tx.programCourse.createMany({
             data: coursesValidation.ids.map((courseId) => ({
@@ -502,8 +585,8 @@ export async function POST(request: NextRequest) {
       createdId = makeId("prg");
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
-          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "degreeLevel", "fieldOfStudy", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
-          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${body.degreeLevel ?? null}, ${body.fieldOfStudy ?? null}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
+          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
+          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${body.degreeLevel ?? null}, ${degreeLevelFr}, ${body.fieldOfStudy ?? null}, ${fieldOfStudyFr}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
         `;
 
         if (coursesValidation.ids.length) {
@@ -524,7 +607,9 @@ export async function POST(request: NextRequest) {
           title,
           description: normalizedDescription,
           degreeLevel: body.degreeLevel ?? null,
+          degreeLevelFr,
           fieldOfStudy: body.fieldOfStudy ?? null,
+          fieldOfStudyFr,
           programDetails: normalizedProgramDetails.value,
           sourceLanguage,
           translations: locPayload.data.translations,
@@ -588,6 +673,18 @@ export async function PATCH(request: NextRequest) {
     const normalizedDescription = description.trim() ? description : null;
     const visibility = parseProgramVisibility(body.visibility) ?? PROGRAM_VISIBILITY_DRAFT;
     const courseIdsRaw = Array.isArray(body.courseIds) ? body.courseIds : [];
+    const degreeLevelFr =
+      body.degreeLevelFr === undefined
+        ? undefined
+        : typeof body.degreeLevelFr === "string"
+          ? body.degreeLevelFr.trim() || null
+          : body.degreeLevelFr ?? null;
+    const fieldOfStudyFr =
+      body.fieldOfStudyFr === undefined
+        ? undefined
+        : typeof body.fieldOfStudyFr === "string"
+          ? body.fieldOfStudyFr.trim() || null
+          : body.fieldOfStudyFr ?? null;
 
     if (title !== existing.title) {
       const titleError = validateProgramTitle(title);
@@ -612,17 +709,25 @@ export async function PATCH(request: NextRequest) {
         visibility,
       };
       if (body.degreeLevel !== undefined) {
-        // @ts-ignore
         data.degreeLevel = body.degreeLevel ?? null;
       }
       if (body.fieldOfStudy !== undefined) {
-        // @ts-ignore
         data.fieldOfStudy = body.fieldOfStudy ?? null;
       }
 
       await prisma.$transaction(async (tx) => {
         await tx.programCourse.deleteMany({ where: { programId } });
         await tx.program.update({ where: { id: programId }, data });
+        if (degreeLevelFr !== undefined || fieldOfStudyFr !== undefined) {
+          const nextDegreeLevelFr = degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr;
+          const nextFieldOfStudyFr = fieldOfStudyFr !== undefined ? fieldOfStudyFr : existing.fieldOfStudyFr;
+          await tx.$executeRaw`
+            UPDATE "Program"
+            SET "degreeLevelFr" = ${nextDegreeLevelFr},
+                "fieldOfStudyFr" = ${nextFieldOfStudyFr}
+            WHERE "id" = ${programId}
+          `.catch(() => {});
+        }
         if (coursesValidation.ids.length) {
           await tx.programCourse.createMany({
             data: coursesValidation.ids.map((courseId) => ({
@@ -642,6 +747,8 @@ export async function PATCH(request: NextRequest) {
       const nextTranslations = body.translations !== undefined ? locPayload.data.translations : existing.translations;
       const nextDegreeLevel = body.degreeLevel !== undefined ? body.degreeLevel ?? null : existing.degreeLevel;
       const nextFieldOfStudy = body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy;
+      const nextDegreeLevelFr = degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr;
+      const nextFieldOfStudyFr = fieldOfStudyFr !== undefined ? fieldOfStudyFr : existing.fieldOfStudyFr;
 
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
@@ -650,7 +757,9 @@ export async function PATCH(request: NextRequest) {
               "description" = ${nextDescription},
               "programContent" = ${nextProgramContent},
               "degreeLevel" = ${nextDegreeLevel},
+              "degreeLevelFr" = ${nextDegreeLevelFr},
               "fieldOfStudy" = ${nextFieldOfStudy},
+              "fieldOfStudyFr" = ${nextFieldOfStudyFr},
               "sourceLanguage" = ${nextSourceLanguage},
               "translations" = ${JSON.stringify(nextTranslations)}::jsonb,
               "visibility" = CAST(${nextVisibility} AS "ProgramVisibility"),
@@ -681,7 +790,9 @@ export async function PATCH(request: NextRequest) {
             ? parseProgramContent(serializedProgramContent)
             : parseProgramContent(existing.programContent),
         degreeLevel: body.degreeLevel !== undefined ? body.degreeLevel ?? null : existing.degreeLevel ?? null,
+        degreeLevelFr: degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr ?? null,
         fieldOfStudy: body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy ?? null,
+        fieldOfStudyFr: fieldOfStudyFr !== undefined ? fieldOfStudyFr : existing.fieldOfStudyFr ?? null,
         sourceLanguage,
         translations: locPayload.data.translations,
         visibility: body.visibility !== undefined ? visibility : existing.visibility,

@@ -18,7 +18,9 @@ import { prisma } from "@/lib/prisma";
 
 type CreateBody = {
   title?: string;
+  titleFr?: string;
   description?: string | null;
+  descriptionFr?: string | null;
   programDetails?: unknown;
   startDate?: string;
   endDate?: string;
@@ -31,7 +33,9 @@ type CreateBody = {
 type UpdateBody = {
   courseId?: string;
   title?: string;
+  titleFr?: string;
   description?: string | null;
+  descriptionFr?: string | null;
   programDetails?: unknown;
   startDate?: string;
   endDate?: string;
@@ -170,10 +174,16 @@ async function ensureCourseMetadataSchema() {
   await prisma.$executeRawUnsafe(`
 ALTER TABLE "Course"
 ADD COLUMN IF NOT EXISTS "programContent" TEXT;
+
+ALTER TABLE "Course"
+ADD COLUMN IF NOT EXISTS "titleFr" TEXT;
+
+ALTER TABLE "Course"
+ADD COLUMN IF NOT EXISTS "descriptionFr" TEXT;
   `);
 }
 
-async function doesCourseColumnExist(columnName: "programContent") {
+async function doesCourseColumnExist(columnName: "programContent" | "titleFr" | "descriptionFr") {
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS (
@@ -657,15 +667,31 @@ export async function GET(request: NextRequest) {
       pendingEnrollmentRequestCount = Number(rows[0]?.count ?? 0);
     }
 
+    const courseFrenchById = new Map<string, { titleFr: string | null; descriptionFr: string | null }>();
+    if (courses.length) {
+      const courseIds = courses.map((course) => course.id);
+      const rows = await prisma.$queryRaw<Array<{ id: string; titleFr: string | null; descriptionFr: string | null }>>`
+        SELECT "id", "titleFr", "descriptionFr"
+        FROM "Course"
+        WHERE "id" IN (${Prisma.join(courseIds)})
+      `.catch(() => []);
+      for (const row of rows) {
+        courseFrenchById.set(row.id, { titleFr: row.titleFr ?? null, descriptionFr: row.descriptionFr ?? null });
+      }
+    }
+
     return NextResponse.json({
       viewerId: user.id,
       courses: courses.map((course) => {
         const myEnrollment = course.enrollments.find((item) => item.studentId === user.id) ?? null;
+        const french = courseFrenchById.get(course.id) ?? { titleFr: null, descriptionFr: null };
         return {
           id: course.id,
           code: course.code,
           title: course.title,
+          titleFr: french.titleFr,
           description: course.description,
+          descriptionFr: french.descriptionFr,
           programDetails: parseCourseProgramContent(course.programContent),
           startDate: course.startDate?.toISOString() ?? null,
           endDate: course.endDate?.toISOString() ?? null,
@@ -726,6 +752,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as CreateBody;
     const title = body.title?.trim() ?? "";
+    const titleFrInput = body.titleFr;
     
     const normalizedProgramDetails = normalizeCourseProgramDetailsInput(body.programDetails);
     if (!normalizedProgramDetails.ok) {
@@ -733,6 +760,7 @@ export async function POST(request: NextRequest) {
     }
     const serializedProgramContent = serializeCourseProgramContent(normalizedProgramDetails.value);
     const description = normalizeDescription(body.description);
+    const descriptionFr = normalizeDescription(body.descriptionFr);
     const startDate = parseCourseDateInput(body.startDate);
     const endDate = parseCourseDateInput(body.endDate);
     const visibility =
@@ -740,6 +768,15 @@ export async function POST(request: NextRequest) {
 
     const titleError = validateCourseTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
+
+    const titleFr =
+      titleFrInput === undefined || titleFrInput === null
+        ? null
+        : String(titleFrInput).trim();
+    if (titleFrInput !== undefined) {
+      const titleFrError = validateCourseTitle(titleFr ?? "");
+      if (titleFrError) return NextResponse.json({ error: titleFrError }, { status: 400 });
+    }
     
     if (!startDate || !endDate) {
       return NextResponse.json({ error: "Course start date and end date are required." }, { status: 400 });
@@ -747,6 +784,12 @@ export async function POST(request: NextRequest) {
     const durationError = validateCourseDuration(startDate, endDate);
     if (durationError) return NextResponse.json({ error: durationError }, { status: 400 });
     if ((body.description ?? "").toString().length > COURSE_DESCRIPTION_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: `Course description must not exceed ${COURSE_DESCRIPTION_MAX_LENGTH} characters.` },
+        { status: 400 }
+      );
+    }
+    if ((body.descriptionFr ?? "").toString().length > COURSE_DESCRIPTION_MAX_LENGTH) {
       return NextResponse.json(
         { error: `Course description must not exceed ${COURSE_DESCRIPTION_MAX_LENGTH} characters.` },
         { status: 400 }
@@ -824,6 +867,13 @@ export async function POST(request: NextRequest) {
         `.catch(() => {});
       }
 
+      await tx.$executeRaw`
+        UPDATE "Course"
+        SET "titleFr" = ${titleFr},
+            "descriptionFr" = ${descriptionFr}
+        WHERE "id" = ${course.id}
+      `.catch(() => {});
+
       return course;
     });
 
@@ -875,7 +925,9 @@ export async function POST(request: NextRequest) {
           id: created.id,
           code: created.code,
           title: created.title,
+          titleFr,
           description: created.description,
+          descriptionFr,
           programDetails: normalizedProgramDetails.value,
           startDate: created.startDate?.toISOString() ?? null,
           endDate: created.endDate?.toISOString() ?? null,
@@ -936,7 +988,9 @@ export async function PATCH(request: NextRequest) {
       | {
           id: string;
           title: string;
+          titleFr: string | null;
           description: string | null;
+          descriptionFr: string | null;
           programContent: string | null;
           startDate: Date | null;
           endDate: Date | null;
@@ -960,7 +1014,7 @@ export async function PATCH(request: NextRequest) {
             visibility: true,
           },
         });
-        existing = result ? { ...result, legacySchema: false } : null;
+        existing = result ? { ...result, titleFr: null, descriptionFr: null, legacySchema: false } : null;
       } else {
           const result = await prisma.course.findUnique({
           where: { id: courseId },
@@ -987,7 +1041,7 @@ export async function PATCH(request: NextRequest) {
           } catch {
             programContent = null;
           }
-          existing = { ...result, programContent, legacySchema: false };
+          existing = { ...result, titleFr: null, descriptionFr: null, programContent, legacySchema: false };
         } else {
           existing = null;
         }
@@ -1001,6 +1055,8 @@ export async function PATCH(request: NextRequest) {
       existing = legacy
         ? {
             ...legacy,
+            titleFr: null,
+            descriptionFr: null,
             programContent: null,
             startDate: null,
             endDate: null,
@@ -1013,14 +1069,37 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
     }
 
+    try {
+      const rows = await prisma.$queryRaw<Array<{ titleFr: string | null; descriptionFr: string | null }>>`
+        SELECT "titleFr", "descriptionFr"
+        FROM "Course"
+        WHERE "id" = ${courseId}
+        LIMIT 1
+      `;
+      existing.titleFr = rows[0]?.titleFr ?? null;
+      existing.descriptionFr = rows[0]?.descriptionFr ?? null;
+    } catch {
+      existing.titleFr = null;
+      existing.descriptionFr = null;
+    }
+
     const data: Prisma.CourseUpdateInput = {};
     let pendingProgramContentUpdate: string | null | undefined = undefined;
+    let pendingTitleFrUpdate: string | null | undefined = undefined;
+    let pendingDescriptionFrUpdate: string | null | undefined = undefined;
 
     if (body.title !== undefined) {
       const title = body.title.trim();
       const titleError = validateCourseTitle(title);
       if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
       data.title = title;
+    }
+
+    if (body.titleFr !== undefined) {
+      const titleFr = String(body.titleFr ?? "").trim();
+      const titleFrError = validateCourseTitle(titleFr);
+      if (titleFrError) return NextResponse.json({ error: titleFrError }, { status: 400 });
+      pendingTitleFrUpdate = titleFr;
     }
 
     if (body.description !== undefined) {
@@ -1031,6 +1110,16 @@ export async function PATCH(request: NextRequest) {
         );
       }
       data.description = normalizeDescription(body.description);
+    }
+
+    if (body.descriptionFr !== undefined) {
+      if (typeof body.descriptionFr === "string" && body.descriptionFr.length > COURSE_DESCRIPTION_MAX_LENGTH) {
+        return NextResponse.json(
+          { error: `Course description must not exceed ${COURSE_DESCRIPTION_MAX_LENGTH} characters.` },
+          { status: 400 }
+        );
+      }
+      pendingDescriptionFrUpdate = normalizeDescription(body.descriptionFr);
     }
 
     
@@ -1097,7 +1186,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     const hasDirectDataUpdates = Object.keys(data).length > 0;
-    const hasRawFallbackUpdates = pendingProgramContentUpdate !== undefined;
+    const hasRawFallbackUpdates =
+      pendingProgramContentUpdate !== undefined ||
+      pendingTitleFrUpdate !== undefined ||
+      pendingDescriptionFrUpdate !== undefined;
 
     if (!hasDirectDataUpdates && !hasRawFallbackUpdates) {
       if (!Array.isArray(studentIds) && !Array.isArray(departmentHeadIds)) {
@@ -1252,6 +1344,17 @@ export async function PATCH(request: NextRequest) {
           WHERE "id" = ${courseId}
         `.catch(() => {});
       }
+      if (pendingTitleFrUpdate !== undefined || pendingDescriptionFrUpdate !== undefined) {
+        const nextTitleFr = pendingTitleFrUpdate !== undefined ? pendingTitleFrUpdate : existing.titleFr;
+        const nextDescriptionFr =
+          pendingDescriptionFrUpdate !== undefined ? pendingDescriptionFrUpdate : existing.descriptionFr;
+        await tx.$executeRaw`
+          UPDATE "Course"
+          SET "titleFr" = ${nextTitleFr},
+              "descriptionFr" = ${nextDescriptionFr}
+          WHERE "id" = ${courseId}
+        `.catch(() => {});
+      }
       return updatedCourse;
     });
 
@@ -1269,6 +1372,9 @@ export async function PATCH(request: NextRequest) {
         : "programContent" in updated
           ? parseCourseProgramContent((updated.programContent as string | null | undefined) ?? null)
           : parseCourseProgramContent(existing.programContent);
+    const updatedTitleFr = pendingTitleFrUpdate !== undefined ? pendingTitleFrUpdate : existing.titleFr;
+    const updatedDescriptionFr =
+      pendingDescriptionFrUpdate !== undefined ? pendingDescriptionFrUpdate : existing.descriptionFr;
 
     return NextResponse.json({
       ok: true,
@@ -1276,7 +1382,9 @@ export async function PATCH(request: NextRequest) {
         id: updated.id,
         code: updated.code,
         title: updated.title,
+        titleFr: updatedTitleFr,
         description: updated.description,
+        descriptionFr: updatedDescriptionFr,
         programDetails: updatedProgramDetails,
         startDate: existing.legacySchema ? null : updatedStartDate?.toISOString() ?? null,
         endDate: existing.legacySchema ? null : updatedEndDate?.toISOString() ?? null,

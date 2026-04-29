@@ -546,6 +546,16 @@ export default async function DashboardDetailPage({ params }: Props) {
       .then((rows) => parseProgramContent(rows[0]?.programContent ?? null))
       .catch(() => null);
 
+    const courseFrench = await prisma
+      .$queryRaw<Array<{ titleFr: string | null; descriptionFr: string | null }>>`
+        SELECT "titleFr", "descriptionFr"
+        FROM "Course"
+        WHERE "id" = ${course.id}
+        LIMIT 1
+      `
+      .then((rows) => rows[0] ?? { titleFr: null, descriptionFr: null })
+      .catch(() => ({ titleFr: null, descriptionFr: null }));
+
     const [teachers, students, departmentHeads, enrolledStudents, assignedDepartmentHeads] = isSuperAdmin
       ? await Promise.all([
           prisma.user.findMany({
@@ -575,9 +585,11 @@ export default async function DashboardDetailPage({ params }: Props) {
       id: course.id,
       code: course.code,
       title: course.title,
+      titleFr: courseFrench.titleFr ?? null,
       degreeLevel: courseDegreeLevel,
       fieldOfStudy: courseFieldOfStudy,
       description: course.description,
+      descriptionFr: courseFrench.descriptionFr ?? null,
       startDate: course.startDate ? course.startDate.toISOString() : null,
       endDate: course.endDate ? course.endDate.toISOString() : null,
       visibility: course.visibility,

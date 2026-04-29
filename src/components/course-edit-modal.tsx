@@ -19,9 +19,11 @@ type CourseSnapshot = {
   id: string;
   code: string;
   title: string;
+  titleFr: string | null;
   degreeLevel: string | null;
   fieldOfStudy: string | null;
   description: string | null;
+  descriptionFr: string | null;
   startDate: string | null;
   endDate: string | null;
   visibility: "DRAFT" | "PUBLISHED";
@@ -60,8 +62,10 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const [pending, setPending] = useState(false);
 
   const [title, setTitle] = useState(course.title);
+  const [titleFr, setTitleFr] = useState(course.titleFr ?? "");
   
   const [description, setDescription] = useState(course.description ?? "");
+  const [descriptionFr, setDescriptionFr] = useState(course.descriptionFr ?? "");
   const [startDate, setStartDate] = useState(toDateInputValue(course.startDate));
   const [endDate, setEndDate] = useState(toDateInputValue(course.endDate));
   const [visibility, setVisibility] = useState<"DRAFT" | "PUBLISHED">(course.visibility);
@@ -95,8 +99,10 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const openModal = () => {
     setError("");
     setTitle(course.title);
+    setTitleFr(course.titleFr ?? "");
     
     setDescription(course.description ?? "");
+    setDescriptionFr(course.descriptionFr ?? "");
     setStartDate(toDateInputValue(course.startDate));
     setEndDate(toDateInputValue(course.endDate));
     setVisibility(course.visibility);
@@ -177,7 +183,12 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextTitle = title.trim();
+    const nextTitleFr = titleFr.trim();
     if (!nextTitle) {
+      setError(t("error.courseTitleRequired"));
+      return;
+    }
+    if (!nextTitleFr) {
       setError(t("error.courseTitleRequired"));
       return;
     }
@@ -197,7 +208,9 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
         body: JSON.stringify({
           courseId: course.id,
           title: nextTitle,
+          titleFr: nextTitleFr,
           description: description.trim(),
+          descriptionFr: descriptionFr.trim(),
           startDate,
           endDate,
           visibility,
@@ -241,10 +254,28 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                     <span className="brand-label">{t("label.course")}</span>
                     <input className="brand-input" value={course.code} disabled />
                   </label>
-                  <label className="grid gap-1.5">
-                    <span className="brand-label">{t("label.courseTitle")}</span>
-                    <input className="brand-input" value={title} onChange={(event) => setTitle(event.currentTarget.value)} maxLength={120} required />
-                  </label>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">{`${t("label.courseTitle")} (${t("english")})`}</span>
+                      <input
+                        className="brand-input"
+                        value={title}
+                        onChange={(event) => setTitle(event.currentTarget.value)}
+                        maxLength={120}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">{`${t("label.courseTitle")} (${t("french")})`}</span>
+                      <input
+                        className="brand-input"
+                        value={titleFr}
+                        onChange={(event) => setTitleFr(event.currentTarget.value)}
+                        maxLength={120}
+                        required
+                      />
+                    </label>
+                  </div>
                   {/* Degree level and field of study moved to Programs module; hidden on Course edit */}
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-1.5">
@@ -313,10 +344,26 @@ export function CourseEditModalTrigger({ course, teachers, students, departmentH
                       </div>
                     </div>
                   </label>
-                  <label className="grid gap-1.5">
-                    <span className="brand-label">{t("label.descriptionOptional")}</span>
-                    <textarea className="brand-input min-h-[90px]" value={description} onChange={(event) => setDescription(event.currentTarget.value)} maxLength={2000} />
-                  </label>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">{`${t("label.descriptionOptional")} (${t("english")})`}</span>
+                      <textarea
+                        className="brand-input min-h-[90px]"
+                        value={description}
+                        onChange={(event) => setDescription(event.currentTarget.value)}
+                        maxLength={2000}
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
+                      <span className="brand-label">{`${t("label.descriptionOptional")} (${t("french")})`}</span>
+                      <textarea
+                        className="brand-input min-h-[90px]"
+                        value={descriptionFr}
+                        onChange={(event) => setDescriptionFr(event.currentTarget.value)}
+                        maxLength={2000}
+                      />
+                    </label>
+                  </div>
 
                   <div className="grid gap-1.5">
                     <span className="brand-label">{t("label.assignedDepartmentHeads")}</span>

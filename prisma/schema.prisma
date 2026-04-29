@@ -235,7 +235,9 @@ model Course {
   id                 String              @id @default(cuid())
   code               String              @unique
   title              String
+  titleFr            String?
   description        String?
+  descriptionFr      String?
   programContent     String?
   startDate          DateTime?
   endDate            DateTime?
@@ -257,7 +259,9 @@ model Program {
   code               String   @unique
   title              String
   degreeLevel        String?
+  degreeLevelFr      String?
   fieldOfStudy       String?
+  fieldOfStudyFr     String?
   description        String?
   programContent     String?
   sourceLanguage     String              @default("en")
@@ -743,4 +747,3 @@ model GovernmentEmployeesSection {
   @@unique([pageId, sectionKey])
   @@index([pageId, position])
 }
-

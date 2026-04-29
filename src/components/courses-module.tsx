@@ -20,9 +20,11 @@ type CourseItem = {
   id: string;
   code: string;
   title: string;
+  titleFr: string | null;
   degreeLevel: string | null;
   fieldOfStudy: string | null;
   description: string | null;
+  descriptionFr: string | null;
   programDetails: ProgramDetails | null;
   startDate: string | null;
   endDate: string | null;
@@ -115,7 +117,7 @@ const formatDurationYmd = (startIso: string | null, endIso: string | null) => {
 };
 
 export function CoursesModule({ role, viewMode = "all", showModuleManagement = true }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const isSuperAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
   const isDepartmentHead = role === "DEPARTMENT_HEAD";
   const isStudent = role === "STUDENT";
@@ -146,6 +148,8 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
 
   const visibilityLabel = (value: CourseItem["visibility"]) =>
     value === "DRAFT" ? t("visibility.draft") : t("visibility.published");
+  const getCourseDisplayTitle = (course: { title: string; titleFr?: string | null }) =>
+    language === "fr" && course.titleFr ? course.titleFr : course.title;
 
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [teachers, setTeachers] = useState<PersonOption[]>([]);
@@ -158,7 +162,9 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [showCreate, setShowCreate] = useState(false);
   const [editCourseId, setEditCourseId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
+  const [createTitleFr, setCreateTitleFr] = useState("");
   const [createDescription, setCreateDescription] = useState("");
+  const [createDescriptionFr, setCreateDescriptionFr] = useState("");
   const [createStartDate, setCreateStartDate] = useState("");
   const [createEndDate, setCreateEndDate] = useState("");
   const [createVisibility, setCreateVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
@@ -171,7 +177,9 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
   const [createPending, setCreatePending] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
+  const [editTitleFr, setEditTitleFr] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editDescriptionFr, setEditDescriptionFr] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
@@ -245,7 +253,9 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
     if (!selected) return;
 
     setEditTitle(selected.title);
+    setEditTitleFr(selected.titleFr ?? "");
     setEditDescription(selected.description ?? "");
+    setEditDescriptionFr(selected.descriptionFr ?? "");
     setEditStartDate(toDateInputValue(selected.startDate));
     setEditEndDate(toDateInputValue(selected.endDate));
     setEditVisibility(selected.visibility);
@@ -373,7 +383,9 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: createTitle,
+          titleFr: createTitleFr,
           description: createDescription,
+          descriptionFr: createDescriptionFr,
           startDate: createStartDate,
           endDate: createEndDate,
           visibility: createVisibility,
@@ -393,8 +405,10 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
 
       setShowCreate(false);
       setCreateTitle("");
+      setCreateTitleFr("");
       
       setCreateDescription("");
+      setCreateDescriptionFr("");
       setCreateStartDate("");
       setCreateEndDate("");
       setCreateVisibility("DRAFT");
@@ -428,7 +442,9 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
         body: JSON.stringify({
           courseId: editCourseId,
           title: editTitle,
+          titleFr: editTitleFr,
           description: editDescription,
+          descriptionFr: editDescriptionFr,
           startDate: editStartDate,
           endDate: editEndDate,
           visibility: editVisibility,
@@ -570,6 +586,16 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
               <button
                 className="btn-brand-primary px-2 py-2 text-sm font-semibold"
                 onClick={() => {
+                  setCreateTitle("");
+                  setCreateTitleFr("");
+                  setCreateDescription("");
+                  setCreateDescriptionFr("");
+                  setCreateStartDate("");
+                  setCreateEndDate("");
+                  setCreateVisibility("DRAFT");
+                  setCreateTeacherId("");
+                  setCreateStudentIds([]);
+                  setCreateDepartmentHeadIds([]);
                   setCreateTeacherSearch("");
                   setCreateDepartmentHeadSearch("");
                   setCreateStudentSearch("");
@@ -590,7 +616,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 <option value="">{t("filter.allCourses")}</option>
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>
-                    {course.code} - {course.title}
+                    {course.code} - {getCourseDisplayTitle(course)}
                   </option>
                 ))}
               </select>
@@ -671,7 +697,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                     <tr className="border-b border-[#e7f0fc] text-[#0d3f80]">
                       <td className="px-3 py-2 font-semibold">{course.code}</td>
                       <td className="px-3 py-2">
-                        <p>{course.title}</p>
+                        <p>{getCourseDisplayTitle(course)}</p>
                         {/* Degree level and field of study moved to Programs; hidden on Courses */}
                         {course.description ? <p className="mt-1 text-xs text-[#3768ac]">{course.description}</p> : null}
                         {course.programDetails?.tuitionAndFees ? (
@@ -754,7 +780,7 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                                   onClick={() =>
                                     setConfirmDeleteCourse({
                                       id: course.id,
-                                      label: `${course.code} - ${course.title}`,
+                                      label: `${course.code} - ${getCourseDisplayTitle(course)}`,
                                     })
                                   }
                                   disabled={deletePendingCourseId === course.id}
@@ -791,10 +817,28 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
           <section className="brand-card w-full max-w-5xl p-5">
             <p className="brand-section-title">{t("course.createTitle")}</p>
             <form className="mt-3 grid gap-4" onSubmit={onCreateCourse}>
-              <label className="grid gap-1.5">
-                <span className="brand-label">{t("label.courseTitle")}</span>
-                <input className="brand-input" value={createTitle} onChange={(event) => setCreateTitle(event.currentTarget.value)} maxLength={120} required />
-              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="brand-label">{`${t("label.courseTitle")} (${t("english")})`}</span>
+                  <input
+                    className="brand-input"
+                    value={createTitle}
+                    onChange={(event) => setCreateTitle(event.currentTarget.value)}
+                    maxLength={120}
+                    required
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">{`${t("label.courseTitle")} (${t("french")})`}</span>
+                  <input
+                    className="brand-input"
+                    value={createTitleFr}
+                    onChange={(event) => setCreateTitleFr(event.currentTarget.value)}
+                    maxLength={120}
+                    required
+                  />
+                </label>
+              </div>
               {/* Degree level and field of study moved to Programs module; hidden on Course create */}
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="grid gap-1.5">
@@ -925,10 +969,26 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                   </div>
                 </div>
               </div>
-              <label className="grid gap-1.5">
-                <span className="brand-label">{t("label.descriptionOptional")}</span>
-                <textarea className="brand-input min-h-[90px]" value={createDescription} onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={2000} />
-              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="brand-label">{`${t("label.descriptionOptional")} (${t("english")})`}</span>
+                  <textarea
+                    className="brand-input min-h-[90px]"
+                    value={createDescription}
+                    onChange={(event) => setCreateDescription(event.currentTarget.value)}
+                    maxLength={2000}
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">{`${t("label.descriptionOptional")} (${t("french")})`}</span>
+                  <textarea
+                    className="brand-input min-h-[90px]"
+                    value={createDescriptionFr}
+                    onChange={(event) => setCreateDescriptionFr(event.currentTarget.value)}
+                    maxLength={2000}
+                  />
+                </label>
+              </div>
               <div className="grid gap-1.5">
                 <span className="brand-label">{t("label.enrollStudentsDuringCreation")}</span>
                 <div className="grid gap-2">
@@ -1019,10 +1079,28 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
               <span className="brand-label">{t("label.course")}</span>
               <input className="brand-input" value={courses.find((course) => course.id === editCourseId)?.code ?? ""} disabled />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">{t("label.courseTitle")}</span>
-              <input className="brand-input" value={editTitle} onChange={(event) => setEditTitle(event.currentTarget.value)} maxLength={120} required />
-            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="brand-label">{`${t("label.courseTitle")} (${t("english")})`}</span>
+                <input
+                  className="brand-input"
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.currentTarget.value)}
+                  maxLength={120}
+                  required
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">{`${t("label.courseTitle")} (${t("french")})`}</span>
+                <input
+                  className="brand-input"
+                  value={editTitleFr}
+                  onChange={(event) => setEditTitleFr(event.currentTarget.value)}
+                  maxLength={120}
+                  required
+                />
+              </label>
+            </div>
             {/* Degree level and field of study moved to Programs module; hidden on Course edit */}
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1.5">
@@ -1153,10 +1231,26 @@ export function CoursesModule({ role, viewMode = "all", showModuleManagement = t
                 </div>
               </div>
             </div>
-            <label className="grid gap-1.5">
-              <span className="brand-label">{t("label.descriptionOptional")}</span>
-              <textarea className="brand-input min-h-[90px]" value={editDescription} onChange={(event) => setEditDescription(event.currentTarget.value)} maxLength={2000} />
-            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="brand-label">{`${t("label.descriptionOptional")} (${t("english")})`}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={editDescription}
+                  onChange={(event) => setEditDescription(event.currentTarget.value)}
+                  maxLength={2000}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">{`${t("label.descriptionOptional")} (${t("french")})`}</span>
+                <textarea
+                  className="brand-input min-h-[90px]"
+                  value={editDescriptionFr}
+                  onChange={(event) => setEditDescriptionFr(event.currentTarget.value)}
+                  maxLength={2000}
+                />
+              </label>
+            </div>
             <div className="grid gap-1.5">
               <span className="brand-label">{t("label.manageStudents")}</span>
               <div className="flex flex-wrap items-center gap-2 text-xs">
