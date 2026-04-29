@@ -18,7 +18,9 @@ function asString(value: unknown) {
 
 function asArrayOfObjects(value: unknown): JsonObject[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isJsonObject);
+  // Preserve indices/length so translations stay aligned across languages.
+  // Sparse arrays or `null` entries can otherwise cause data to appear "lost" after JSON roundtrips.
+  return value.map((entry) => (isJsonObject(entry) ? entry : {}));
 }
 
 function AdminImagePicker({
@@ -185,8 +187,8 @@ function createDraftDonationsPage(): DynamicPage {
         content: {
           sourceLanguage: "en",
           translations: {
-            en: { stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives. Last year, donor-funded scholarships helped over 1,200 students complete their degrees and launch successful careers." },
-            fr: { stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives." },
+            en: { title: "Why Give", stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives. Last year, donor-funded scholarships helped over 1,200 students complete their degrees and launch successful careers." },
+            fr: { title: "Why Give", stats: { raised: "$2.4M", students: "1,200+" }, description: "Your generosity directly impacts students' lives." },
           },
         },
       },
@@ -268,7 +270,34 @@ export default function DonationsEditor() {
     setSaving(true);
     setError("");
     try {
-      const sanitizedPage: DynamicPage = { ...page, sections: page.sections.map((section) => { const rawContent = section.content as unknown; if (!isJsonObject(rawContent) || !("translations" in rawContent)) return section; const translationsCandidate = (rawContent as Record<string, unknown>).translations; if (!isJsonObject(translationsCandidate)) return section; const translations = translationsCandidate as Record<string, unknown>; const cleanedTranslations: Record<string, unknown> = { ...translations }; for (const [language, value] of Object.entries(translations)) { if (!isJsonObject(value)) continue; const next = { ...value }; delete next["className"]; delete next["classNameCard"]; cleanedTranslations[language] = next; } return { ...section, content: { ...(rawContent as JsonObject), translations: cleanedTranslations } }; }), };
+      const sanitizedPage: DynamicPage = {
+        ...page,
+        sections: page.sections.map((section) => {
+          const rawContent = section.content as unknown;
+          if (!isJsonObject(rawContent) || !("translations" in rawContent)) return section;
+          const translationsCandidate = (rawContent as Record<string, unknown>).translations;
+          if (!isJsonObject(translationsCandidate)) return section;
+
+          const translations = translationsCandidate as Record<string, unknown>;
+          const cleanedTranslations: Record<string, unknown> = { ...translations };
+
+          for (const [language, value] of Object.entries(translations)) {
+            if (!isJsonObject(value)) continue;
+            const next = { ...value };
+
+            delete next["className"];
+            delete next["classNameCard"];
+
+            if (section.componentType === "WhyGiveSection") {
+              delete next["blockContent"];
+            }
+
+            cleanedTranslations[language] = next;
+          }
+
+          return { ...section, content: { ...(rawContent as JsonObject), translations: cleanedTranslations } };
+        }),
+      };
 
       const method = "PUT";
       const endpoint = `/api/admin/pages/${page.slug}`;
@@ -377,7 +406,7 @@ function GenericSectionForm({ content, onUpdate }: { content: unknown; onUpdate:
   useEffect(() => {
     const out: Record<string, string> = {};
     for (const lang of supportedLanguages) out[lang] = JSON.stringify((getLocalizedSectionEnvelopeDraft(content).translations[lang] ?? {}), null, 2);
-    setLocalJson(out);
+    queueMicrotask(() => setLocalJson(out));
   }, [content]);
 
   const saveLang = (lang: string) => {
@@ -414,21 +443,17 @@ function BannerSectionForm({ content, onUpdate }: { content: unknown; onUpdate: 
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
 
-  const setSourceLanguage = (next: Language) => {
-    onUpdate({ sourceLanguage: next, translations });
-  };
-
   const updateTranslation = (language: Language, nextValue: JsonObject) => {
     onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((entryLanguage) => {
           const fields = translations[entryLanguage] ?? {};
           return (
-            <fieldset key={entryLanguage} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={entryLanguage} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-[#0b3e81]">{languageLabelFallback(entryLanguage)} version</span>
@@ -514,8 +539,11 @@ function IconCardSectionForm({ content, onUpdate }: { content: unknown; onUpdate
 
   const updateCardField = (language: Language, index: number, field: "cardTitle" | "cardDescription" | "icon", value: string) => {
     const fields = translations[language] ?? {};
-    const cards = Array.isArray(fields.blockContent) ? [...fields.blockContent] : [];
-    cards[index] = { ...(cards[index] ?? {}), [field]: value };
+    const cards = asArrayOfObjects(fields.blockContent).slice();
+    while (cards.length <= index) {
+      cards.push({ cardTitle: "", cardDescription: "", icon: "" });
+    }
+    cards[index] = { ...cards[index], [field]: value };
     updateTranslation(language, { ...fields, blockContent: cards });
   };
 
@@ -530,13 +558,13 @@ function IconCardSectionForm({ content, onUpdate }: { content: unknown; onUpdate
         </select>
       </label>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
           const cards = asArrayOfObjects(fields.blockContent);
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Section Title</span>
@@ -599,13 +627,6 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
 
   const sourceButtons = Array.isArray(translations[sourceLanguage]?.buttons) ? (translations[sourceLanguage].buttons as string[]) : [];
 
-  const addButton = () => {
-    updateAllTranslations((current) => ({
-      ...current,
-      buttons: [...(Array.isArray(current.buttons) ? current.buttons : []), ""],
-    }));
-  };
-
   const removeButton = (index: number) => {
     updateAllTranslations((current) => ({
       ...current,
@@ -616,6 +637,7 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
   const updateButton = (language: Language, index: number, value: string) => {
     const fields = translations[language] ?? {};
     const buttons = Array.isArray(fields.buttons) ? [...fields.buttons] : [];
+    while (buttons.length <= index) buttons.push("");
     buttons[index] = value;
     updateTranslation(language, { ...fields, buttons });
   };
@@ -631,13 +653,13 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
         </select>
       </label>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
           const buttons = Array.isArray(fields.buttons) ? (fields.buttons as string[]) : [];
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -650,7 +672,6 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
 
               <div className="flex justify-between items-center mt-2">
                 <span className="brand-label">Buttons</span>
-                {isPrimary && <button type="button" onClick={addButton} className="btn-brand-secondary px-2 py-1 text-xs font-semibold">+ Add Button</button>}
               </div>
               <div className="space-y-2">
                 {(isPrimary ? sourceButtons : buttons).map((_, i) => (
@@ -711,7 +732,7 @@ function DonationFormSectionForm({ content, onUpdate }: { content: unknown; onUp
         </select>
       </label>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
@@ -719,7 +740,7 @@ function DonationFormSectionForm({ content, onUpdate }: { content: unknown; onUp
           const designations = designationsFor(lang);
           const paymentMethods = paymentMethodsFor(lang);
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -756,10 +777,26 @@ function DonationFormSectionForm({ content, onUpdate }: { content: unknown; onUp
                 <h4 className="font-semibold">Payment Methods</h4>
                 <div className="space-y-2">
                   {paymentMethods.map((m, i) => (
-                    <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                      <input className="brand-input" placeholder="value" value={asString(m.value)} onChange={(e) => updatePaymentMethod(lang, i, "value", e.target.value)} />
-                      <input className="brand-input" placeholder="label" value={asString(m.label)} onChange={(e) => updatePaymentMethod(lang, i, "label", e.target.value)} />
-                      <div className="flex items-center gap-2">
+                    <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Value</span>
+                        <input
+                          className="brand-input"
+                          placeholder="mtn_mobile_money"
+                          value={asString(m.value)}
+                          onChange={(e) => updatePaymentMethod(lang, i, "value", e.target.value)}
+                        />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="brand-label">Label</span>
+                        <input
+                          className="brand-input"
+                          placeholder="MTN Mobile Money (CamPay)"
+                          value={asString(m.label)}
+                          onChange={(e) => updatePaymentMethod(lang, i, "label", e.target.value)}
+                        />
+                      </label>
+                      <div className="flex items-end gap-2">
                         {isPrimary ? <button type="button" onClick={() => removePaymentMethod(lang, i)} className="text-xs font-semibold text-red-700">Remove</button> : null}
                       </div>
                     </div>
@@ -779,12 +816,8 @@ function WhyGiveSectionForm({ content, onUpdate }: { content: unknown; onUpdate:
   const envelope = getLocalizedSectionEnvelopeDraft(content);
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
-  const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
-  const updateAll = (updater: (cur: JsonObject) => JsonObject) => { const next = { ...translations } as Record<Language, JsonObject>; for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {}); onUpdate({ sourceLanguage, translations: next }); };
-  const cards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
-  const addCard = () => updateAll((c) => ({ ...c, blockContent: [...(Array.isArray(c.blockContent) ? c.blockContent : []), { cardTitle: "", cardDescription: "", icon: "" }] }));
-  const updateCard = (lang: Language, idx: number, field: string, value: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.blockContent) ? [...f.blockContent] : []; items[idx] = { ...(items[idx] ?? {}), [field]: value }; updateTranslation(lang, { ...f, blockContent: items }); };
-  const removeCard = (idx: number) => updateAll((c) => ({ ...c, blockContent: (Array.isArray(c.blockContent) ? c.blockContent : []).filter((_: any, i: number) => i !== idx) }));
+  const updateTranslation = (language: Language, nextValue: JsonObject) =>
+    onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
 
   return (
     <div className="space-y-4">
@@ -792,34 +825,42 @@ function WhyGiveSectionForm({ content, onUpdate }: { content: unknown; onUpdate:
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const f = translations[lang] ?? {};
-          const items = asArrayOfObjects(f.blockContent);
-          const primaryCards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
-          const maxCount = Math.max(primaryCards.length, items.length);
+          const stats = isJsonObject(f.stats) ? (f.stats as JsonObject) : {};
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
                 <input className="brand-input" value={asString(f.title)} onChange={(e) => updateTranslation(lang, { ...f, title: e.target.value })} required={isPrimary} />
               </label>
-              <div className="space-y-4">
-                {Array.from({ length: maxCount }).map((_, i) => (
-                  <div key={i} className="brand-panel rounded-lg p-4">
-                    <input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} />
-                    <textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} />
-                    <AdminImagePicker label="Icon" value={asString(items[i]?.icon)} onChange={(next) => updateCard(lang, i, "icon", next)} compact />
-                    {isPrimary && (
-                      <button type="button" onClick={() => removeCard(i)} className="text-xs font-semibold text-red-700">
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {lang === sourceLanguage && (
-                  <button type="button" onClick={addCard} className="btn-brand-secondary px-3 py-1.5">
-                    + Add card
-                  </button>
-                )}
+
+              <label className="grid gap-1.5">
+                <span className="brand-label">Description</span>
+                <textarea
+                  className="brand-input"
+                  value={asString(f.description)}
+                  onChange={(e) => updateTranslation(lang, { ...f, description: e.target.value })}
+                  rows={4}
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Raised</span>
+                  <input
+                    className="brand-input"
+                    value={asString(stats.raised)}
+                    onChange={(e) => updateTranslation(lang, { ...f, stats: { ...stats, raised: e.target.value } })}
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="brand-label">Students</span>
+                  <input
+                    className="brand-input"
+                    value={asString(stats.students)}
+                    onChange={(e) => updateTranslation(lang, { ...f, stats: { ...stats, students: e.target.value } })}
+                  />
+                </label>
               </div>
             </fieldset>
           );
@@ -834,22 +875,84 @@ function OtherWaysSectionForm({ content, onUpdate }: { content: unknown; onUpdat
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
-  const list = Array.isArray(translations[sourceLanguage]?.items) ? translations[sourceLanguage].items as string[] : [];
-  const addItem = () => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: [...list, ""] });
-  const updateItem = (i: number, v: string) => { const next = list.slice(); next[i] = v; updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: next }); };
-  const removeItem = (i: number) => { const next = list.slice(); next.splice(i, 1); updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), items: next }); };
+  const updateAll = (updater: (cur: JsonObject) => JsonObject) => {
+    const next = { ...translations } as Record<Language, JsonObject>;
+    for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {});
+    onUpdate({ sourceLanguage, translations: next });
+  };
+  const addItem = () => updateAll((cur) => ({ ...cur, items: [...(Array.isArray(cur.items) ? (cur.items as string[]) : []), ""] }));
+  const removeItem = (index: number) =>
+    updateAll((cur) => ({ ...cur, items: (Array.isArray(cur.items) ? (cur.items as string[]) : []).filter((_, i) => i !== index) }));
 
   return (
     <div className="space-y-4">
-      <label className="grid gap-1.5 md:max-w-xs"><span className="brand-label">Primary Language</span><select className="brand-input" value={sourceLanguage} onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}>{supportedLanguages.map((lang) => (<option key={lang} value={lang}>{languageLabelFallback(lang)}</option>))}</select></label>
-      <fieldset className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
-        <LanguageLegend language={sourceLanguage} isPrimary={true} />
-        <label className="grid gap-1.5"><span className="brand-label">Title</span><input className="brand-input" value={asString(translations[sourceLanguage]?.title)} onChange={(e) => updateTranslation(sourceLanguage, { ...(translations[sourceLanguage] ?? {}), title: e.target.value })} /></label>
-        <div className="space-y-2">
-          {list.map((it, i) => (<div key={i} className="flex gap-2"><input className="brand-input flex-1" value={it} onChange={(e) => updateItem(i, e.target.value)} /><button type="button" onClick={() => removeItem(i)} className="text-xs font-semibold text-red-700">Remove</button></div>))}
-          <button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">+ Add item</button>
-        </div>
-      </fieldset>
+      <label className="grid gap-1.5 md:max-w-xs">
+        <span className="brand-label">Primary Language</span>
+        <select
+          className="brand-input"
+          value={sourceLanguage}
+          onChange={(e) => onUpdate({ sourceLanguage: e.target.value as Language, translations })}
+        >
+          {supportedLanguages.map((lang) => (
+            <option key={lang} value={lang}>
+              {languageLabelFallback(lang)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {supportedLanguages.map((lang) => {
+          const isPrimary = lang === sourceLanguage;
+          const fields = translations[lang] ?? {};
+          const items = Array.isArray(fields.items) ? (fields.items as string[]) : [];
+          const primaryItems = Array.isArray(translations[sourceLanguage]?.items)
+            ? (translations[sourceLanguage]?.items as string[])
+            : [];
+          const maxCount = Math.max(primaryItems.length, items.length);
+
+          return (
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+              <LanguageLegend language={lang} isPrimary={isPrimary} />
+              <label className="grid gap-1.5">
+                <span className="brand-label">Title</span>
+                <input
+                  className="brand-input"
+                  value={asString(fields.title)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, title: e.target.value })}
+                  required={isPrimary}
+                />
+              </label>
+              <div className="space-y-2">
+                {Array.from({ length: maxCount }).map((_, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      className="brand-input flex-1"
+                      value={items[i] ?? ""}
+                      onChange={(e) => {
+                        const next = items.slice();
+                        while (next.length <= i) next.push("");
+                        next[i] = e.target.value;
+                        updateTranslation(lang, { ...fields, items: next });
+                      }}
+                    />
+                    {isPrimary ? (
+                      <button type="button" onClick={() => removeItem(i)} className="text-xs font-semibold text-red-700">
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {isPrimary ? (
+                  <button type="button" onClick={addItem} className="btn-brand-secondary px-3 py-1.5">
+                    + Add item
+                  </button>
+                ) : null}
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -860,7 +963,6 @@ function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onU
   const sourceLanguage = envelope.sourceLanguage;
   const translations = envelope.translations;
   const updateTranslation = (language: Language, nextValue: JsonObject) => onUpdate({ sourceLanguage, translations: { ...translations, [language]: nextValue } });
-  const cards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
   const updateAll = (updater: (cur: JsonObject) => JsonObject) => {
     const next = { ...translations } as Record<Language, JsonObject>;
     for (const lang of supportedLanguages) next[lang] = updater(translations[lang] ?? {});
@@ -868,8 +970,15 @@ function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onU
   };
 
   const addCard = () => updateAll((current) => ({ ...current, blockContent: [...(Array.isArray(current.blockContent) ? current.blockContent : []), { cardTitle: "", cardDescription: "", icon: "" }] }));
-  const updateCard = (lang: Language, idx: number, field: string, v: string) => { const f = translations[lang] ?? {}; const items = Array.isArray(f.blockContent) ? [...f.blockContent] : []; items[idx] = { ...(items[idx] ?? {}), [field]: v }; updateTranslation(lang, { ...f, blockContent: items }); };
-  const removeCard = (idx: number) => updateAll((current) => ({ ...current, blockContent: (Array.isArray(current.blockContent) ? current.blockContent : []).filter((_: any, i: number) => i !== idx) }));
+  const updateCard = (lang: Language, idx: number, field: string, v: string) => {
+    const f = translations[lang] ?? {};
+    const items = asArrayOfObjects(f.blockContent).slice();
+    while (items.length <= idx) items.push({ cardTitle: "", cardDescription: "", icon: "" });
+    items[idx] = { ...items[idx], [field]: v };
+    updateTranslation(lang, { ...f, blockContent: items });
+  };
+  const removeCard = (idx: number) =>
+    updateAll((current) => ({ ...current, blockContent: (Array.isArray(current.blockContent) ? current.blockContent : []).filter((_, i) => i !== idx) }));
 
   return (
     <div className="space-y-4">
@@ -881,7 +990,7 @@ function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onU
           const primaryCards = asArrayOfObjects(translations[sourceLanguage]?.blockContent);
           const maxCount = Math.max(primaryCards.length, items.length);
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
@@ -937,12 +1046,12 @@ function MatchingGiftSectionForm({ content, onUpdate }: { content: unknown; onUp
         </select>
       </label>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
           return (
-            <fieldset key={lang} className="grid gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
+            <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
                 <span className="brand-label">Title</span>
