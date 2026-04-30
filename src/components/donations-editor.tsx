@@ -670,17 +670,17 @@ function CtaSectionForm({ content, onUpdate }: { content: unknown; onUpdate: (co
                 <textarea className="brand-input" value={asString(fields.desc)} onChange={(e) => updateTranslation(lang, { ...fields, desc: e.target.value })} rows={3} />
               </label>
 
-              <div className="flex justify-between items-center mt-2">
+              {/* <div className="flex justify-between items-center mt-2">
                 <span className="brand-label">Buttons</span>
-              </div>
-              <div className="space-y-2">
-                {(isPrimary ? sourceButtons : buttons).map((_, i) => (
-                  <div key={i} className="flex gap-2">
-                    <input type="text" value={buttons[i] ?? ""} onChange={(e) => updateButton(lang, i, e.target.value)} className="brand-input flex-1 text-sm" />
-                    {isPrimary && <button type="button" onClick={() => removeButton(i)} className="text-xs font-semibold text-red-700">Remove</button>}
-                  </div>
-                ))}
-              </div>
+              </div> */}
+                {/* <div className="space-y-2">
+                  {(isPrimary ? sourceButtons : buttons).map((_, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input type="text" value={buttons[i] ?? ""} onChange={(e) => updateButton(lang, i, e.target.value)} className="brand-input flex-1 text-sm" />
+                      {isPrimary && <button type="button" onClick={() => removeButton(i)} className="text-xs font-semibold text-red-700">Remove</button>}
+                    </div>
+                  ))}
+                </div> */}
             </fieldset>
           );
         })}
@@ -998,7 +998,7 @@ function AccreditationSectionForm({ content, onUpdate }: { content: unknown; onU
               </label>
               <div className="space-y-4">
                 {Array.from({ length: maxCount }).map((_, i) => (
-                  <div key={i} className="brand-panel rounded-lg p-4">
+                  <div key={i} className="brand-panel grid rounded-lg p-4 gap-2">
                     <input className="brand-input" placeholder="Card title" value={asString(items[i]?.cardTitle)} onChange={(e) => updateCard(lang, i, "cardTitle", e.target.value)} />
                     <textarea className="brand-input" placeholder="Card description" rows={2} value={asString(items[i]?.cardDescription)} onChange={(e) => updateCard(lang, i, "cardDescription", e.target.value)} />
                     <AdminImagePicker

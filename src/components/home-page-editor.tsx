@@ -433,11 +433,6 @@ function HeroForm({ content, onUpdate }: { content: unknown; onUpdate: (content:
   const descFr = localizedString(c.description, "fr");
   const bgImg = typeof c.bgImg === "string" ? c.bgImg : "";
 
-  const button = typeof c.button === "object" && c.button ? (c.button as Record<string, unknown>) : {};
-  const btnLabelEn = localizedString(button.label, "en");
-  const btnLabelFr = localizedString(button.label, "fr");
-  const btnHref = typeof button.href === "string" ? button.href : "";
-
   return (
     <div className="space-y-4">
       <AdminImagePicker label="Background Image" value={bgImg} onChange={(v) => onUpdate({ ...c, bgImg: v })} />
@@ -462,10 +457,6 @@ function HeroForm({ content, onUpdate }: { content: unknown; onUpdate: (content:
               <span className="brand-label">Description</span>
               <textarea className="brand-input" rows={3} value={descEn} onChange={(e) => onUpdate(setLocalized(c, "description", "en", e.target.value))} />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Button label</span>
-              <input className="brand-input" value={btnLabelEn} onChange={(e) => onUpdate({ ...c, button: { ...(c.button as object), label: setLocalized(button, "label", "en", e.target.value).label } })} />
-            </label>
           </div>
         </div>
 
@@ -480,18 +471,9 @@ function HeroForm({ content, onUpdate }: { content: unknown; onUpdate: (content:
               <span className="brand-label">Description</span>
               <textarea className="brand-input" rows={3} value={descFr} onChange={(e) => onUpdate(setLocalized(c, "description", "fr", e.target.value))} />
             </label>
-            <label className="grid gap-1.5">
-              <span className="brand-label">Button label</span>
-              <input className="brand-input" value={btnLabelFr} onChange={(e) => onUpdate({ ...c, button: { ...(c.button as object), label: setLocalized(button, "label", "fr", e.target.value).label } })} />
-            </label>
           </div>
         </div>
       </div>
-
-      {/* <div className="mt-3">
-        <label className="brand-label">Button href</label>
-        <input className="brand-input mt-2" value={btnHref} onChange={(e) => onUpdate({ ...c, button: { ...(c.button as object), href: e.target.value } })} />
-      </div> */}
     </div>
   );
 }
