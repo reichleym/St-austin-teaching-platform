@@ -16,10 +16,6 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function asNumber(value: unknown): number {
-  return typeof value === "number" ? value : 0;
-}
-
 function asArrayOfObjects(value: unknown): JsonObject[] {
   if (!Array.isArray(value)) return [];
   return value.filter(isJsonObject);
@@ -199,12 +195,14 @@ function createDraftGovernmentEmployeesPage(): DynamicPage {
           sourceLanguage: "en" as Language,
           translations: {
             en: {
-              phone: 25,
+              discountPercent: 25,
               contactEmail: "govtservices@staustin.edu",
+              phoneNumber: "",
             },
             fr: {
-              phone: 25,
+              discountPercent: 25,
               contactEmail: "govtservices@staustin.edu",
+              phoneNumber: "",
             },
           },
         },
@@ -578,8 +576,8 @@ function SectionCard({ section, onUpdate }: SectionEditorProps) {
       description: "Intro banner with title, description, and background image.",
     },
     GovernmentEmployeeDiscountCard: {
-      label: "Discount Card",
-      description: "Government employee discount percentage and contact information.",
+      label: "Contact Info",
+      description: "Government employee support contact details (and optional discount percent).",
     },
     HowItWorksSection: {
       label: "How It Works",
@@ -800,18 +798,42 @@ function DiscountCardSectionForm({ content, onUpdate }: { content: unknown; onUp
         {supportedLanguages.map((lang) => {
           const isPrimary = lang === sourceLanguage;
           const fields = translations[lang] ?? {};
+          const legacyPhone = (fields as Record<string, unknown>).phone;
+          const discountPercent =
+            typeof (fields as Record<string, unknown>).discountPercent === "number"
+              ? ((fields as Record<string, unknown>).discountPercent as number)
+              : typeof legacyPhone === "number" && legacyPhone >= 0 && legacyPhone <= 100
+                ? legacyPhone
+                : 0;
+          const phoneNumber =
+            typeof (fields as Record<string, unknown>).phoneNumber === "string"
+              ? ((fields as Record<string, unknown>).phoneNumber as string)
+              : typeof legacyPhone === "number" && legacyPhone > 100
+                ? String(legacyPhone)
+                : "";
           return (
             <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
-                <span className="brand-label">Phone Number</span>
+                <span className="brand-label">Discount percent</span>
                 <input
                   type="number"
                   className="brand-input"
-                  value={asNumber(fields.phone)}
-                  onChange={(e) => updateTranslation(lang, { ...fields, phone: Number(e.target.value) })}
+                  value={Number.isFinite(discountPercent) ? discountPercent : 0}
+                  onChange={(e) => updateTranslation(lang, { ...fields, discountPercent: Number(e.target.value) })}
                   min={0}
                   max={100}
+                  required={isPrimary}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="brand-label">Phone Number</span>
+                <input
+                  type="tel"
+                  className="brand-input"
+                  value={phoneNumber}
+                  onChange={(e) => updateTranslation(lang, { ...fields, phoneNumber: e.target.value })}
+                  placeholder="e.g. +2376XXXXXXXX"
                   required={isPrimary}
                 />
               </label>

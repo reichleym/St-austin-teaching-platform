@@ -865,7 +865,7 @@ function NewsAnnouncementsForm({ content, onUpdate }: { content: unknown; onUpda
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-3 items-end">
+          <div className="grid md:grid-cols-3 gap-3 items-start">
             <div>
               <AdminImagePicker label="Image" value={String(it.image ?? "")} compact onChange={(v) => updateItem(idx, { ...(it as object), image: v })} />
             </div>
