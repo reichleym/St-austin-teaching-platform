@@ -199,11 +199,11 @@ function createDraftGovernmentEmployeesPage(): DynamicPage {
           sourceLanguage: "en" as Language,
           translations: {
             en: {
-              discountPercent: 25,
+              phone: 25,
               contactEmail: "govtservices@staustin.edu",
             },
             fr: {
-              discountPercent: 25,
+              phone: 25,
               contactEmail: "govtservices@staustin.edu",
             },
           },
@@ -804,12 +804,12 @@ function DiscountCardSectionForm({ content, onUpdate }: { content: unknown; onUp
             <fieldset key={lang} className="flex flex-col gap-3 rounded-2xl border border-[#c6ddfa] bg-[#f8fbff] p-4">
               <LanguageLegend language={lang} isPrimary={isPrimary} />
               <label className="grid gap-1.5">
-                <span className="brand-label">Discount Percent</span>
+                <span className="brand-label">Phone Number</span>
                 <input
                   type="number"
                   className="brand-input"
-                  value={asNumber(fields.discountPercent)}
-                  onChange={(e) => updateTranslation(lang, { ...fields, discountPercent: Number(e.target.value) })}
+                  value={asNumber(fields.phone)}
+                  onChange={(e) => updateTranslation(lang, { ...fields, phone: Number(e.target.value) })}
                   min={0}
                   max={100}
                   required={isPrimary}

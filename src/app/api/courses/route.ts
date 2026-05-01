@@ -69,6 +69,7 @@ const ALLOWED_DEGREE_LEVELS = [
   "Bachelor’s Degree",
   "Master’s Degree",
   "Higher National Diploma (HND)",
+  "Certification",
 ] as const;
 type DegreeLevelValue = (typeof ALLOWED_DEGREE_LEVELS)[number];
 

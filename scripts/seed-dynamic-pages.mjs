@@ -96,7 +96,7 @@ const govtSections = [
     sectionKey: 'discountCard',
     componentType: 'GovernmentEmployeeDiscountCard',
     position: 1,
-    content: { sourceLanguage: 'en', translations: { en: { discountPercent: 25, contactEmail: 'govtservices@staustin.edu' }, fr: { discountPercent: 25, contactEmail: 'govtservices@staustin.edu' } } },
+    content: { sourceLanguage: 'en', translations: { en: { phone: 25, contactEmail: 'govtservices@staustin.edu' }, fr: { phone: 25, contactEmail: 'govtservices@staustin.edu' } } },
   },
   {
     sectionKey: 'howItWorks',
