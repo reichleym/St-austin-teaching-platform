@@ -29,6 +29,10 @@ type CreateBody = {
   sourceLanguage?: string;
   translations?: unknown;
   visibility?: ProgramVisibilityValue;
+  programType?: string | null;
+  programTypeFr?: string | null;
+  programDuration?: string | null;
+  programDurationFr?: string | null;
   degreeLevel?: string | null;
   degreeLevelFr?: string | null;
   fieldOfStudy?: string | null;
@@ -51,6 +55,10 @@ type ProgramRecord = {
   title: string;
   description: string | null;
   programContent: string | null;
+  programType: string | null;
+  programTypeFr: string | null;
+  programDuration: string | null;
+  programDurationFr: string | null;
   degreeLevel: string | null;
   degreeLevelFr: string | null;
   fieldOfStudy: string | null;
@@ -74,6 +82,10 @@ type RawProgramRow = {
   title: string;
   description: string | null;
   programContent: string | null;
+  programType: string | null;
+  programTypeFr: string | null;
+  programDuration: string | null;
+  programDurationFr: string | null;
   degreeLevel: string | null;
   degreeLevelFr: string | null;
   fieldOfStudy: string | null;
@@ -91,6 +103,30 @@ type RawProgramCourseRow = {
   title: string;
   titleFr: string | null;
 };
+
+const PROGRAM_TYPE_ONLINE = "ONLINE" as const;
+const PROGRAM_TYPE_ON_CAMPUS = "ON_CAMPUS" as const;
+type ProgramTypeValue = typeof PROGRAM_TYPE_ONLINE | typeof PROGRAM_TYPE_ON_CAMPUS;
+
+function defaultProgramTypeFr(value: ProgramTypeValue | null) {
+  if (!value) return null;
+  if (value === PROGRAM_TYPE_ONLINE) return "En ligne";
+  return "Sur le campus";
+}
+
+function parseProgramType(
+  value: unknown
+): { ok: true; value: ProgramTypeValue | null | undefined } | { ok: false } {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string") return { ok: false };
+
+  const normalized = value.trim().toUpperCase().replace(/\s+/g, "_");
+  if (!normalized) return { ok: true, value: null };
+  if (normalized === PROGRAM_TYPE_ONLINE) return { ok: true, value: PROGRAM_TYPE_ONLINE };
+  if (normalized === PROGRAM_TYPE_ON_CAMPUS) return { ok: true, value: PROGRAM_TYPE_ON_CAMPUS };
+  return { ok: false };
+}
 
 function getProgramDelegate() {
   return (prisma as unknown as { program?: typeof prisma.program }).program;
@@ -165,6 +201,18 @@ ALTER TABLE "Program"
 ADD COLUMN IF NOT EXISTS "fieldOfStudy" TEXT;
 
 ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "programType" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "programTypeFr" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "programDuration" TEXT;
+
+ALTER TABLE "Program"
+ADD COLUMN IF NOT EXISTS "programDurationFr" TEXT;
+
+ALTER TABLE "Program"
 ADD COLUMN IF NOT EXISTS "degreeLevelFr" TEXT;
 
 ALTER TABLE "Program"
@@ -232,14 +280,23 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
     });
     if (!found) return null;
     const french = await prisma
-      .$queryRaw<Array<{ degreeLevelFr: string | null; fieldOfStudyFr: string | null }>>`
-        SELECT "degreeLevelFr", "fieldOfStudyFr"
+      .$queryRaw<
+        Array<{
+          degreeLevelFr: string | null;
+          fieldOfStudyFr: string | null;
+          programType: string | null;
+          programTypeFr: string | null;
+          programDuration: string | null;
+          programDurationFr: string | null;
+        }>
+      >`
+        SELECT "degreeLevelFr", "fieldOfStudyFr", "programType", "programTypeFr", "programDuration", "programDurationFr"
         FROM "Program"
         WHERE "id" = ${programId}
         LIMIT 1
       `
-      .then((rows) => rows[0] ?? { degreeLevelFr: null, fieldOfStudyFr: null })
-      .catch(() => ({ degreeLevelFr: null, fieldOfStudyFr: null }));
+      .then((rows) => rows[0] ?? { degreeLevelFr: null, fieldOfStudyFr: null, programType: null, programTypeFr: null, programDuration: null, programDurationFr: null })
+      .catch(() => ({ degreeLevelFr: null, fieldOfStudyFr: null, programType: null, programTypeFr: null, programDuration: null, programDurationFr: null }));
 
     return {
       id: found.id,
@@ -247,6 +304,10 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
       title: found.title,
       description: found.description,
       programContent: found.programContent,
+      programType: french.programType ?? null,
+      programTypeFr: french.programTypeFr ?? null,
+      programDuration: french.programDuration ?? null,
+      programDurationFr: french.programDurationFr ?? null,
       degreeLevel: found.degreeLevel ?? null,
       degreeLevelFr: french.degreeLevelFr ?? null,
       fieldOfStudy: found.fieldOfStudy ?? null,
@@ -259,7 +320,7 @@ async function getProgramById(programId: string): Promise<ProgramRecord | null> 
   }
 
   const rows = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "programType", "programTypeFr", "programDuration", "programDurationFr", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     WHERE "id" = ${programId}
     LIMIT 1
@@ -298,8 +359,18 @@ async function listProgramsWithCourses() {
 
     const programIds = programs.map((program) => program.id);
     const programFrenchRows = programIds.length
-      ? await prisma.$queryRaw<Array<{ id: string; degreeLevelFr: string | null; fieldOfStudyFr: string | null }>>`
-          SELECT "id", "degreeLevelFr", "fieldOfStudyFr"
+      ? await prisma.$queryRaw<
+          Array<{
+            id: string;
+            degreeLevelFr: string | null;
+            fieldOfStudyFr: string | null;
+            programType: string | null;
+            programTypeFr: string | null;
+            programDuration: string | null;
+            programDurationFr: string | null;
+          }>
+        >`
+          SELECT "id", "degreeLevelFr", "fieldOfStudyFr", "programType", "programTypeFr", "programDuration", "programDurationFr"
           FROM "Program"
           WHERE "id" IN (${Prisma.join(programIds)})
         `.catch(() => [])
@@ -337,10 +408,14 @@ async function listProgramsWithCourses() {
         title: program.title,
         description: program.description,
         programDetails: parseProgramContent(program.programContent),
+        programType: programFrenchById.get(program.id)?.programType ?? null,
+        programTypeFr: programFrenchById.get(program.id)?.programTypeFr ?? null,
         degreeLevel: program.degreeLevel ?? null,
         degreeLevelFr: programFrenchById.get(program.id)?.degreeLevelFr ?? null,
         fieldOfStudy: program.fieldOfStudy ?? null,
         fieldOfStudyFr: programFrenchById.get(program.id)?.fieldOfStudyFr ?? null,
+        programDuration: programFrenchById.get(program.id)?.programDuration ?? null,
+        programDurationFr: programFrenchById.get(program.id)?.programDurationFr ?? null,
         sourceLanguage: program.sourceLanguage,
         translations: program.translations,
         visibility: program.visibility as ProgramVisibilityValue,
@@ -352,7 +427,7 @@ async function listProgramsWithCourses() {
   }
 
   const programs = await prisma.$queryRaw<RawProgramRow[]>`
-    SELECT "id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
+    SELECT "id", "code", "title", "description", "programContent", "programType", "programTypeFr", "programDuration", "programDurationFr", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility"::text AS "visibility", "createdAt"
     FROM "Program"
     ORDER BY "createdAt" DESC
   `;
@@ -392,6 +467,10 @@ async function listProgramsWithCourses() {
       title: program.title,
       description: program.description,
       programDetails: parseProgramContent(program.programContent),
+      programType: program.programType ?? null,
+      programTypeFr: program.programTypeFr ?? null,
+      programDuration: program.programDuration ?? null,
+      programDurationFr: program.programDurationFr ?? null,
       degreeLevel: program.degreeLevel ?? null,
       fieldOfStudy: program.fieldOfStudy ?? null,
       degreeLevelFr: program.degreeLevelFr ?? null,
@@ -471,6 +550,10 @@ export async function GET() {
         code: program.code,
         title: program.title,
         description: program.description,
+        programType: program.programType ?? null,
+        programTypeFr: program.programTypeFr ?? null,
+        programDuration: program.programDuration ?? null,
+        programDurationFr: program.programDurationFr ?? null,
         degreeLevel: program.degreeLevel ?? null,
         degreeLevelFr: program.degreeLevelFr ?? null,
         fieldOfStudy: program.fieldOfStudy ?? null,
@@ -530,6 +613,18 @@ export async function POST(request: NextRequest) {
       typeof body.degreeLevelFr === "string" ? body.degreeLevelFr.trim() || null : body.degreeLevelFr ?? null;
     const fieldOfStudyFr =
       typeof body.fieldOfStudyFr === "string" ? body.fieldOfStudyFr.trim() || null : body.fieldOfStudyFr ?? null;
+    const programDuration =
+      typeof body.programDuration === "string" ? body.programDuration.trim() || null : body.programDuration ?? null;
+    const programDurationFr =
+      typeof body.programDurationFr === "string" ? body.programDurationFr.trim() || null : body.programDurationFr ?? null;
+    const programTypeFr =
+      typeof body.programTypeFr === "string" ? body.programTypeFr.trim() || null : body.programTypeFr ?? null;
+    const programTypeParsed = parseProgramType(body.programType);
+    if (!programTypeParsed.ok) {
+      return NextResponse.json({ error: "Invalid `programType` value." }, { status: 400 });
+    }
+    const programType = programTypeParsed.value ?? null;
+    const normalizedProgramTypeFr = programTypeFr ?? defaultProgramTypeFr(programType);
 
     const titleError = validateProgramTitle(title);
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 });
@@ -553,6 +648,7 @@ export async function POST(request: NextRequest) {
             title,
             description: normalizedDescription,
             programContent: serializedProgramContent,
+            programDuration,
             degreeLevel: body.degreeLevel ?? null,
             fieldOfStudy: body.fieldOfStudy ?? null,
             sourceLanguage,
@@ -564,7 +660,11 @@ export async function POST(request: NextRequest) {
         await tx.$executeRaw`
           UPDATE "Program"
           SET "degreeLevelFr" = ${degreeLevelFr},
-              "fieldOfStudyFr" = ${fieldOfStudyFr}
+              "fieldOfStudyFr" = ${fieldOfStudyFr},
+              "programType" = ${programType},
+              "programTypeFr" = ${normalizedProgramTypeFr},
+              "programDuration" = ${programDuration},
+              "programDurationFr" = ${programDurationFr}
           WHERE "id" = ${program.id}
         `.catch(() => {});
 
@@ -585,8 +685,8 @@ export async function POST(request: NextRequest) {
       createdId = makeId("prg");
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
-          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
-          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${body.degreeLevel ?? null}, ${degreeLevelFr}, ${body.fieldOfStudy ?? null}, ${fieldOfStudyFr}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
+          INSERT INTO "Program" ("id", "code", "title", "description", "programContent", "programType", "programTypeFr", "programDuration", "programDurationFr", "degreeLevel", "degreeLevelFr", "fieldOfStudy", "fieldOfStudyFr", "sourceLanguage", "translations", "visibility", "createdAt", "updatedAt")
+          VALUES (${createdId}, ${code}, ${title}, ${normalizedDescription}, ${serializedProgramContent}, ${programType}, ${normalizedProgramTypeFr}, ${programDuration}, ${programDurationFr}, ${body.degreeLevel ?? null}, ${degreeLevelFr}, ${body.fieldOfStudy ?? null}, ${fieldOfStudyFr}, ${sourceLanguage}, ${JSON.stringify(locPayload.data.translations)}::jsonb, CAST(${visibility} AS "ProgramVisibility"), NOW(), NOW())
         `;
 
         if (coursesValidation.ids.length) {
@@ -606,6 +706,10 @@ export async function POST(request: NextRequest) {
           code,
           title,
           description: normalizedDescription,
+          programType,
+          programTypeFr: normalizedProgramTypeFr,
+          programDuration,
+          programDurationFr,
           degreeLevel: body.degreeLevel ?? null,
           degreeLevelFr,
           fieldOfStudy: body.fieldOfStudy ?? null,
@@ -685,6 +789,29 @@ export async function PATCH(request: NextRequest) {
         : typeof body.fieldOfStudyFr === "string"
           ? body.fieldOfStudyFr.trim() || null
           : body.fieldOfStudyFr ?? null;
+    const programDuration =
+      body.programDuration === undefined
+        ? undefined
+        : typeof body.programDuration === "string"
+          ? body.programDuration.trim() || null
+          : body.programDuration ?? null;
+    const programDurationFr =
+      body.programDurationFr === undefined
+        ? undefined
+        : typeof body.programDurationFr === "string"
+          ? body.programDurationFr.trim() || null
+          : body.programDurationFr ?? null;
+    const programTypeFr =
+      body.programTypeFr === undefined
+        ? undefined
+        : typeof body.programTypeFr === "string"
+          ? body.programTypeFr.trim() || null
+          : body.programTypeFr ?? null;
+    const programTypeParsed = parseProgramType(body.programType);
+    if (!programTypeParsed.ok) {
+      return NextResponse.json({ error: "Invalid `programType` value." }, { status: 400 });
+    }
+    const programType = programTypeParsed.value;
 
     if (title !== existing.title) {
       const titleError = validateProgramTitle(title);
@@ -714,17 +841,36 @@ export async function PATCH(request: NextRequest) {
       if (body.fieldOfStudy !== undefined) {
         data.fieldOfStudy = body.fieldOfStudy ?? null;
       }
+      if (body.programDuration !== undefined) {
+        data.programDuration = programDuration ?? null;
+      }
 
       await prisma.$transaction(async (tx) => {
         await tx.programCourse.deleteMany({ where: { programId } });
         await tx.program.update({ where: { id: programId }, data });
-        if (degreeLevelFr !== undefined || fieldOfStudyFr !== undefined) {
+        if (
+          degreeLevelFr !== undefined ||
+          fieldOfStudyFr !== undefined ||
+          programType !== undefined ||
+          programTypeFr !== undefined ||
+          programDuration !== undefined ||
+          programDurationFr !== undefined
+        ) {
           const nextDegreeLevelFr = degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr;
           const nextFieldOfStudyFr = fieldOfStudyFr !== undefined ? fieldOfStudyFr : existing.fieldOfStudyFr;
+          const nextProgramType = programType !== undefined ? programType : existing.programType;
+          const nextProgramTypeFr =
+            programTypeFr !== undefined ? programTypeFr : existing.programTypeFr ?? defaultProgramTypeFr((nextProgramType as ProgramTypeValue | null) ?? null);
+          const nextProgramDuration = programDuration !== undefined ? programDuration : existing.programDuration;
+          const nextProgramDurationFr = programDurationFr !== undefined ? programDurationFr : existing.programDurationFr;
           await tx.$executeRaw`
             UPDATE "Program"
             SET "degreeLevelFr" = ${nextDegreeLevelFr},
-                "fieldOfStudyFr" = ${nextFieldOfStudyFr}
+                "fieldOfStudyFr" = ${nextFieldOfStudyFr},
+                "programType" = ${nextProgramType},
+                "programTypeFr" = ${nextProgramTypeFr},
+                "programDuration" = ${nextProgramDuration},
+                "programDurationFr" = ${nextProgramDurationFr}
             WHERE "id" = ${programId}
           `.catch(() => {});
         }
@@ -749,6 +895,11 @@ export async function PATCH(request: NextRequest) {
       const nextFieldOfStudy = body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy;
       const nextDegreeLevelFr = degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr;
       const nextFieldOfStudyFr = fieldOfStudyFr !== undefined ? fieldOfStudyFr : existing.fieldOfStudyFr;
+      const nextProgramType = programType !== undefined ? programType : existing.programType;
+      const nextProgramTypeFr =
+        programTypeFr !== undefined ? programTypeFr : existing.programTypeFr ?? defaultProgramTypeFr((nextProgramType as ProgramTypeValue | null) ?? null);
+      const nextProgramDuration = programDuration !== undefined ? programDuration : existing.programDuration;
+      const nextProgramDurationFr = programDurationFr !== undefined ? programDurationFr : existing.programDurationFr;
 
       await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`
@@ -760,6 +911,10 @@ export async function PATCH(request: NextRequest) {
               "degreeLevelFr" = ${nextDegreeLevelFr},
               "fieldOfStudy" = ${nextFieldOfStudy},
               "fieldOfStudyFr" = ${nextFieldOfStudyFr},
+              "programType" = ${nextProgramType},
+              "programTypeFr" = ${nextProgramTypeFr},
+              "programDuration" = ${nextProgramDuration},
+              "programDurationFr" = ${nextProgramDurationFr},
               "sourceLanguage" = ${nextSourceLanguage},
               "translations" = ${JSON.stringify(nextTranslations)}::jsonb,
               "visibility" = CAST(${nextVisibility} AS "ProgramVisibility"),
@@ -789,6 +944,13 @@ export async function PATCH(request: NextRequest) {
           serializedProgramContent !== undefined
             ? parseProgramContent(serializedProgramContent)
             : parseProgramContent(existing.programContent),
+        programType: programType !== undefined ? programType ?? null : existing.programType ?? null,
+        programTypeFr:
+          programTypeFr !== undefined
+            ? programTypeFr ?? defaultProgramTypeFr((programType as ProgramTypeValue | null) ?? null)
+            : existing.programTypeFr ?? defaultProgramTypeFr((existing.programType as ProgramTypeValue | null) ?? null),
+        programDuration: programDuration !== undefined ? programDuration ?? null : existing.programDuration ?? null,
+        programDurationFr: programDurationFr !== undefined ? programDurationFr ?? null : existing.programDurationFr ?? null,
         degreeLevel: body.degreeLevel !== undefined ? body.degreeLevel ?? null : existing.degreeLevel ?? null,
         degreeLevelFr: degreeLevelFr !== undefined ? degreeLevelFr : existing.degreeLevelFr ?? null,
         fieldOfStudy: body.fieldOfStudy !== undefined ? body.fieldOfStudy ?? null : existing.fieldOfStudy ?? null,

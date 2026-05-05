@@ -264,6 +264,10 @@ model Program {
   fieldOfStudyFr     String?
   description        String?
   programContent     String?
+  programType        String?
+  programTypeFr      String?
+  programDuration    String?
+  programDurationFr  String?
   sourceLanguage     String              @default("en")
   translations       Json?
   visibility         ProgramVisibility @default(DRAFT)

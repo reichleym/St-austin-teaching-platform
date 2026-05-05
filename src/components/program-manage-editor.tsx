@@ -6,7 +6,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { LoadingIndicator } from "@/components/loading-indicator";
 import { ToastMessage } from "@/components/toast-message";
 import { useLanguage } from "@/components/language-provider";
-import { supportedLanguages, type Language } from "@/lib/i18n";
+import { supportedLanguages, translate, type Language } from "@/lib/i18n";
 import {
   createEmptyProgramLocalizationDrafts,
   getProgramLocalizationDrafts,
@@ -34,6 +34,10 @@ type ProgramItem = {
   code: string;
   title: string;
   description: string | null;
+  programType: string | null;
+  programTypeFr: string | null;
+  programDuration: string | null;
+  programDurationFr: string | null;
   degreeLevel: string | null;
   degreeLevelFr: string | null;
   fieldOfStudy: string | null;
@@ -66,8 +70,25 @@ const DEGREE_LEVEL_OPTIONS_FR = [
   "Attestation",
 ] as const;
 
+const PROGRAM_TYPE_OPTIONS = ["ONLINE", "ON_CAMPUS"] as const;
+type ProgramTypeValue = (typeof PROGRAM_TYPE_OPTIONS)[number];
+
 const coerceDegreeLevelValue = (value: string | null | undefined): DegreeLevelValue | "" =>
   value && (DEGREE_LEVEL_OPTIONS as readonly string[]).includes(value) ? (value as DegreeLevelValue) : "";
+
+const coerceProgramTypeValue = (value: string | null | undefined): ProgramTypeValue | "" =>
+  value && (PROGRAM_TYPE_OPTIONS as readonly string[]).includes(value) ? (value as ProgramTypeValue) : "";
+
+const getProgramTypeFrLabel = (value: ProgramTypeValue) =>
+  value === "ONLINE" ? translate("fr", "programType.online") : translate("fr", "programType.onCampus");
+
+const coerceProgramTypeValueFromFr = (value: string): ProgramTypeValue | "" => {
+  const normalized = value.trim();
+  if (!normalized) return "";
+  if (normalized === translate("fr", "programType.online")) return "ONLINE";
+  if (normalized === translate("fr", "programType.onCampus")) return "ON_CAMPUS";
+  return "";
+};
 
 const getDegreeLevelFrOptions = (current: string) => {
   const options = [...DEGREE_LEVEL_OPTIONS_FR] as string[];
@@ -102,6 +123,10 @@ export function ProgramManageEditor({ programId }: Props) {
   );
   const [editVisibility, setEditVisibility] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
   const [editTuitionAndFees, setEditTuitionAndFees] = useState("");
+  const [editProgramType, setEditProgramType] = useState<ProgramTypeValue | "">("");
+  const [editProgramTypeFr, setEditProgramTypeFr] = useState("");
+  const [editProgramDuration, setEditProgramDuration] = useState("");
+  const [editProgramDurationFr, setEditProgramDurationFr] = useState("");
   const [editDegreeLevel, setEditDegreeLevel] = useState<DegreeLevelValue | "">("");
   const [editFieldOfStudy, setEditFieldOfStudy] = useState("");
   const [editDegreeLevelFr, setEditDegreeLevelFr] = useState("");
@@ -117,6 +142,10 @@ export function ProgramManageEditor({ programId }: Props) {
     setEditLocalizations(getProgramLocalizationDrafts(nextProgram));
     setEditVisibility(nextProgram.visibility);
     setEditTuitionAndFees(nextProgram.programDetails?.tuitionAndFees ?? "");
+    setEditProgramType(coerceProgramTypeValue(nextProgram.programType));
+    setEditProgramTypeFr(nextProgram.programTypeFr ?? "");
+    setEditProgramDuration(nextProgram.programDuration ?? "");
+    setEditProgramDurationFr(nextProgram.programDurationFr ?? "");
     setEditDegreeLevel(coerceDegreeLevelValue(nextProgram.degreeLevel));
     setEditFieldOfStudy(nextProgram.fieldOfStudy ?? "");
     setEditDegreeLevelFr(nextProgram.degreeLevelFr ?? "");
@@ -341,6 +370,10 @@ export function ProgramManageEditor({ programId }: Props) {
     const careerList = toListFromMultiline(primaryLocalization.careerOpportunities ?? "");
     if (
       !primaryLocalization.title?.trim() ||
+      !editProgramType ||
+      !editProgramTypeFr.trim() ||
+      !editProgramDuration.trim() ||
+      !editProgramDurationFr.trim() ||
       !editDegreeLevel ||
       !editDegreeLevelFr.trim() ||
       !editFieldOfStudy.trim() ||
@@ -364,10 +397,14 @@ export function ProgramManageEditor({ programId }: Props) {
           description: (primaryLocalization.description ?? "").trim() || null,
           sourceLanguage: editSourceLanguage,
           translations: editLocalizations,
-            degreeLevel: editDegreeLevel || null,
-            degreeLevelFr: editDegreeLevelFr.trim() || null,
-            fieldOfStudy: editFieldOfStudy.trim() || null,
-            fieldOfStudyFr: editFieldOfStudyFr.trim() || null,
+          programType: editProgramType || null,
+          programTypeFr: editProgramTypeFr.trim() || null,
+          programDuration: editProgramDuration.trim() || null,
+          programDurationFr: editProgramDurationFr.trim() || null,
+          degreeLevel: editDegreeLevel || null,
+          degreeLevelFr: editDegreeLevelFr.trim() || null,
+          fieldOfStudy: editFieldOfStudy.trim() || null,
+          fieldOfStudyFr: editFieldOfStudyFr.trim() || null,
           visibility: editVisibility,
           programDetails: {
             overview: primaryLocalization.overview?.trim() || null,
@@ -470,6 +507,69 @@ export function ProgramManageEditor({ programId }: Props) {
             placeholder="$12,500 / year"
           />
         </label>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.programType")} (${t("english")})`}</span>
+            <select
+              className="brand-input"
+              value={editProgramType}
+              onChange={(e) => {
+                const value = e.currentTarget.value as ProgramTypeValue | "";
+                setEditProgramType(value);
+                setEditProgramTypeFr(value ? getProgramTypeFrLabel(value) : "");
+              }}
+              required
+            >
+              <option value="">{translate("en", "placeholder.selectProgramType")}</option>
+              <option value="ONLINE">{translate("en", "programType.online")}</option>
+              <option value="ON_CAMPUS">{translate("en", "programType.onCampus")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.programType")} (${t("french")})`}</span>
+            <select
+              className="brand-input"
+              value={editProgramTypeFr}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                setEditProgramTypeFr(value);
+                const derived = coerceProgramTypeValueFromFr(value);
+                if (derived) setEditProgramType(derived);
+              }}
+              required
+            >
+              <option value="">{translate("fr", "placeholder.selectProgramType")}</option>
+              <option value={translate("fr", "programType.online")}>{translate("fr", "programType.online")}</option>
+              <option value={translate("fr", "programType.onCampus")}>{translate("fr", "programType.onCampus")}</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.programDuration")} (${t("english")})`}</span>
+            <input
+              className="brand-input"
+              value={editProgramDuration}
+              onChange={(e) => setEditProgramDuration(e.currentTarget.value)}
+              placeholder={translate("en", "placeholder.programDurationExample")}
+              maxLength={60}
+              required
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="brand-label">{`${t("label.programDuration")} (${t("french")})`}</span>
+            <input
+              className="brand-input"
+              value={editProgramDurationFr}
+              onChange={(e) => setEditProgramDurationFr(e.currentTarget.value)}
+              placeholder={translate("fr", "placeholder.programDurationExample")}
+              maxLength={60}
+              required
+            />
+          </label>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="grid gap-1.5">
