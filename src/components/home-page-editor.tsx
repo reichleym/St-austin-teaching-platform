@@ -104,7 +104,7 @@ function AdminImagePicker({ label, value, onChange, onUpload, compact = false }:
 }
 
 interface PageSection {
-  id?:string;
+  id?: string;
   sectionKey: string;
   componentType: string;
   position: number;
@@ -204,6 +204,18 @@ function createDraftHomePage(): DynamicPage {
       //     position: 6,
       //     content: {},
       //   },
+      {
+        sectionKey: "footer",
+        componentType: "Footer",
+        position: 9,
+        content: {
+          description: { en: "", fr: "" },
+          address: { en: "", fr: "" },
+          socials: [
+            { label: "", url: "", icon: "" }
+          ]
+        },
+      }
     ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -420,7 +432,10 @@ function SectionCard({ section, onUpdate }: { section: PageSection; onUpdate: (c
       {section.componentType === "CtaSection" && <CtaForm content={section.content} onUpdate={onUpdate} />}
       {section.componentType === "WhyAustin" && <WhyAustinForm content={section.content} onUpdate={onUpdate} />}
       {/* {section.componentType === "FeaturedPrograms" && <div className="text-sm text-gray-600">No visual editor for Featured Programs.</div>} */}
-      {section.componentType === "Footer" && <div className="text-sm text-gray-600">Footer content managed elsewhere.</div>}
+      {/* {section.componentType === "Footer" && <div className="text-sm text-gray-600">Footer content managed elsewhere.</div>} */}
+      {section.componentType === "Footer" && (
+        <FooterForm content={section.content} onUpdate={onUpdate} />
+      )}
     </section>
   );
 }
@@ -889,6 +904,139 @@ function NewsAnnouncementsForm({ content, onUpdate }: { content: unknown; onUpda
       <div>
         <button type="button" className="btn-brand-secondary w-fit px-4 py-2 text-sm font-semibold rounded-md shadow-sm" onClick={addItem}>
           Add item
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FooterForm({ content, onUpdate }: { content: unknown; onUpdate: (content: JsonObject) => void }) {
+  const c = isJsonObject(content) ? content : {};
+
+  const descEn = localizedString(c.description, "en");
+  const descFr = localizedString(c.description, "fr");
+
+  const addrEn = localizedString(c.address, "en");
+  const addrFr = localizedString(c.address, "fr");
+
+  const socials = Array.isArray(c.socials) ? (c.socials as Array<Record<string, unknown>>) : [];
+
+  const updateSocial = (idx: number, next: Record<string, unknown>) => {
+    const nextList = socials.slice();
+    nextList[idx] = next;
+    onUpdate({ ...c, socials: nextList });
+  };
+
+  const addSocial = () => {
+    onUpdate({
+      ...c,
+      socials: [...socials, { label: "", url: "", icon: "" }],
+    });
+  };
+
+  const removeSocial = (idx: number) => {
+    onUpdate({
+      ...c,
+      socials: socials.filter((_, i) => i !== idx),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+
+      {/* Description & Address */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="brand-panel p-4">
+          <LanguageLegend language="en" isPrimary={true} />
+          <div className="mt-3 grid gap-3">
+            <textarea
+              className="brand-input"
+              rows={3}
+              placeholder="Description"
+              value={descEn}
+              onChange={(e) => onUpdate(setLocalized(c, "description", "en", e.target.value))}
+            />
+            <textarea
+              className="brand-input"
+              rows={3}
+              placeholder="Address"
+              value={addrEn}
+              onChange={(e) => onUpdate(setLocalized(c, "address", "en", e.target.value))}
+            />
+          </div>
+        </div>
+
+        <div className="brand-panel p-4">
+          <LanguageLegend language="fr" isPrimary={false} />
+          <div className="mt-3 grid gap-3">
+            <textarea
+              className="brand-input"
+              rows={3}
+              placeholder="Description"
+              value={descFr}
+              onChange={(e) => onUpdate(setLocalized(c, "description", "fr", e.target.value))}
+            />
+            <textarea
+              className="brand-input"
+              rows={3}
+              placeholder="Address"
+              value={addrFr}
+              onChange={(e) => onUpdate(setLocalized(c, "address", "fr", e.target.value))}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Social Links */}
+      <div className="space-y-3">
+        <h4 className="brand-label">Social Links</h4>
+
+        {socials.map((item, idx) => (
+          <div key={idx} className="grid md:grid-cols-3 gap-3 items-end border p-3 rounded-md">
+
+            <input
+              className="brand-input"
+              placeholder="Platform (e.g. Facebook)"
+              value={String(item.label ?? "")}
+              onChange={(e) =>
+                updateSocial(idx, { ...item, label: e.target.value })
+              }
+            />
+
+            <input
+              className="brand-input"
+              placeholder="URL"
+              value={String(item.url ?? "")}
+              onChange={(e) =>
+                updateSocial(idx, { ...item, url: e.target.value })
+              }
+            />
+
+            {/* <div className="flex items-center gap-2">
+              <AdminImagePicker
+                label="Icon"
+                value={String(item.icon ?? "")}
+                compact
+                onChange={(v) => updateSocial(idx, { ...item, icon: v })}
+              />
+
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => removeSocial(idx)}
+              >
+                Remove
+              </button>
+            </div> */}
+          </div>
+        ))}
+
+        <button
+          type="button"
+          className="btn-brand-secondary px-4 py-2 text-sm font-semibold"
+          onClick={addSocial}
+        >
+          Add Social Link
         </button>
       </div>
     </div>
