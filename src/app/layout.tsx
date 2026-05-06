@@ -9,6 +9,10 @@ import { getServerLanguage } from "@/lib/i18n-server";
 export const metadata: Metadata = {
   title: "St. Austin Teaching Platform",
   description: "Core platform for St. Austin teaching operations.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default async function RootLayout({

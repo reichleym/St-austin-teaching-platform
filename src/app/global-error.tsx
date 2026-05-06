@@ -15,6 +15,11 @@ export default function GlobalError({
           <p className="mt-3 text-sm text-neutral-700">
             {error.message || "An unexpected error occurred."}
           </p>
+          {error.digest ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              Digest: {error.digest}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={reset}
